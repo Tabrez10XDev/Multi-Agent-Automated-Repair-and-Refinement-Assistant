@@ -1,3 +1,15 @@
+<p align= "center">
+<img width="300" height="300" src="maara-logo.png" />
+</p>
+<p align="center">
+    <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.10+">
+    <img src="https://img.shields.io/badge/Ollama-Local%20LLMs-000000?style=for-the-badge&logo=ollama&logoColor=white" alt="Ollama">
+    <img src="https://img.shields.io/badge/ChromaDB-Vector%20Store-F97316?style=for-the-badge" alt="ChromaDB">
+    <img src="https://img.shields.io/badge/Pytest-Testing-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white" alt="Pytest">
+    <img src="https://img.shields.io/badge/RAG-Semantic%20Retrieval-10B981?style=for-the-badge" alt="RAG Semantic Retrieval">
+    <img src="https://img.shields.io/badge/Multi--Agent-Orchestration-8B5CF6?style=for-the-badge" alt="Multi-Agent Orchestration">
+</p>
+
 # MAARA — Multi-Agent Automated Repair and Refinement Assistant
 
 > A locally deployable multi-agent SDE assistant that autonomously plans, validates, generates, and repairs software artifacts using locally hosted LLMs via Ollama.
