@@ -1,0 +1,178 @@
+{
+  "measured_at": "2026-09-15 22:15:17",
+  "backend": "mac-metal",
+  "prompt_sizes": {
+    "stable_prefix_tokens": 480,
+    "variable_suffix_tokens": 90,
+    "variable_suffix_retry_tokens": 227,
+    "test_files_included": [
+      "test_target.py"
+    ],
+    "stable_prefix_chars": 1923,
+    "note": "Measured against this repo's target.py/test_target.py, which are small. A realistic SWE-bench-scale task will have a much larger stable prefix; re-run against a representative benchmark case before drawing conclusions."
+  },
+  "cpu_stages": {
+    "pytest_seconds": 0.243,
+    "rag_index_seconds": 15.599
+  },
+  "rates": {
+    "qwen2.5-coder:7b": {
+      "prefill_rate": 267.9,
+      "prefill_rate_naive_largest": 269.58,
+      "prefill_points": [
+        {
+          "tokens": 563,
+          "seconds": 1.923,
+          "rate": 292.82
+        },
+        {
+          "tokens": 2213,
+          "seconds": 7.643,
+          "rate": 289.55
+        },
+        {
+          "tokens": 7713,
+          "seconds": 28.612,
+          "rate": 269.58
+        }
+      ],
+      "decode_rate": 28.09,
+      "decode_sample_tokens": 200
+    },
+    "llama3.2": {
+      "prefill_rate": 541.87,
+      "prefill_rate_naive_largest": 547.26,
+      "prefill_points": [
+        {
+          "tokens": 558,
+          "seconds": 0.89,
+          "rate": 626.9
+        },
+        {
+          "tokens": 2208,
+          "seconds": 3.45,
+          "rate": 640.06
+        },
+        {
+          "tokens": 7708,
+          "seconds": 14.085,
+          "rate": 547.26
+        }
+      ],
+      "decode_rate": 59.9,
+      "decode_sample_tokens": 200
+    }
+  },
+  "realistic_repos": {
+    "requests": {
+      "repo": "requests",
+      "maara_root_only": {
+        "files": [],
+        "count": 0,
+        "total_chars": 0
+      },
+      "recursive": {
+        "count": 9,
+        "total_chars": 165322,
+        "largest": [
+          [
+            108436,
+            "tests/test_requests.py"
+          ],
+          [
+            31434,
+            "tests/test_utils.py"
+          ],
+          [
+            15342,
+            "tests/test_lowlevel.py"
+          ],
+          [
+            5547,
+            "tests/test_testserver.py"
+          ],
+          [
+            2757,
+            "tests/test_structures.py"
+          ]
+        ]
+      },
+      "chars_per_token": 4.077,
+      "scenarios": {
+        "focused_single_test_file": {
+          "file": "tests/test_requests.py",
+          "tokens": 26798,
+          "method": "scaled-by-measured-ratio",
+          "chars": 109271
+        },
+        "median_test_file": {
+          "file": "tests/test_structures.py",
+          "tokens": 767,
+          "method": "exact",
+          "chars": 3594
+        },
+        "all_test_files": {
+          "file": "9 files",
+          "tokens": 40825,
+          "method": "scaled-by-measured-ratio",
+          "chars": 166463
+        }
+      }
+    },
+    "flask": {
+      "repo": "flask",
+      "maara_root_only": {
+        "files": [],
+        "count": 0,
+        "total_chars": 0
+      },
+      "recursive": {
+        "count": 27,
+        "total_chars": 215750,
+        "largest": [
+          [
+            54251,
+            "tests/test_basic.py"
+          ],
+          [
+            31287,
+            "tests/test_blueprints.py"
+          ],
+          [
+            20298,
+            "tests/test_cli.py"
+          ],
+          [
+            15403,
+            "tests/test_templating.py"
+          ],
+          [
+            11218,
+            "tests/test_helpers.py"
+          ]
+        ]
+      },
+      "chars_per_token": 4.018,
+      "scenarios": {
+        "focused_single_test_file": {
+          "file": "tests/test_basic.py",
+          "tokens": 13708,
+          "method": "scaled-by-measured-ratio",
+          "chars": 55083
+        },
+        "median_test_file": {
+          "file": "tests/test_async.py",
+          "tokens": 905,
+          "method": "exact",
+          "chars": 4167
+        },
+        "all_test_files": {
+          "file": "27 files",
+          "tokens": 54176,
+          "method": "scaled-by-measured-ratio",
+          "chars": 217686
+        }
+      }
+    }
+  }
+}
