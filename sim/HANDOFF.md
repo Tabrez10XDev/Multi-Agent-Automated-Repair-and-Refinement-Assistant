@@ -61,9 +61,12 @@ Run: `./venv/bin/python -m sim.engine --help`
    full output at admission, because with no preemption a request that runs out
    of KV mid-decode has nowhere to go.
 4. **Rent is emergent, never priced.** There is deliberately no per-token memory
-   knob. The engine charges rent by observing that a retained entry kept a
-   request waiting. **Do not add a memory-price config value** — it would let the
-   retention policy read the answer it is supposed to infer.
+   knob. **Do not add a memory-price config value** — it would let the retention
+   policy read the answer it is supposed to infer.
+   > **REVISED — see §13.** The *no-price* principle stands, but the mechanism
+   > ("charge rent while a retained entry keeps a request waiting") has been
+   > replaced by derived, eviction-pressure-scaled rent. Do not implement the
+   > blocking-only version from this line.
 5. **CPU stages consume wall-clock but hold no KV.** `navigate` (ChromaDB +
    nomic-embed-text) and `apply_and_test` (pytest) define the reuse gap.
 
@@ -273,7 +276,8 @@ retention-addressable blocking.
    and will be recomputed", which the current model does not capture. Rent is
    consequently too sparse to drive a policy. Reworking this changes what the
    competitive-ratio bound is a bound *on*, so it is a design decision, not a
-   patch. **Unresolved; needs the user's input.**
+   patch. **RESOLVED — design recorded in §13.** Implementation lands in
+   Milestone 1 Phase 4; the old model stays selectable as `blocking_rent`.
 3. **`batch_decode_coeff = 0.15` is a placeholder** and is load-bearing — it
    decides how much throughput a blocked request forgoes. Sweep it in `ablate.py`.
 4. Rates are Mac/Metal, not CUDA.
@@ -324,3 +328,64 @@ writeup: **vLLM's automatic prefix caching evicts with LRU**, so the LRU baselin
 is the real incumbent rather than a strawman. If GPU access appears, spend it
 calibrating the cost model (especially `batch_decode_coeff`), not on a
 reimplementation.
+
+---
+
+## 13. Derived rent design (supersedes §3 decision 4, resolves §9.2)
+
+Decided with the user before Milestone 1. This replaces blocking-only rent.
+
+### The four rules
+
+1. **Rent scales with eviction pressure.** The accrual rate is proportional to
+   how fast the cache is actually being forced to evict, measured live from
+   engine state.
+2. **Rent for holding entry E = the recompute cost of the next victim that would
+   be evicted instead of E** — the marginal victim, selected from current budget
+   state, **excluding E itself**. If E were released, that victim would survive;
+   the damage E causes by staying is precisely that victim's recompute.
+3. **Rent = 0 when nothing else is evictable.** No victim means no pressure and
+   no damage. This covers the case where the budget is full of pinned in-flight
+   KV: retention had no lever, so charging it would blame the wrong mechanism.
+   That time is reported separately as residual blocking.
+4. **Rent accrues continuously over time**, throughout any interval where the
+   budget is full and pending work would require an eviction — not only while a
+   request is hard-blocked.
+
+### Why not the obvious version
+
+The first formulation set the rate equal to the marginal victim's recompute cost
+directly. That gives the rate units of seconds per second, i.e. dimensionless,
+so break-even lands at `E_recompute / victim_recompute` **time units** — and
+which time unit is arbitrary. With measured numbers, two 7,710-token prefixes
+(28.8s recompute each) break even at `t* = 1.0 second`, while the measured p50
+reuse gap is ~21s. Ski-rental would evict almost everything immediately and lose
+to LRU. Re-express the identical rule in milliseconds and it evicts 1000x
+sooner. A rule whose behaviour depends on the unit you write it in has a missing
+factor, and the missing factor is the eviction rate.
+
+So: `rate = marginal_victim_recompute_seconds × evictions_per_second`. Accrued
+rent then reads as "recompute-seconds actually being forced while I hold this",
+which is directly comparable to E's own recompute cost — the ski-rental
+comparison, in consistent units.
+
+### Still no price knob
+
+§3 decision 4's *principle* survives even though its mechanism is replaced:
+there is no configurable memory price. Both terms in the rate are observed —
+the victim's recompute comes from `CostModel` prefill physics (the same physics
+the offline reference uses), and the eviction rate is counted from the engine.
+
+One honest caveat: the eviction rate needs smoothing, so there is an EWMA time
+constant. It is an **estimator** parameter, not a price — it changes how noisily
+an observable is measured, not how much memory costs. It should still be listed
+as a PLACEHOLDER and swept.
+
+### Consequence for the competitive-ratio claim
+
+Classic ski-rental assumes **constant** rent. Derived rent is not constant: it
+moves with load and with which victim is currently marginal. The textbook
+2-competitive guarantee therefore does **not** transfer, and must not be claimed.
+Measure the realized ratio against the offline reference instead, and label that
+baseline "offline reference" rather than "optimal" — exact OPT under continuous
+batching with load-dependent rent is not proven here.

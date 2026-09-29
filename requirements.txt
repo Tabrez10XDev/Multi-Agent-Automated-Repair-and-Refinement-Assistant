@@ -1,3 +1,12 @@
+# MAARA agent harness
 chromadb
 ollama
 python-dotenv
+
+# Simulator (sim/) — stdlib plus these two only. No ML/serving deps: the
+# simulator must stay runnable without a GPU or a model server.
+numpy
+matplotlib
+
+# Tests
+pytest
