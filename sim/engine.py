@@ -71,6 +71,13 @@ class EngineConfig:
     # observable is measured, not what memory costs.
     ewma_tau_s: float = 30.0
 
+    # Chunked prefill, as vLLM does it: a long prompt is prefilled a chunk at a
+    # time so one 27k-token prompt cannot monopolise an iteration and stall
+    # every decode behind it. 512 is vLLM's default order of magnitude.
+    # PLACEHOLDER, not measured. 0 disables chunking (the Phase 1-5 behaviour).
+    # Chunked is the DEFAULT here; --prefill-chunk 0 restores unchunked.
+    prefill_chunk_tokens: int = 512
+
     @property
     def kv_budget_bytes(self) -> int:
         return int(self.kv_budget_mb * 1024 * 1024)
@@ -147,9 +154,12 @@ class Request:
     finished_at: Optional[float] = None
 
     prefill_tokens: int = 0         # tokens actually prefilled (excludes a cache hit)
+    prefill_remaining: int = 0      # still to prefill, when chunking
     generated: int = 0
     private_bytes: int = 0
     entry: Optional[KVEntry] = None
+    held_blocks: list = field(default_factory=list)
+    matched_blocks: int = 0
     prefix_hit: bool = False
     kv_blocked_seconds: float = 0.0
     # Prediction recorded at enqueue, scored against the true output at
@@ -199,6 +209,11 @@ class Engine:
         # decayed by exp(-dt/tau) each iteration, which is an EWMA of an event
         # rate. This is the only estimator knob in derived rent.
         self._evict_rate = 0.0
+        # Per block key, across the whole run: rent it accrued while resident,
+        # and what rebuilding it costs. Hindsight cost for a key is the cheaper
+        # of the two -- what an observer with perfect foresight would have paid.
+        self._key_rent = {}
+        self._key_recompute = {}
         self._req_id = 0
         self.done_nodes = {}        # (task_id, node_id) -> finish time
         self.task_done_at = {}
@@ -319,6 +334,23 @@ class Engine:
 
     # -- admission ---------------------------------------------------------
 
+    def _match_blocks(self, r: Request):
+        """
+        Longest run of leading KV blocks already cached, vLLM-style.
+
+        Each block key hashes the chain of every block before it, so a match can
+        only ever be a prefix: the first differing block ends it for good. This
+        is what makes a hit PARTIAL -- matched blocks skip prefill, everything
+        after is computed.
+        """
+        matched = 0
+        for k in r.node.block_keys:
+            e = self.entries.get(k)
+            if e is None or e.model != r.model:
+                break
+            matched += 1
+        return matched
+
     def _try_admit(self, r: Request) -> bool:
         """
         Returns True if admitted. Reserves KV for prompt AND full output up front:
@@ -326,126 +358,117 @@ class Engine:
         nowhere to go, so the engine refuses to start what it cannot finish.
         """
         node = r.node
-        key = node.prefix_key
-        entry = self.entries.get(key) if key else None
-        if entry is not None and entry.model != r.model:
-            # A KV cache belongs to one model instance, so an entry another
-            # model produced cannot be reused however identical the text.
-            # Keys already carry the model; this is defence in depth against a
-            # trace or generator that forgets to include it.
-            entry = None
-        hit = entry is not None
+        bt = self.cfg.block_tokens
+        chain = node.block_keys
+        matched = self._match_blocks(r)
+        matched_tokens = min(matched * bt, node.prompt_tokens)
+        new_keys = chain[matched:]
 
-        # KV is allocated in whole blocks, so a 4-token shared prefix still
-        # occupies a full 16-token block. At this workload's median reuse that
-        # quantisation is the dominant cost, not a rounding detail.
-        held_prefix_tokens = self.cfg.blocks_for(node.prefix_tokens)
-        prefix_new_bytes = 0 if hit else self.cost.kv_bytes(r.model, held_prefix_tokens)
-        private_bytes = self.cost.kv_bytes(
-            r.model, self.cfg.blocks_for(node.suffix_tokens + node.output_tokens))
-        need = prefix_new_bytes + private_bytes
+        block_bytes = self.cost.kv_bytes(r.model, bt)
+        # Generated tokens are not part of the prompt chain but still need KV.
+        output_bytes = self.cost.kv_bytes(
+            r.model, self.cfg.blocks_for(node.output_tokens))
+        need = len(new_keys) * block_bytes + output_bytes
 
-        if need > self.cfg.kv_budget_bytes:
+        # Check the WORST case, not the current one. With some blocks already
+        # cached a request can look admissible, then become permanently
+        # infeasible once they are evicted -- which surfaced as a deadlock far
+        # from the cause. A request whose whole prompt cannot fit an empty
+        # budget can never run, so say so now.
+        worst_case = len(chain) * block_bytes + output_bytes
+        if worst_case > self.cfg.kv_budget_bytes:
             raise RuntimeError(
-                f"req{r.req_id} ({node.stage}) needs "
-                f"{need/1024/1024:.0f}MB but the whole budget is "
-                f"{self.cfg.kv_budget_mb:.0f}MB. Raise kv_budget_mb.")
+                f"req{r.req_id} ({node.stage}) needs {worst_case/1024/1024:.0f}MB "
+                f"for its full prompt ({len(chain)} blocks + output) but the whole "
+                f"budget is {self.cfg.kv_budget_mb:.0f}MB. Raise kv_budget_mb.")
 
         if need > self.free_bytes:
-            # Pressure. Ask the retention policy what to give up.
-            candidates = [e for e in self.entries.values() if e.evictable]
-            if hit and entry in candidates:
-                candidates.remove(entry)   # never evict the thing we are about to use
-            victims = self.retention.choose_victims(candidates, need - self.free_bytes, self.now)
+            held = set(chain[:matched])
+            candidates = [e for e in self.entries.values()
+                          if e.evictable and e.key not in held]
+            victims = self.retention.choose_victims(
+                candidates, need - self.free_bytes, self.now)
             for v in victims:
+                if self.free_bytes >= need:
+                    break
+                self._evict(v, forced=True)
+
+            if need > self.free_bytes and held:
+                # Last resort: give up the hit. The blocks this request matched
+                # were excluded from eviction to protect the reuse, but under a
+                # tight budget they can be the very thing blocking the
+                # request's own admission -- a deadlock where a request is held
+                # up by the blocks it wanted to reuse. Releasing them costs a
+                # recompute; refusing to costs the whole run.
+                spares = [e for e in self.entries.values()
+                          if e.evictable and e.key in held]
+                for v in self.retention.choose_victims(
+                        spares, need - self.free_bytes, self.now):
+                    if self.free_bytes >= need:
+                        break
+                    self._evict(v, forced=True)
+                # The match is shorter now, so redo it and re-price.
+                matched = self._match_blocks(r)
+                matched_tokens = min(matched * bt, node.prompt_tokens)
+                new_keys = chain[matched:]
+                need = len(new_keys) * block_bytes + output_bytes
+
+            for v in ():
                 # Test against live free space only. An earlier version also
                 # accumulated a `freed` counter and compared it to
                 # `need - self.free_bytes` -- but free_bytes already grows as
                 # entries are evicted, so the same bytes were counted twice and
-                # the loop stopped at roughly half the required eviction. That
-                # produced spurious admission failures, and a hard deadlock
-                # whenever nothing was running to free memory later.
+                # the loop stopped at roughly half the required eviction.
                 if self.free_bytes >= need:
                     break
                 self._evict(v, forced=True)
             if need > self.free_bytes:
                 return False      # still blocked: caller records this as KV pressure
 
-        if hit:
-            self.m["hits"] += 1
-            r.prefix_hit = True
-            r.prefill_tokens = node.suffix_tokens
-            entry.last_used = self.now
-        else:
-            if key is not None and key in self.seen_keys:
+        # Accounting. A block seen before and now absent is recompute the
+        # retention policy could have avoided; a block never seen is a cold
+        # miss nobody could have prevented.
+        for k in new_keys:
+            if k in self.seen_keys:
                 self.m["recompute_misses"] += 1
-                self.m["recompute_tokens"] += node.prefix_tokens
-                self.m["recompute_seconds"] += self.cost.recompute_seconds(
-                    r.model, node.prefix_tokens)
-            elif key is not None:
+                self.m["recompute_tokens"] += bt
+                self.m["recompute_seconds"] += self.cost.recompute_seconds(r.model, bt)
+            else:
                 self.m["cold_misses"] += 1
-            r.prefill_tokens = node.prompt_tokens
-            if key is not None:
-                entry = KVEntry(
-                    key=key, model=r.model, tokens=held_prefix_tokens,
-                    nbytes=self.cost.kv_bytes(r.model, held_prefix_tokens),
-                    created=self.now, last_used=self.now,
-                    # Benefit of keeping it is the prefill a later call avoids,
-                    # which is the tokens it actually matches -- not the
-                    # block-rounded amount we are obliged to store.
-                    useful_tokens=node.prefix_tokens,
-                    recompute_s=self.cost.recompute_seconds(r.model, node.prefix_tokens),
-                    true_gap_s=node.next_reuse_gap_s,
-                    hint_gap_s=(self.hints.hint_for(node) if self.hints else None))
-                self.entries[key] = entry
-                self.seen_keys.add(key)
+        self.m["hits"] += matched
+        r.prefix_hit = matched > 0
+        r.matched_blocks = matched
+        r.prefill_tokens = max(0, node.prompt_tokens - matched_tokens)
+        r.prefill_remaining = r.prefill_tokens
 
-        if entry is not None:
-            entry.refcount += 1
-        r.entry = entry
-        r.private_bytes = private_bytes
-        self.pinned_bytes += private_bytes
+        for k in chain[:matched]:
+            self.entries[k].last_used = self.now
+        for k in new_keys:
+            self.entries[k] = KVEntry(
+                key=k, model=r.model, tokens=bt, nbytes=block_bytes,
+                created=self.now, last_used=self.now,
+                useful_tokens=bt,
+                recompute_s=self.cost.recompute_seconds(r.model, bt),
+                true_gap_s=node.next_reuse_gap_s,
+                hint_gap_s=(self.hints.hint_for(node) if self.hints else None))
+            self.seen_keys.add(k)
+            self._key_recompute[k] = self.cost.recompute_seconds(r.model, bt)
+
+        for k in chain:
+            self.entries[k].refcount += 1
+        r.held_blocks = list(chain)
+
+        r.private_bytes = output_bytes
+        self.pinned_bytes += output_bytes
         r.state = State.PREFILL
         r.started_at = self.now
         self.running.append(r)
 
         self._log(f"  ADMIT req{r.req_id} t{node.task_id}/{node.stage} "
-                  f"{'HIT ' if hit else 'MISS'} prefill={r.prefill_tokens}tok "
+                  f"{matched}/{len(chain)} blocks hit  prefill={r.prefill_tokens}tok "
                   f"batch={len(self.running)} kv={self.used_bytes/1024/1024:.0f}/"
                   f"{self.cfg.kv_budget_mb:.0f}MB")
         return True
-
-    def _retain_tail(self, r: Request):
-        """
-        Cache the prompt blocks past the shared head, as vLLM would.
-
-        A finished sequence leaves ALL its prompt blocks in the cache, not only
-        the part some later call happens to match. Those trailing blocks cost
-        exactly as much memory as useful ones and pay back nothing, and an
-        online policy cannot tell them apart at creation time -- which is
-        precisely the decision retention has to get right. Modelling only the
-        shared head would quietly assume the problem away.
-
-        Generated tokens are not retained: a follow-up call in this workload
-        rebuilds its prompt rather than continuing the previous sequence.
-        """
-        node = r.node
-        tail_tokens = self.cfg.blocks_for(node.suffix_tokens)
-        if tail_tokens <= 0:
-            return
-        entry = KVEntry(
-            key=f"tail:{r.req_id}", model=r.model, tokens=tail_tokens,
-            nbytes=self.cost.kv_bytes(r.model, tail_tokens),
-            created=self.now, last_used=self.now, refcount=0,
-            useful_tokens=0, recompute_s=0.0, is_tail=True,
-            # A tail is never matched, so its true gap is "never".
-            true_gap_s=None, hint_gap_s=None)
-        if not self.retention.on_complete(entry, self.now):
-            return
-        if entry.nbytes > self.free_bytes:
-            return          # no room; the tail is worthless, so never force an eviction for it
-        self.entries[entry.key] = entry
-        self.m["tail_entries_created"] += 1
 
     def _evict(self, entry: KVEntry, forced: bool):
         del self.entries[entry.key]
@@ -538,10 +561,15 @@ class Engine:
         # not just to the request that missed.
         prefill = next((r for r in batch if r.state is State.PREFILL), None)
         if prefill is not None:
-            t = self.cost.prefill_seconds(model, prefill.prefill_tokens)
+            chunk = prefill.prefill_remaining
+            if self.cfg.prefill_chunk_tokens > 0:
+                chunk = min(chunk, self.cfg.prefill_chunk_tokens)
+            t = self.cost.prefill_seconds(model, chunk)
             dt += t
             self.m["prefill_seconds"] += t
-            prefill.state = State.DECODE
+            prefill.prefill_remaining -= chunk
+            if prefill.prefill_remaining <= 0:
+                prefill.state = State.DECODE
 
         decoders = [r for r in batch if r.state is State.DECODE and r is not prefill]
         if decoders:
@@ -576,12 +604,10 @@ class Engine:
     def _need_bytes(self, r: Request) -> int:
         """KV a request must be given to run: new prefix blocks plus private blocks."""
         node = r.node
-        entry = self.entries.get(node.prefix_key) if node.prefix_key else None
-        prefix = 0 if entry else self.cost.kv_bytes(
-            r.model, self.cfg.blocks_for(node.prefix_tokens))
-        private = self.cost.kv_bytes(
-            r.model, self.cfg.blocks_for(node.suffix_tokens + node.output_tokens))
-        return prefix + private
+        matched = self._match_blocks(r)
+        new_blocks = max(0, len(node.block_keys) - matched)
+        return (new_blocks * self.cost.kv_bytes(r.model, self.cfg.block_tokens)
+                + self.cost.kv_bytes(r.model, self.cfg.blocks_for(node.output_tokens)))
 
     def _under_pressure(self) -> bool:
         """
@@ -659,11 +685,24 @@ class Engine:
         order = sorted(evictable, key=lambda e: (e.last_used, e.key))
         first, second = order[0], order[1]
         rate = self._evict_rate
+        # Normalised by the evictable pool, so the charges SUM to the damage
+        # actually being done -- one victim's recompute per eviction -- instead
+        # of charging every entry the full amount.
+        #
+        # Phase 4 wrote this as E.bytes x victim_recompute_per_byte x rate,
+        # which does not conserve: total rent scaled with the number of
+        # entries. That was tolerable with a handful of whole-prefix entries
+        # and became pathological under block granularity, where a run holds
+        # thousands of 16-token blocks and total rent inflated ~100x.
+        # Break-even is unaffected: rent and benefit are both linear in size,
+        # so the entry size still cancels.
+        pool = sum(e.nbytes for e in evictable) or 1
         for e in evictable:
             victim = second if e is first else first
-            rent_rate = e.nbytes * victim.recompute_s_per_byte * rate
+            rent_rate = (e.nbytes / pool) * victim.recompute_s * rate
             e.rent_rate = rent_rate
             e.rent_accrued += rent_rate * dt
+            self._key_rent[e.key] = self._key_rent.get(e.key, 0.0) + rent_rate * dt
             self.m["total_rent"] += rent_rate * dt
 
     def _voluntary_release(self):
@@ -688,12 +727,14 @@ class Engine:
                 r.finished_at = self.now
                 self.running.remove(r)
                 self.pinned_bytes -= r.private_bytes
-                if r.entry is not None:
-                    r.entry.refcount -= 1
-                    r.entry.last_used = self.now
-                    if r.entry.refcount == 0 and not self.retention.on_complete(r.entry, self.now):
-                        self._evict(r.entry, forced=False)
-                self._retain_tail(r)
+                for k in r.held_blocks:
+                    e = self.entries.get(k)
+                    if e is None:
+                        continue
+                    e.refcount -= 1
+                    e.last_used = self.now
+                    if e.refcount == 0 and not self.retention.on_complete(e, self.now):
+                        self._evict(e, forced=False)
                 self._log(f"  DONE  req{r.req_id} t{r.node.task_id}/{r.node.stage} "
                           f"({r.finished_at - r.enqueued_at:.2f}s e2e)")
                 if self.estimator is not None:
@@ -800,6 +841,17 @@ class Engine:
                 met += 1
         n_dl = len(slacks)
 
+        # Per-entry hindsight: for each block key, the cheaper of rebuilding it
+        # and the rent it actually accrued. Summed, that is what a policy with
+        # perfect foresight would have spent, so the ratio below is a
+        # measurement against an achievable floor rather than against another
+        # heuristic's guess.
+        hindsight = sum(min(self._key_recompute.get(k, 0.0), rent)
+                        for k, rent in self._key_rent.items())
+        hindsight += sum(v for k, v in self._key_recompute.items()
+                         if k not in self._key_rent and False)
+        policy_cost = self.m["total_rent"] + self.m["recompute_seconds"]
+
         all_ape = [x for v in self.m["ape_by_stage"].values() for x in v]
         mape_by_stage = {stage: statistics.fmean(v)
                          for stage, v in self.m["ape_by_stage"].items() if v}
@@ -839,6 +891,9 @@ class Engine:
             "voluntary_evictions": self.m["voluntary_evictions"],
             "tail_evictions": self.m["tail_evictions"],
             "mean_eviction_rate_per_s": w("w_evict_rate"),
+            "hindsight_cost_s": hindsight,
+            "policy_cost_s": policy_cost,
+            "realized_ratio": (policy_cost / hindsight) if hindsight > 0 else float("nan"),
             "mean_queue_depth": w("w_queue"),
             "max_queue_depth": self.m["max_queue"],
             "frac_decisions_with_choice": (
@@ -985,6 +1040,9 @@ def main():
     ap.add_argument("--rent-model", choices=["derived", "blocking"], default="derived")
     ap.add_argument("--block-tokens", type=int, default=16,
                     help="KV block size (PLACEHOLDER, vLLM default)")
+    ap.add_argument("--prefill-chunk", type=int, default=512,
+                    help="chunked prefill size in tokens; 0 = unchunked "
+                         "(PLACEHOLDER, chunked is the default)")
     ap.add_argument("--ewma-tau", type=float, default=30.0,
                     help="eviction-rate smoothing constant, seconds (PLACEHOLDER)")
     ap.add_argument("--slack-factor", type=float, default=1.5,
@@ -1021,7 +1079,8 @@ def main():
     print(scheduling_provenance(
         EngineConfig(kv_budget_mb=args.kv, max_batch=args.batch,
                      slack_factor=args.slack_factor, rent_model=args.rent_model,
-                     block_tokens=args.block_tokens, ewma_tau_s=args.ewma_tau), estimator))
+                     block_tokens=args.block_tokens, ewma_tau_s=args.ewma_tau,
+                     prefill_chunk_tokens=args.prefill_chunk), estimator))
     print()
     print(describe_trace(tasks))
     print()
@@ -1030,7 +1089,8 @@ def main():
         tasks, cost,
         EngineConfig(kv_budget_mb=args.kv, max_batch=args.batch,
                      slack_factor=args.slack_factor, rent_model=args.rent_model,
-                     block_tokens=args.block_tokens, ewma_tau_s=args.ewma_tau),
+                     block_tokens=args.block_tokens, ewma_tau_s=args.ewma_tau,
+                     prefill_chunk_tokens=args.prefill_chunk),
         retention=RETENTIONS[args.retention](),
         scheduler=SCHEDULERS[args.scheduler](),
         estimator=estimator,

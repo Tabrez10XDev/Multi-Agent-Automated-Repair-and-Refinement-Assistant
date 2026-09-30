@@ -21,6 +21,7 @@ values came from measurement and which are still assumed.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
@@ -297,6 +298,13 @@ class Node:
     attempt_index: int = 0
     replan_index: int = 0
 
+    # vLLM-style prefix cache keys: one per KV block, each hashing the chain of
+    # all blocks up to and including it. A lookup matches the longest run of
+    # leading blocks already cached, so a hit is PARTIAL -- matched blocks skip
+    # prefill, the rest are computed. Model is folded into the chain seed
+    # because a KV cache belongs to one model instance.
+    block_keys: list = field(default_factory=list)
+
     # Filled in by the generator, consumed by Phase-2 schedulers.
     # ORACLE FIELDS - an online policy must not read these.
     expected_seconds: float = 0.0
@@ -352,6 +360,46 @@ class WorkloadConfig:
 # Trace generation
 # --------------------------------------------------------------------------
 
+DEFAULT_BLOCK_TOKENS = 16
+
+
+def build_block_chain(model: str, segments) -> list:
+    """
+    Hash chain over KV blocks.
+
+    `segments` is [(identity, n_blocks), ...]. Two prompts sharing an identity
+    for their leading segments produce identical leading keys, and diverge for
+    good at the first differing block -- which is what a real prefix cache does.
+
+    Only WHOLE shared blocks are given the shared identity. A block straddling
+    the boundary between shared and private content holds both, so it cannot
+    match, and flooring here reproduces that loss rather than hiding it.
+    """
+    h = hashlib.sha1(model.encode()).hexdigest()[:12]
+    chain = []
+    for ident, n in segments:
+        for i in range(int(n)):
+            h = hashlib.sha1(f"{h}|{ident}|{i}".encode()).hexdigest()[:12]
+            chain.append(h)
+    return chain
+
+
+def block_chain_from_text(model: str, text: str, chars_per_block: int) -> list:
+    """
+    Chain built from prompt text, for traces where only the text is known.
+
+    Chunk width is fixed rather than derived per call: two calls with slightly
+    different chars-per-token would otherwise cut at different offsets and
+    diverge on block 1 even with an identical prefix.
+    """
+    h = hashlib.sha1(model.encode()).hexdigest()[:12]
+    chain = []
+    for i in range(0, len(text), max(1, chars_per_block)):
+        h = hashlib.sha1((h + text[i:i + chars_per_block]).encode()).hexdigest()[:12]
+        chain.append(h)
+    return chain
+
+
 def _weighted_choice(rng: random.Random, weights) -> int:
     total = sum(weights)
     r = rng.random() * total
@@ -391,9 +439,19 @@ def _build_task(task_id: int, arrival: float, rng: random.Random,
 
     def add(stage, kind, deps, **kw) -> int:
         nid = len(nodes)
-        nodes.append(Node(node_id=nid, task_id=task_id, stage=stage, kind=kind,
-                          deps=list(deps), attempt_index=ctx["attempt"],
-                          replan_index=ctx["replan"], **kw))
+        n = Node(node_id=nid, task_id=task_id, stage=stage, kind=kind,
+                 deps=list(deps), attempt_index=ctx["attempt"],
+                 replan_index=ctx["replan"], **kw)
+        if n.kind is Kind.LLM:
+            bt = DEFAULT_BLOCK_TOKENS
+            shared_blocks = n.prefix_tokens // bt          # whole blocks only
+            total_blocks = -(-n.prompt_tokens // bt)
+            ident = n.prefix_key or f"t{task_id}:n{nid}:head"
+            n.block_keys = build_block_chain(n.model, [
+                (ident, shared_blocks),
+                (f"t{task_id}:n{nid}:tail", max(0, total_blocks - shared_blocks)),
+            ])
+        nodes.append(n)
         return nid
 
     # Model is part of the key: a KV cache belongs to one model instance, so

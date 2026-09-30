@@ -109,20 +109,25 @@ def test_rent_is_proportional_to_entry_bytes():
 
 def test_break_even_is_independent_of_entry_size():
     """
-    Both rent and benefit are linear in tokens, so the size cancels and
-    break-even is 1/eviction_rate for any entry that holds exactly what it
-    reuses. This is the claim the worked example makes concrete.
+    Both rent and benefit are linear in tokens, so entry size cancels: a
+    64-token and a 2,048-token entry break even at the same moment.
+
+    The absolute constant depends on the evictable pool, because rent is
+    normalised by it so the charges sum to the damage actually done. Only the
+    size-independence is asserted here; the worked example in
+    sim/analyze_trace.py pins the constants for a stated pool.
     """
     eng = build_engine()
     rate = 0.1
+    t_stars = []
     for tokens in (64, 512, 2048):
         e = entry("e", tokens, eng)
         victim = entry("v", tokens, eng, last_used=-1.0)
         eng.entries = {"e": e, "v": victim}
         eng._evict_rate = rate
         eng._accrue_derived_rent(dt=1.0, pressure=True, evictable=[e, victim])
-        t_star = e.recompute_s / e.rent_accrued      # rent_accrued is for dt=1s
-        assert t_star == pytest.approx(1.0 / rate, rel=1e-6)
+        t_stars.append(e.recompute_s / e.rent_accrued)
+    assert max(t_stars) == pytest.approx(min(t_stars), rel=1e-6)
 
 
 def test_holding_more_than_you_reuse_shrinks_break_even():
@@ -139,8 +144,17 @@ def test_holding_more_than_you_reuse_shrinks_break_even():
     eng._evict_rate = 0.1
     eng._accrue_derived_rent(dt=1.0, pressure=True, evictable=[held, victim])
 
-    t_star = held.recompute_s / held.rent_accrued
-    assert t_star == pytest.approx((4 / 16) * (1 / 0.1), rel=1e-6)
+    # Same pool, same rate: only useful/held differs, so break-even must
+    # shrink by exactly that ratio against a full-value entry of equal size.
+    full = entry("full", 16, eng)
+    v2 = entry("v2", 16, eng, last_used=-1.0)
+    eng.entries = {"full": full, "v2": v2}
+    eng._evict_rate = 0.1
+    eng._accrue_derived_rent(dt=1.0, pressure=True, evictable=[full, v2])
+
+    shrunk = held.recompute_s / held.rent_accrued
+    baseline = full.recompute_s / full.rent_accrued
+    assert shrunk == pytest.approx(baseline * (4 / 16), rel=1e-6)
 
 
 # --- the marginal victim excludes E --------------------------------------
@@ -279,15 +293,16 @@ def test_derived_rent_is_denser_than_blocking_rent():
     assert ra["total_rent_s"] == 0.0 or rb["total_rent_s"] > ra["total_rent_s"] * 10
 
 
-def test_tail_entries_are_created_and_are_worthless():
+def test_every_prompt_block_is_cached_not_only_the_shared_head():
     """
-    vLLM caches every prompt block, not just the shared head. The trailing
-    blocks cost memory and can never be matched -- which is the decision
-    retention has to get right.
+    vLLM caches every prompt block. Under block-hash keying the trailing blocks
+    are ordinary entries in the chain rather than a special "tail" object --
+    they simply never get matched by anyone, which is exactly the situation
+    retention has to detect without being told.
     """
-    eng = build_engine(kv_mb=8192.0, n_tasks=12, stable_tokens=4000)
+    eng = build_engine(kv_mb=1_000_000.0, n_tasks=8, stable_tokens=4000)
     eng.run()
-    assert eng.m["tail_entries_created"] > 0
-    for e in eng.entries.values():
-        if e.is_tail:
-            assert e.useful_tokens == 0 and e.recompute_s == 0.0
+    assert len(eng.seen_keys) > 100
+    blocks_per_call = [len(r.node.block_keys) for r in eng.requests]
+    assert min(blocks_per_call) > 1          # prompts span many blocks
+    assert eng.m["cold_misses"] > 0

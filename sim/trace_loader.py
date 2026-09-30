@@ -49,7 +49,8 @@ import statistics
 from dataclasses import dataclass, field
 from typing import Optional
 
-from sim.workload import (ROLE_TO_STAGE, Kind, Node, Task)
+from sim.workload import (DEFAULT_BLOCK_TOKENS, ROLE_TO_STAGE, Kind, Node,
+                          Task, block_chain_from_text)
 
 CODER_MODELS = {"qwen2.5-coder:7b", "llama3.2"}
 
@@ -440,6 +441,10 @@ def load_trace(main_path, prompts_path=None,
         prefixes = compute_prefixes(block, prompts_by_call, run_key)
         all_prefixes.update(prefixes)
 
+        # Fixed chunk width so two calls with an identical text prefix cut at
+        # the same offsets and therefore produce identical leading block keys.
+        chars_per_block = max(1, int(DEFAULT_BLOCK_TOKENS * median_cpt))
+
         nodes, node_of_call = [], {}
         for r in block:
             role = r["agent_role"]
@@ -472,6 +477,10 @@ def load_trace(main_path, prompts_path=None,
                          output_tokens=r.get("output_tokens") or 0,
                          attempt_index=r.get("attempt_index", 0),
                          replan_index=r.get("replan_index", 0))
+                msgs = prompts_by_call.get(r["call_id"])
+                text = render_prompt(msgs) if msgs else ""
+                n.block_keys = block_chain_from_text(
+                    n.model, text[:int(total_tokens * median_cpt)], chars_per_block)
                 n.expected_seconds = dur
             nodes.append(n)
             node_of_call[r["call_id"]] = n.node_id
