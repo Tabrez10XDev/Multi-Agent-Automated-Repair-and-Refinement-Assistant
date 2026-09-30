@@ -62,8 +62,14 @@ class ModelRates:
     a prefix you dropped), decode is the clock the rent runs on (what a blocked
     request is losing while it waits).
 
-    kv_bytes_per_token is derived from published architecture configs, not
-    measured:
+    kv_bytes_per_token for qwen2.5-coder:7b is now CONFIRMED against Ollama's
+    own server log. Ollama 0.33.3 reports each saved prompt-cache state as
+    "3791 tokens, 207.364 MiB", i.e. 207.364 x 1048576 / 3791 = 57,356 B/token
+    against the 57,344 derived below -- a 0.02% difference, which is rounding
+    in the logged MiB figure. llama3.2's value remains derived; it needs the
+    same check against a log line for one of its states.
+
+    Derived from published architecture configs:
         qwen2.5-coder:7b  28 layers, 4 KV heads (GQA), head_dim 128, fp16
                           -> 2 * 28 * 4 * 128 * 2 = 57344 B/token
         llama3.2:3b       28 layers, 8 KV heads, head_dim 128, fp16
@@ -161,9 +167,15 @@ class CostModel:
         lines = ["CostModel provenance:"]
         for name, r in self.rates.items():
             tag = "MEASURED" if r.measured else "PLACEHOLDER"
+            # KV bytes/token has its own provenance: qwen's is confirmed
+            # against an Ollama 0.33.3 prompt-cache log line ("3791 tokens,
+            # 207.364 MiB" -> 57,356 B/token vs 57,344 derived, 0.02% apart).
+            # llama3.2's is still derived from published config only.
+            kv_tag = "MEASURED from ollama log" if name == CODER_MODEL else "DERIVED"
             lines.append(f"  {name:<20} prefill={r.prefill_rate:>7.1f} tok/s  "
                          f"decode={r.decode_rate:>6.1f} tok/s  "
-                         f"kv={r.kv_bytes_per_token/1024:>5.0f} KiB/tok  [{tag}]")
+                         f"kv={r.kv_bytes_per_token/1024:>5.0f} KiB/tok  "
+                         f"[rates {tag}; kv {kv_tag}]")
         lines.append(f"  batch_decode_coeff   {self.batch_decode_coeff}  [PLACEHOLDER - sweep this]")
         lines.append(f"  homogeneous          {self.homogeneous}")
         # Applies whenever a trace-derived workload is used (sim/trace_loader.py).

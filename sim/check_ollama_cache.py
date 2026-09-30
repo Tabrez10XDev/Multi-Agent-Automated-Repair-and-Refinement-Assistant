@@ -146,13 +146,96 @@ def slot_probe(endpoint="generate", k_max=8):
     return last_hit
 
 
+def capacity_probe(endpoint="generate", n=40):
+    """
+    How many saved prompt states does the host RAM cache hold?
+
+    Ollama 0.33.3 runs ONE slot (-np 1) but saves displaced slot states to a
+    host-RAM cache, which is why repeats kept hitting at every K up to 8. This
+    finds where that cache ends.
+
+    Send n distinct prompts once to fill it, then re-probe in REVERSE order.
+    Under LRU the most recent survive, so the number of consecutive hits before
+    the first miss is the capacity. Sweeping K from 1 would cost sum(2K) calls;
+    this costs n + (hits) and stops as soon as it has the answer.
+    """
+    print(f"--- capacity probe on /api/{endpoint}, n={n} ---")
+    prompts = [f"# cap {i} {random.randint(10**9, 10**10)}\n" + PROMPT + LAST_ORIGINAL
+               for i in range(n)]
+    fill = []
+    for i, p in enumerate(prompts):
+        fill.append(call(endpoint, p, f"fill {i}", quiet=True)[1])
+        if i % 10 == 9:
+            print(f"  filled {i+1}/{n}  (median cold {sorted(fill)[len(fill)//2]:.2f}s)",
+                  flush=True)
+    cold = sorted(fill)[len(fill) // 2]
+
+    print(f"  cold prefill median {cold:.3f}s; re-probing newest-first", flush=True)
+    survivors = 0
+    for rank, i in enumerate(range(n - 1, -1, -1)):
+        secs = call(endpoint, prompts[i], f"reprobe {i}", quiet=True)[1]
+        hit = secs < cold / 3.0
+        print(f"  rank {rank:>3} (prompt {i:>3})  {secs:7.3f}s  "
+              f"{'HIT' if hit else 'MISS'}", flush=True)
+        if not hit:
+            break
+        survivors += 1
+    print()
+    per_state_mib = 207.364 * (len(PROMPT) // 4) / 3791
+    print(f"  => {survivors} of {n} states survived; the {survivors+1}th oldest was evicted")
+    print(f"  at roughly {per_state_mib:.0f} MiB per state that is "
+          f"~{survivors * per_state_mib / 1024:.1f} GiB of prompt cache")
+    return survivors
+
+
+def affinity_probe(endpoint="generate"):
+    """
+    Does a SIMILAR prompt overwrite the slot, or get its own state?
+
+    Ollama reuses the active slot when prefix similarity clears 0.10
+    ("checking sim = 0.002 > 0.100"), otherwise picks a slot by LRU. If a
+    similar B reuses A's slot, A's state may be overwritten rather than saved,
+    so A would stop hitting. Each level runs A, then B sharing that fraction of
+    A's prefix, then A again.
+    """
+    print(f"--- affinity probe on /api/{endpoint} ---")
+    print(f"  {'shared':>7}  {'A cold':>8}  {'B':>8}  {'A again':>8}  A survived?")
+    for frac in (0.05, 0.25, 0.50, 0.90):
+        nonce = f"# aff {random.randint(10**9, 10**10)}\n"
+        a = nonce + PROMPT + LAST_ORIGINAL
+        cut = int(len(a) * frac)
+        b = a[:cut] + f"\n# divergent tail {random.randint(10**9, 10**10)}\n" + BODY[:400]
+        t_a = call(endpoint, a, "A cold", quiet=True)[1]
+        t_b = call(endpoint, b, "B", quiet=True)[1]
+        t_a2 = call(endpoint, a, "A again", quiet=True)[1]
+        survived = t_a2 < t_a / 3.0
+        print(f"  {frac:>6.0%}  {t_a:>7.3f}s  {t_b:>7.3f}s  {t_a2:>7.3f}s  "
+              f"{'yes' if survived else 'NO - overwritten'}", flush=True)
+    print()
+    print("  A surviving at every level => displaced states go to the RAM cache.")
+    print("  A lost above 10% similarity => the slot is overwritten in place.")
+    print()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--slots", action="store_true",
                     help="also probe how many prompts are cached per model")
     ap.add_argument("--k-max", type=int, default=8)
+    ap.add_argument("--capacity", type=int, default=0,
+                    help="probe host prompt-cache capacity with N distinct prompts")
+    ap.add_argument("--affinity", action="store_true",
+                    help="probe whether a similar prompt overwrites the slot")
+    ap.add_argument("--only", action="store_true",
+                    help="skip the 4-call verdict and run only the chosen probes")
     args = ap.parse_args()
     print(f"model={MODEL}  keep_alive={KEEP_ALIVE}  prompt ~{len(PROMPT)//4} tokens\n")
+    if args.affinity:
+        affinity_probe("generate")
+    if args.capacity:
+        capacity_probe("generate", args.capacity)
+    if args.only:
+        return 0
     for endpoint in ("chat", "generate"):
         print(f"--- /api/{endpoint} ---")
         # A unique preamble makes call 1 genuinely cold. Without it the first
