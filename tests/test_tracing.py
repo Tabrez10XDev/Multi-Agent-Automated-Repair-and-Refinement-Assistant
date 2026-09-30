@@ -214,3 +214,69 @@ def test_seq_is_monotonic(traced, tmp_path):
         for _ in range(4):
             tracing.chat(model="m", messages=[], role="coder")
     assert [r["seq"] for r in _rows(tmp_path)] == [1, 2, 3, 4]
+
+
+# --- append guard --------------------------------------------------------
+
+def test_refuses_to_reuse_an_existing_trace_file(tmp_path, monkeypatch):
+    """
+    MAARA_RUN_ID pins the filename, so a restarted run used to append a second
+    seq sequence into the same file under the same run_id -- indistinguishable
+    from the first except by seq ceasing to advance. That silently invalidated
+    a whole run's reuse figures once already.
+    """
+    import ollama
+    monkeypatch.setattr(ollama, "chat", lambda model, messages, **kw: _fake_response())
+    monkeypatch.setenv("MAARA_TRACE", "1")
+    monkeypatch.setenv("MAARA_TRACE_SMOKE", "1")
+    monkeypatch.setenv("MAARA_TRACE_DIR", str(tmp_path))
+    monkeypatch.setenv("MAARA_RUN_ID", "dup")
+    monkeypatch.delenv("MAARA_TRACE_APPEND", raising=False)
+    tracing._reset()
+
+    with tracing.task("t1"):
+        tracing.chat(model="m", messages=[], role="coder")
+    tracing._reset()
+    assert (tmp_path / "smoke" / "dup.jsonl").exists()
+
+    with pytest.raises(RuntimeError, match="already exists"):
+        tracing.chat(model="m", messages=[], role="coder")
+    tracing._reset()
+
+
+def test_append_is_allowed_when_asked_for(tmp_path, monkeypatch):
+    import ollama
+    monkeypatch.setattr(ollama, "chat", lambda model, messages, **kw: _fake_response())
+    monkeypatch.setenv("MAARA_TRACE", "1")
+    monkeypatch.setenv("MAARA_TRACE_SMOKE", "1")
+    monkeypatch.setenv("MAARA_TRACE_DIR", str(tmp_path))
+    monkeypatch.setenv("MAARA_RUN_ID", "dup2")
+    tracing._reset()
+    with tracing.task("t1"):
+        tracing.chat(model="m", messages=[], role="coder")
+    tracing._reset()
+
+    monkeypatch.setenv("MAARA_TRACE_APPEND", "1")
+    with tracing.task("t2"):
+        tracing.chat(model="m", messages=[], role="coder")
+    tracing._reset()
+    rows = [json.loads(l) for l in
+            (tmp_path / "smoke" / "dup2.jsonl").read_text().splitlines() if l.strip()]
+    assert len(rows) == 2
+
+
+def test_a_fresh_run_id_is_unaffected(tmp_path, monkeypatch):
+    import ollama
+    monkeypatch.setattr(ollama, "chat", lambda model, messages, **kw: _fake_response())
+    monkeypatch.setenv("MAARA_TRACE", "1")
+    monkeypatch.setenv("MAARA_TRACE_SMOKE", "1")
+    monkeypatch.setenv("MAARA_TRACE_DIR", str(tmp_path))
+    monkeypatch.delenv("MAARA_TRACE_APPEND", raising=False)
+    for rid in ("a", "b"):
+        monkeypatch.setenv("MAARA_RUN_ID", rid)
+        tracing._reset()
+        with tracing.task("t"):
+            tracing.chat(model="m", messages=[], role="coder")
+        tracing._reset()
+    assert (tmp_path / "smoke" / "a.jsonl").exists()
+    assert (tmp_path / "smoke" / "b.jsonl").exists()

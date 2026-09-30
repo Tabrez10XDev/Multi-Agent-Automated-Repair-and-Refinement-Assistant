@@ -482,6 +482,82 @@ a task-run boundary on nearly every row — the shared-first trace segmented
 into 305 blocks instead of 60. Now ordered by `t_start` with a new process
 group wherever `seq` fails to advance.
 
+## 14b. The shared-first prompt layout experiment (negative result)
+
+`MAARA_PROMPT_LAYOUT=shared_first` reorders every prompt to put one common
+system message and identically-rendered shared blocks first. It was built to
+recover the 24% of prompt tokens that are repeated but unreachable by a prefix
+cache. **It made things worse and should not be retried as designed.**
+
+Reusable fraction (same-model matching) fell 13.7% -> 12.0%; saved prefill
+49.6s -> 35.2s. Not retried.
+
+### Order by volatility, not by role coverage
+
+The blocks were ordered by how many roles carry each one, putting the code
+block first because three roles have it. But the code is the one block that
+**changes on every attempt**: `apply_and_test` writes the fix and
+`orchestrator.py:160-161` re-reads it into `relevant_code`. Consecutive coder
+calls therefore diverged 254 characters in, inside the very first block.
+
+The result, by source -> target pair, in tokens:
+
+| pair | original | shared_first |
+|---|---|---|
+| coder -> coder | **7,626** | 703 |
+| debugger -> debugger | 3,466 | 3,402 |
+| evaluator -> coder | — | 2,187 |
+| issue_parser -> coder | — | 1,067 |
+
+The new layout did create real cross-role sharing, in the arms where those
+roles happen to run the same model. It just destroyed something 3.5x larger.
+Reuse in this workload is overwhelmingly **same-role across retries**, not
+cross-role, and the original layout (issue -> tests -> code -> retry context)
+was already ordered stable-to-volatile by accident.
+
+**The rule: most-stable content first, most-volatile last.** Role coverage is
+the wrong sort key. A correct retry would be issue -> tests -> code ->
+role-specific, keeping the common system message.
+
+### It also broke the evaluator on 7 of 60 runs
+
+Seven shared-first task runs died with `list index out of range` before any fix
+attempt, against zero in the original. The cause is `agents/evaluator.py:66`:
+
+```python
+score_line = [l for l in raw.split("\n") if l.startswith("SCORE:")]
+score_raw = score_line[0].split(":")[-1].strip()      # IndexError if absent
+```
+
+Moving the output-format instructions from the opening of the prompt to the end
+made llama3.2 less reliably emit the `SCORE:` line. Two findings, not one: the
+layout degrades instruction-following for the smaller model, **and**
+`evaluate_plan` has no guard for a malformed response. The parser should
+default rather than crash whichever layout is used.
+
+Pass rate 50/60 -> 47/60. With n=15 per config that difference is **not
+distinguishable from noise**; the 7 crashes are, because they are mechanical.
+
+## 14c. Run-ID resume hazard
+
+`MAARA_RUN_ID` pins the trace filename. A run interrupted and restarted under
+the same id **appends a second `seq` sequence starting again at 1**, into the
+same file, with the same `run_id`. Nothing in the data marks the boundary
+except that `seq` stops advancing.
+
+This happened to the shared-first run: 340 rows, 156 from one process and 184
+from another, split by a 204-second gap. Segmenting by `seq` interleaved them
+and produced 305 task-run blocks instead of 60, which invalidated every reuse
+figure computed from that trace until it was found.
+
+Two mitigations are in place:
+
+* `segment_task_runs` orders by `t_start` and starts a new process group
+  wherever `seq` fails to advance, so an already-collected trace is still
+  usable.
+* `tracing.py` now **refuses to open a trace file that already exists** unless
+  `MAARA_TRACE_APPEND=1` is set, so the situation cannot be created silently.
+
 ## 14. MAARA writeup issues
 
 Found while wiring trace logging. **No code was changed for any of these** —

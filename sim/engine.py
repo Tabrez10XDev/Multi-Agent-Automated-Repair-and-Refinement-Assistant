@@ -116,6 +116,17 @@ class KVEntry:
     # where this call's prompt diverged from its predecessor. vLLM caches them
     # like any other block; nothing will ever match them.
     is_tail: bool = False
+    # Predicted seconds until this prefix is wanted again, from the workflow
+    # graph via HintBuilder. Noisy on purpose. Online policies may read it.
+    hint_gap_s: Optional[float] = None
+    # TRUE seconds until reuse, None if never reused. ORACLE -- only the
+    # offline reference may read it. An online policy that does is cheating.
+    true_gap_s: Optional[float] = None
+    # Rent this entry is accruing per second, as of the last iteration under
+    # pressure. Policies need an instantaneous rate to convert a predicted
+    # reuse TIME into the rent scale; averaging over the entry's own lifetime
+    # reads zero before the first pressure and makes any prediction inert.
+    rent_rate: float = 0.0
 
     @property
     def evictable(self) -> bool:
@@ -161,7 +172,7 @@ class Request:
 
 class Engine:
     def __init__(self, tasks, cost: CostModel, cfg: EngineConfig,
-                 retention=None, scheduler=None, estimator=None,
+                 retention=None, scheduler=None, estimator=None, hints=None,
                  trace: bool = False):
         self.tasks = tasks
         self.cost = cost
@@ -169,6 +180,7 @@ class Engine:
         self.retention = retention or LRURetention()
         self.scheduler = scheduler or FCFSScheduler()
         self.estimator = estimator
+        self.hints = hints
         self.do_trace = trace
         self.trace_log = []
         # task_id -> absolute deadline, set once when the task arrives.
@@ -230,6 +242,7 @@ class Engine:
             # policies are equivalent".
             "w_queue": 0.0, "max_queue": 0, "admit_calls": 0, "calls_with_choice": 0,
             "tail_entries_created": 0, "tail_evictions": 0, "w_evict_rate": 0.0,
+            "voluntary_evictions": 0,
         }
 
         # Isolated task time is computed ONCE, from the estimator's priors,
@@ -381,7 +394,9 @@ class Engine:
                     # which is the tokens it actually matches -- not the
                     # block-rounded amount we are obliged to store.
                     useful_tokens=node.prefix_tokens,
-                    recompute_s=self.cost.recompute_seconds(r.model, node.prefix_tokens))
+                    recompute_s=self.cost.recompute_seconds(r.model, node.prefix_tokens),
+                    true_gap_s=node.next_reuse_gap_s,
+                    hint_gap_s=(self.hints.hint_for(node) if self.hints else None))
                 self.entries[key] = entry
                 self.seen_keys.add(key)
 
@@ -422,7 +437,9 @@ class Engine:
             key=f"tail:{r.req_id}", model=r.model, tokens=tail_tokens,
             nbytes=self.cost.kv_bytes(r.model, tail_tokens),
             created=self.now, last_used=self.now, refcount=0,
-            useful_tokens=0, recompute_s=0.0, is_tail=True)
+            useful_tokens=0, recompute_s=0.0, is_tail=True,
+            # A tail is never matched, so its true gap is "never".
+            true_gap_s=None, hint_gap_s=None)
         if not self.retention.on_complete(entry, self.now):
             return
         if entry.nbytes > self.free_bytes:
@@ -645,8 +662,24 @@ class Engine:
         for e in evictable:
             victim = second if e is first else first
             rent_rate = e.nbytes * victim.recompute_s_per_byte * rate
+            e.rent_rate = rent_rate
             e.rent_accrued += rent_rate * dt
             self.m["total_rent"] += rent_rate * dt
+
+    def _voluntary_release(self):
+        """
+        Let the retention policy give entries up of its own accord.
+
+        Ski-rental needs this: its whole decision is "hold until accrued rent
+        reaches the recompute cost, then let go". Without a per-iteration hook
+        a policy could only ever react to pressure, never anticipate it.
+        """
+        release = self.retention.on_tick(list(self.entries.values()), self.now)
+        for key in release:
+            e = self.entries.get(key)
+            if e is not None and e.evictable:
+                self.m["voluntary_evictions"] += 1
+                self._evict(e, forced=False)
 
     def _retire(self):
         for r in list(self.running):
@@ -724,6 +757,7 @@ class Engine:
 
             dt = self._iteration()
             self._accrue_rent(dt, blocked, pressure, evictable_before)
+            self._voluntary_release()
             self.now += dt
             self.m["w_time"] += dt
             self.m["w_batch"] += self._last_batch * dt
@@ -802,6 +836,7 @@ class Engine:
             "block_tokens": self.cfg.block_tokens,
             "ewma_tau_s": self.cfg.ewma_tau_s,
             "tail_entries_created": self.m["tail_entries_created"],
+            "voluntary_evictions": self.m["voluntary_evictions"],
             "tail_evictions": self.m["tail_evictions"],
             "mean_eviction_rate_per_s": w("w_evict_rate"),
             "mean_queue_depth": w("w_queue"),

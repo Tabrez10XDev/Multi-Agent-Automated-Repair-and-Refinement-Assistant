@@ -446,6 +446,16 @@ class RetentionPolicy:
         """Entries to evict, in order, until need_bytes is freed."""
         raise NotImplementedError
 
+    def on_tick(self, entries, now: float):
+        """
+        Keys to give up voluntarily this iteration.
+
+        Ski-rental lives here: its decision is "hold until accrued rent reaches
+        the recompute cost, then let go", which has to be checked as rent
+        accrues rather than only when pressure arrives.
+        """
+        return []
+
 
 class LRURetention(RetentionPolicy):
     """
@@ -476,4 +486,191 @@ class KeepAllRetention(LRURetention):
     name = "keep-all"
 
 
-RETENTIONS = {c.name: c for c in [LRURetention, KeepAllRetention]}
+class EvictNowRetention(RetentionPolicy):
+    """
+    Never retain anything. The opposite extreme from keep-all.
+
+    Every reuse becomes a recompute, so this is the upper bound on recompute
+    cost and the lower bound on memory held. Useful as the floor against which
+    any retention policy must justify the memory it keeps.
+    """
+    name = "evict-now"
+
+    def on_complete(self, entry, now):
+        return False
+
+    def choose_victims(self, candidates, need_bytes, now):
+        return sorted(candidates, key=lambda e: (e.last_used, e.key))
+
+
+class SkiRentalRetention(RetentionPolicy):
+    """
+    Deterministic ski-rental. Hold while cheap, let go at the break-even point.
+
+    accrued rent is in recompute-seconds (see engine._accrue_derived_rent), and
+    an entry's recompute_s is what keeping it saves, so the comparison is in
+    consistent units: release once rent_accrued >= recompute_s.
+
+    WHY 2-COMPETITIVE DOES NOT APPLY HERE
+    -------------------------------------
+    The textbook bound assumes rent is CONSTANT per unit time. The adversary's
+    only freedom is when the season ends, and paying rent up to the buy price
+    before buying costs at most twice the offline optimum.
+
+    Derived rent is not constant. Its rate is
+        E.bytes x marginal victim's recompute per byte x eviction rate
+    and both the marginal victim and the eviction rate move with load, so an
+    adversary controlling arrivals controls the rate as well as the deadline.
+    That is strictly more power than the ski-rental adversary has, and the
+    2-competitive proof does not survive it.
+
+    So the bound is not claimed. The realized ratio against the offline
+    reference is measured instead, and reported as a measurement rather than a
+    guarantee.
+    """
+    name = "ski-rental"
+
+    def on_complete(self, entry, now):
+        return True             # start renting
+
+    def choose_victims(self, candidates, need_bytes, now):
+        # Under forced pressure, give up whatever is closest to break-even
+        # first: it was about to be released anyway.
+        return sorted(candidates,
+                      key=lambda e: (-(e.rent_accrued - e.recompute_s), e.key))
+
+    def on_tick(self, entries, now):
+        return [e.key for e in entries
+                if e.evictable and e.rent_accrued >= e.recompute_s > 0]
+
+
+class SkiRentalPredictionsRetention(SkiRentalRetention):
+    """
+    Learning-augmented ski-rental, after Purohit, Svitkina and Kumar (2018).
+
+    Given a prediction y of how long the entry will be wanted, and a trust
+    parameter lambda in (0, 1]:
+
+        predicted FAR  (y >= break-even)   -> release early, at lambda x b
+        predicted NEAR (y <  break-even)   -> hold longer, until b / lambda
+
+    lambda near 1 trusts the prediction (better when it is right, worse when it
+    is wrong); lambda near 0 ignores it and degrades towards the deterministic
+    rule. That trade is the point: consistency against robustness.
+
+    Everything is measured in accrued rent rather than seconds, because rent is
+    what actually accumulates and its rate varies. The predicted gap in seconds
+    is converted using the rate this entry has seen so far; before any rent has
+    accrued the conversion yields zero, which reads as "predicted near" and
+    holds -- the right default when there is no pressure yet.
+    """
+    name = "ski-rental-pred"
+
+    def __init__(self, lam: float = 0.5):
+        if not 0.0 < lam <= 1.0:
+            raise ValueError("lambda must be in (0, 1]")
+        self.lam = lam
+
+    def _predicted_rent(self, e, now):
+        """
+        Predicted rent between now and the predicted reuse.
+
+        Uses the entry's CURRENT rent rate, stamped by the engine. An earlier
+        version averaged rent over the entry's own lifetime, which reads zero
+        until the first moment of pressure -- so every entry looked "predicted
+        near" and the prediction had no effect at all. The symptom was that
+        hint noise changed nothing.
+        """
+        return (e.hint_gap_s or 0.0) * e.rent_rate
+
+    def on_tick(self, entries, now):
+        out = []
+        for e in entries:
+            if not e.evictable or e.recompute_s <= 0:
+                continue
+            b = e.recompute_s
+            if e.hint_gap_s is None:
+                threshold = b                      # no prediction: plain rule
+            elif self._predicted_rent(e, now) >= b:
+                threshold = self.lam * b           # predicted far: leave early
+            else:
+                threshold = b / self.lam           # predicted near: hold on
+            if e.rent_accrued >= threshold:
+                out.append(e.key)
+        return out
+
+
+class OfflineReferenceRetention(RetentionPolicy):
+    """
+    OFFLINE REFERENCE -- not optimal, and must never be labelled as such.
+
+    Reads true_gap_s, the real time until each entry is next matched, which no
+    online policy can see. Two rules:
+
+      * keep an entry only if the rent it will accrue before its reuse is less
+        than the recompute it saves; otherwise drop it at once;
+      * under forced pressure evict by Belady, farthest next use first.
+
+    Why not "optimal": Belady is optimal for a fixed reference string with
+    uniform costs and no batching. Here entry sizes differ, eviction changes
+    later timing through the queue, and rent depends on load that the policy's
+    own decisions perturb. This is a strong reference, not a proven lower bound.
+    """
+    name = "offline-ref"
+
+    def _rent_until_reuse(self, e, now):
+        """Rent this entry will accrue before its true next use, at the current
+        rate. Same instantaneous-rate reasoning as the prediction policy."""
+        return (e.true_gap_s or 0.0) * e.rent_rate
+
+    def on_complete(self, entry, now):
+        # Never reused: worthless from this instant.
+        return entry.true_gap_s is not None
+
+    def choose_victims(self, candidates, need_bytes, now):
+        # Belady: farthest next use first, "never" farthest of all.
+        return sorted(candidates,
+                      key=lambda e: (-(e.true_gap_s if e.true_gap_s is not None
+                                       else float("inf")), e.key))
+
+    def on_tick(self, entries, now):
+        out = []
+        for e in entries:
+            if not e.evictable:
+                continue
+            if e.true_gap_s is None:
+                out.append(e.key)
+            elif e.recompute_s > 0 and self._rent_until_reuse(e, now) > e.recompute_s:
+                out.append(e.key)
+        return out
+
+
+class HintBuilder:
+    """
+    Turns the trace's oracle reuse time into the noisy prediction the
+    learning-augmented policy is allowed to see.
+
+    This is the ONLY place outside the offline reference that may read
+    Node.next_reuse_gap_s. Noise is multiplicative lognormal, so a prediction
+    is wrong by a factor rather than by an absolute amount -- the realistic
+    failure mode for a duration estimate. sigma=0 means a perfect oracle hint,
+    which is the consistency end of the Purohit trade-off.
+    """
+
+    def __init__(self, sigma: float = 0.0, seed: int = 0):
+        self.sigma = sigma
+        self._rng = random.Random(seed)
+
+    def hint_for(self, node):
+        true_gap = getattr(node, "next_reuse_gap_s", None)
+        if true_gap is None:
+            return None
+        if self.sigma <= 0:
+            return true_gap
+        return true_gap * math.exp(self._rng.gauss(0.0, self.sigma))
+
+
+RETENTIONS = {c.name: c for c in [
+    LRURetention, KeepAllRetention, EvictNowRetention, SkiRentalRetention,
+    SkiRentalPredictionsRetention, OfflineReferenceRetention,
+]}

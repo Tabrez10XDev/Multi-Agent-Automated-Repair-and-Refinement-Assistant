@@ -171,6 +171,40 @@ def _smoke() -> bool:
     return os.environ.get("MAARA_TRACE_SMOKE", "").strip() not in ("", "0", "false", "False")
 
 
+def _append_allowed() -> bool:
+    return os.environ.get("MAARA_TRACE_APPEND", "").strip() not in ("", "0", "false", "False")
+
+
+def _guard_existing(base: str, run_id: str) -> None:
+    """
+    Refuse to write into a trace file that already exists.
+
+    MAARA_RUN_ID pins the filename, so a run interrupted and restarted under
+    the same id used to append a SECOND seq sequence starting again at 1, into
+    the same file, under the same run_id. Nothing in the data marked the
+    boundary except seq ceasing to advance, and segmenting by seq then
+    interleaved the two processes and fabricated a task-run boundary on nearly
+    every row. That silently invalidated a whole run's reuse figures.
+
+    Set MAARA_TRACE_APPEND=1 to allow it deliberately.
+    """
+    if _append_allowed():
+        return
+    smoke = _smoke()
+    d = os.path.join(base, "smoke") if smoke else base
+    ext = ".jsonl" if smoke else ".jsonl.gz"
+    for path in (os.path.join(d, f"{run_id}{ext}"),
+                 os.path.join(d, f"{run_id}.prompts{ext}")):
+        if os.path.exists(path):
+            raise RuntimeError(
+                f"trace file already exists: {path}\n"
+                f"MAARA_RUN_ID={run_id!r} would append a second call sequence to "
+                f"it, which cannot be told apart from the first except by seq "
+                f"failing to advance.\n"
+                f"Either choose a new MAARA_RUN_ID, move the existing file "
+                f"aside, or set MAARA_TRACE_APPEND=1 to append on purpose.")
+
+
 def _get_run():
     """Lazily open the process-wide trace file. Returns None when disabled."""
     global _run
@@ -185,6 +219,7 @@ def _get_run():
             datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
             + "-" + uuid.uuid4().hex[:6])
         base = os.environ.get("MAARA_TRACE_DIR") or os.path.join(_REPO, "traces")
+        _guard_existing(base, run_id)
         if _smoke():
             d = os.path.join(base, "smoke")
             os.makedirs(d, exist_ok=True)
