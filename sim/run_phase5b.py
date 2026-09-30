@@ -128,6 +128,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--quick", action="store_true")
     ap.add_argument("--kv", type=float, default=1024.0)
+    ap.add_argument("--scales", default=None,
+                    help="comma-separated context scales, e.g. 1 or 1,8,16")
+    ap.add_argument("--seeds", type=int, default=5)
     args = ap.parse_args()
 
     cost = CostModel()
@@ -135,14 +138,18 @@ def main():
     cpu = CpuStageSeconds.from_measured()
 
     utils = [0.6] if args.quick else [0.6, 0.8]
-    scales = [1] if args.quick else [1, 8, 16]
-    seeds = [1, 2] if args.quick else [1, 2, 3, 4, 5]
+    scales = ([int(x) for x in args.scales.split(",")] if args.scales
+              else ([1] if args.quick else [1, 8, 16]))
+    seeds = [1, 2] if args.quick else list(range(1, args.seeds + 1))
 
     for scale in scales:
         # Bigger contexts need a bigger budget simply to admit one request.
         kv = args.kv * max(1, scale // 2)
         for util in utils:
+            print(f"[{scale}x util {util:.0%}] calibrating arrival rate...", flush=True)
             rate = calibrate_rate(util, scale, seeds[0], kv, cost, tok, cpu)
+            print(f"[{scale}x util {util:.0%}] rate={rate:.4f}/s; "
+                  f"measuring hindsight...", flush=True)
             hind = st.fmean([hindsight_denominator(scale, s, kv, rate, cost, tok, cpu)
                              for s in seeds]) or float("nan")
             print(f"=== context {scale}x | target util {util:.0%} "
@@ -166,13 +173,14 @@ def main():
                             break
                     if not rs:
                         continue
-                    m = lambda k: st.fmean([r[k] for _, r in rs])
+                    m = lambda k: st.fmean([r[k] for _, r in rs])  # noqa: E731
                     ctrl = st.fmean([e.m["recompute_misses"] for e, _ in rs])
                     cost_s = m("recompute_seconds") + m("total_rent_s")
                     ratio = cost_s / hind if hind and hind == hind else float("nan")
                     print(f"  {pol:<17}{sched:<6}{m('recompute_seconds'):>11.1f}"
                           f"{m('total_rent_s'):>9.1f}{m('p50_task_latency_s'):>8.0f}"
-                          f"{m('p95_task_latency_s'):>9.0f}{ratio:>8.2f}{ctrl:>12.0f}")
+                          f"{m('p95_task_latency_s'):>9.0f}{ratio:>8.2f}{ctrl:>12.0f}",
+                          flush=True)
             print()
     return 0
 
