@@ -181,23 +181,52 @@ def test_no_prefix_when_nothing_is_shared():
 # --- ollama cache detection ----------------------------------------------
 
 def test_cache_detector_is_quiet_on_uncached_calls():
-    text = "x" * 400
-    rows = [row(i, "T/1", "coder", f"c{i}", pt=100) for i in range(1, 6)]
-    prompts = {f"c{i}": [{"role": "user", "content": text}] for i in range(1, 6)}
-    d = detect_cache_hits(rows, prompts)
+    """A call prefilling at the calibrated rate is not a hit."""
+    rows = [row(i, "T/1", "coder", f"c{i}", pt=268) for i in range(1, 6)]
+    for r in rows:
+        r["prompt_eval_duration"] = 1.0        # 268 tok/s == the uncached rate
+    d = detect_cache_hits(rows)
+    assert d["checked"] == 5
     assert d["likely_cache_hits"] == 0
-    assert d["median_chars_per_token"] == pytest.approx(4.0)
+    assert d["hidden_prompt_tokens"] == 0
 
 
-def test_cache_detector_spots_a_hit():
-    """A cached call reports few prompt tokens for a large prompt."""
-    rows = [row(i, "T/1", "coder", f"c{i}", pt=100) for i in range(1, 6)]
-    rows.append(row(6, "T/1", "coder", "hit", pt=10))      # same text, 10x fewer tokens
-    prompts = {r["call_id"]: [{"role": "user", "content": "x" * 400}] for r in rows}
-    d = detect_cache_hits(rows, prompts)
+def test_cache_detector_spots_a_hit_from_duration_not_count():
+    """
+    The real failure mode this replaces: Ollama reports the FULL
+    prompt_eval_count even when it reused the whole cached prefix, so a
+    count-based detector sees nothing. Measured directly, an identical repeat
+    returned in 0.040s against a cold 13.400s with the count unchanged.
+
+    Here every call reports the same count; only the duration betrays the hit.
+    """
+    rows = [row(i, "T/1", "coder", f"c{i}", pt=268) for i in range(1, 6)]
+    for r in rows:
+        r["prompt_eval_duration"] = 1.0
+    hit = row(6, "T/1", "coder", "hit", pt=268)     # same count as the others
+    hit["prompt_eval_duration"] = 0.01              # 100x faster
+    rows.append(hit)
+
+    d = detect_cache_hits(rows)
     assert d["likely_cache_hits"] == 1
-    assert d["hidden_prompt_tokens"] == pytest.approx(90, abs=2)
     assert d["by_role"] == {"coder": 1}
+    # Tokens that could not have been computed in the time observed.
+    assert d["hidden_prompt_tokens"] == pytest.approx(268 - 0.01 * 267.9, abs=2)
+    assert d["prefill_seconds_saved"] > 0.9
+
+
+def test_cache_detector_uses_the_right_rate_per_model():
+    """
+    qwen prefills at ~268 tok/s uncached, llama3.2 at ~542. The same observed
+    500 tok/s is therefore a hit for qwen (1.87x) and ordinary for llama (0.92x).
+    A single global threshold would mislabel one of them.
+    """
+    q = row(1, "T/1", "coder", "q", pt=500, model="qwen2.5-coder:7b")
+    l = row(2, "T/1", "evaluator", "l", pt=500, model="llama3.2")
+    q["prompt_eval_duration"] = l["prompt_eval_duration"] = 1.0   # 500 tok/s
+    d = detect_cache_hits([q, l])
+    assert d["by_role"] == {"coder": 1}
+    assert d["by_model"] == {"qwen2.5-coder:7b": 1}
 
 
 # --- DAG construction ----------------------------------------------------

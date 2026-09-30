@@ -49,8 +49,8 @@ import statistics
 from dataclasses import dataclass, field
 from typing import Optional
 
-from sim.workload import (DEFAULT_BLOCK_TOKENS, ROLE_TO_STAGE, Kind, Node,
-                          Task, block_chain_from_text)
+from sim.workload import (DEFAULT_BLOCK_TOKENS, ROLE_TO_STAGE, CostModel, Kind,
+                          Node, Task, block_chain_from_text)
 
 CODER_MODELS = {"qwen2.5-coder:7b", "llama3.2"}
 
@@ -193,48 +193,70 @@ def validate_segmentation(blocks) -> dict:
 # Ollama prefix-cache detection
 # --------------------------------------------------------------------------
 
-def detect_cache_hits(rows, prompts_by_call, z=2.0) -> dict:
+def detect_cache_hits(rows, prompts_by_call=None, speedup=1.5, cost=None) -> dict:
     """
-    Ollama reuses cached prefixes, and prompt_eval_count then counts only the
-    tokens it actually had to recompute. That makes prompt_tokens an
-    underestimate of true prompt size for any call that hit the cache.
+    Find Ollama prefix-cache hits from prefill DURATION, not token count.
 
-    Detection: for an uncached call, len(text) / prompt_tokens lands near the
-    tokenizer's chars-per-token for this content (~3.5-4.5 for code). A cached
-    call has a small prompt_tokens for a large text, so the implied ratio blows
-    up. Calls whose ratio exceeds z times the median are flagged, and the
-    shortfall is estimated against the median ratio.
+    The earlier version inferred a hit from prompt_eval_count falling below the
+    prompt's true size. sim/check_ollama_cache proved that assumption wrong:
+    Ollama reports the FULL count even when llama.cpp reuses the whole cached
+    prefix. Measured on /api/generate, an identical repeat returned in 0.040s
+    against a cold 13.400s -- 335x faster -- with the count unchanged. The
+    count-based detector was therefore blind, and its "zero hits" on both
+    committed traces was an artefact.
+
+    A call is counted as a hit when its prefill rate exceeds `speedup` times
+    the model's calibrated uncached rate. Hidden cached tokens are estimated as
+
+        prompt_tokens - prefill_seconds x uncached_rate
+
+    i.e. the tokens that could not have been computed in the time observed.
     """
-    ratios, per_call = [], []
+    cost = cost or CostModel()
+    per_call, hits = [], []
     for r in rows:
         if r.get("kind") != "chat":
             continue
-        msgs = prompts_by_call.get(r["call_id"])
-        pt = r.get("prompt_tokens")
-        if not msgs or not pt:
+        pt = r.get("prompt_tokens") or 0
+        secs = r.get("prompt_eval_duration") or 0.0
+        model = r.get("model") or ""
+        if pt <= 0 or secs <= 0 or model not in cost.rates:
             continue
-        chars = len(render_prompt(msgs))
-        ratios.append(chars / pt)
-        per_call.append((r, chars, pt, chars / pt))
+        uncached = cost.rates[model].prefill_rate
+        rate = pt / secs
+        hidden = max(0, int(round(pt - secs * uncached)))
+        rec = {"row": r, "rate": rate, "uncached": uncached,
+               "ratio": rate / uncached, "hidden": hidden}
+        per_call.append(rec)
+        if rate > speedup * uncached:
+            hits.append(rec)
 
-    if not ratios:
+    if not per_call:
         return {"checked": 0, "likely_cache_hits": 0}
 
-    median = statistics.median(ratios)
-    hits = [(r, chars, pt, ratio) for r, chars, pt, ratio in per_call if ratio > z * median]
-    hidden = sum(max(0, int(chars / median) - pt) for _, chars, pt, _ in hits)
-    total_reported = sum(pt for _, _, pt, _ in per_call)
+    def tally(field):
+        out = {}
+        for h in hits:
+            k = h["row"].get(field)
+            out[k] = out.get(k, 0) + 1
+        return dict(sorted(out.items()))
 
+    hidden_total = sum(h["hidden"] for h in hits)
     return {
+        "method": "prefill duration vs calibrated uncached rate",
+        "speedup_threshold": speedup,
         "checked": len(per_call),
-        "median_chars_per_token": round(median, 3),
         "likely_cache_hits": len(hits),
         "hit_fraction": len(hits) / len(per_call),
-        "hidden_prompt_tokens": hidden,
-        "reported_prompt_tokens": total_reported,
-        "hidden_fraction": hidden / (hidden + total_reported) if (hidden + total_reported) else 0.0,
-        "by_role": {role: sum(1 for r, _, _, _ in hits if r["agent_role"] == role)
-                    for role in sorted({r["agent_role"] for r, _, _, _ in hits})},
+        "hidden_prompt_tokens": hidden_total,
+        "reported_prompt_tokens": sum(r["row"].get("prompt_tokens", 0) for r in per_call),
+        "prefill_seconds_saved": round(
+            sum(h["hidden"] / h["uncached"] for h in hits), 2),
+        "by_role": tally("agent_role"),
+        "by_model": tally("model"),
+        "median_ratio_all": round(statistics.median(r["ratio"] for r in per_call), 2),
+        "median_ratio_hits": (round(statistics.median(h["ratio"] for h in hits), 2)
+                              if hits else None),
     }
 
 

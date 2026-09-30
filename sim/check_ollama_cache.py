@@ -5,21 +5,24 @@ CALLS THE MODEL. Not run automatically; invoke it yourself.
 
     ./venv/bin/python -m sim.check_ollama_cache
 
-WHY THIS EXISTS
----------------
-The trace-based detector infers a cache hit from prompt_eval_count dropping
-below the prompt's true size. That assumes Ollama reports only the tokens it
-recomputed. If it instead reports the full count while llama.cpp quietly reuses
-the cached prefix, the detector sees nothing and we would wrongly conclude no
-caching happens.
+RESULT (measured 2026-09-30)
+---------------------------
+Ollama DOES reuse cached prefixes, and prompt_eval_count hides it completely:
 
-The duration check on the committed traces is suggestive but confounded: coder
-(307 tok prompts) and debugger (790 tok) both prefill at 291-306 tok/s, which
-matches the calibrated uncached rate of 268-292 -- no sign of reuse for exactly
-the roles that have long shared prefixes. But issue_parser prefills at 2881
-tok/s on 166-token prompts, ten times calibration, and nothing in the trace
-explains it. Prompt size, role and shared-prefix length all covary there, so
-the traces cannot settle the question.
+    /api/generate  cold                 13.400s   281 tok/s
+                   identical repeat      0.040s   -> 335x faster
+                   last line changed     0.074s   -> 181x faster
+                   prompt_eval_count CONSTANT throughout
+
+So every count-based conclusion drawn before this was wrong, including the
+"zero cache hits" reported for both committed traces. The trace detector has
+been rewritten around prefill DURATION against the calibrated uncached rate.
+
+It also explains the anomaly that the traces could not: issue_parser prefilled
+at 2881 tok/s against a calibrated 268, because consecutive issue_parser calls
+share a long fixed preamble and were hitting Ollama's cache. coder and debugger
+ran at ~300 tok/s -- the uncached rate -- because a call on the other model
+lands between them and evicts the slot.
 
 WHAT THIS DOES
 --------------
@@ -49,6 +52,7 @@ cache path.
 """
 
 import json
+import random
 import urllib.request
 
 OLLAMA = "http://localhost:11434"
@@ -102,24 +106,39 @@ def main():
     print(f"model={MODEL}  keep_alive={KEEP_ALIVE}  prompt ~{len(PROMPT)//4} tokens\n")
     for endpoint in ("chat", "generate"):
         print(f"--- /api/{endpoint} ---")
-        a = call(endpoint, PROMPT + LAST_ORIGINAL, "1. cold")
-        b = call(endpoint, PROMPT + LAST_ORIGINAL, "2. identical prompt")
-        c = call(endpoint, PROMPT + LAST_CHANGED, "3. last line changed")
-        d = call(endpoint, PROMPT + LAST_ORIGINAL, "4. identical again (warm-up check)")
+        # A unique preamble makes call 1 genuinely cold. Without it the first
+        # /api/chat call inherited the cache left by the /api/generate block
+        # above and clocked 0.040s, so the "cold" baseline was already warm and
+        # the verdict came out backwards.
+        nonce = f"# session {random.randint(10**9, 10**10)}\n"
+        cold_prompt = nonce + PROMPT + LAST_ORIGINAL
+        a = call(endpoint, cold_prompt, "1. cold (unique preamble)")
+        b = call(endpoint, cold_prompt, "2. identical prompt")
+        c = call(endpoint, nonce + PROMPT + LAST_CHANGED, "3. last line changed")
+        d = call(endpoint, cold_prompt, "4. identical again")
 
         print()
-        cd = "yes" if b[0] < a[0] * 0.9 else "no"
-        dd = "yes" if b[1] < a[1] * 0.7 else "no"
-        print(f"  count drops on repeat?     {cd}")
-        print(f"  duration drops on repeat?  {dd}")
-        if cd == "no" and dd == "no":
-            print("  => no cross-call prefix reuse visible on this endpoint")
-        elif cd == "no":
-            print("  => caching works but prompt_eval_count hides it; "
-                  "the trace detector must use duration")
+        count_drops = b[0] < a[0] * 0.9
+        dur_drops = b[1] < a[1] * 0.5
+        tail_reuse = c[1] < a[1] * 0.5
+        print(f"  count drops on an identical repeat?   "
+              f"{'yes' if count_drops else 'no'}  ({a[0]} -> {b[0]})")
+        print(f"  duration drops on that repeat?        "
+              f"{'yes' if dur_drops else 'no'}  ({a[1]:.3f}s -> {b[1]:.3f}s)")
+        print(f"  duration drops when only the tail changed? "
+              f"{'yes' if tail_reuse else 'no'}  ({a[1]:.3f}s -> {c[1]:.3f}s)")
+        print(f"  4th call consistent with the 2nd?     "
+              f"{'yes' if abs(d[1] - b[1]) < max(0.05, 0.5 * b[1]) else 'no'}")
+        print()
+        if dur_drops and not count_drops:
+            print("  => PREFIX CACHING IS REAL and prompt_eval_count hides it.")
+            print("     Any trace detector built on the count is blind; it must")
+            print("     use prefill duration against the uncached rate.")
+        elif count_drops:
+            print("  => prompt_eval_count reflects only recomputed tokens, so a")
+            print("     count-based trace detector is valid.")
         else:
-            print("  => prompt_eval_count reflects recomputed tokens; "
-                  "the trace detector is valid")
+            print("  => no cross-call prefix reuse visible on this endpoint.")
         print()
     return 0
 

@@ -460,6 +460,59 @@ batching with load-dependent rent is not proven here.
 
 ---
 
+## 14d. CORRECTION: Ollama does prefix caching, and the count hides it
+
+**The "zero Ollama cache hits" reported in Phase 2 and Phase 4 was wrong.**
+It came from a detector built on `prompt_eval_count`, assuming Ollama reports
+only the tokens it recomputed. It does not. Measured directly with
+`sim/check_ollama_cache` on 2026-09-30, `/api/generate`:
+
+| call | prefill | vs cold |
+|---|---|---|
+| cold | 13.400s (281 tok/s) | — |
+| identical repeat | **0.040s** | 335x faster |
+| last line changed | **0.074s** | 181x faster |
+
+`prompt_eval_count` was **constant throughout**. The cache is real and the
+count is blind to it.
+
+`detect_cache_hits` is rewritten around prefill DURATION against the
+calibrated uncached rate: a call is a hit when its rate exceeds 1.5x the
+model's uncached rate, and hidden tokens are
+`prompt_tokens - prefill_seconds x uncached_rate`. Reclassified:
+
+| trace | hits | hidden tokens | prefill saved |
+|---|---|---|---|
+| original | **89 / 272 (32.7%)** | 20,402 | **60.8s** |
+| shared_first | **78 / 214 (36.4%)** | 15,831 | **49.5s** |
+
+By role, hits concentrate in `issue_parser` (45 of 89), which also explains the
+2881 tok/s anomaly the earlier analysis could not: consecutive `issue_parser`
+calls share a long fixed preamble and were hitting the cache. coder and
+debugger sat at ~300 tok/s, the uncached rate.
+
+### The single-slot hypothesis is NOT supported
+
+Tested by recording, for every call, the previous call on the same model and
+their shared prefix:
+
+| | original | shared_first |
+|---|---|---|
+| prev same-model call shares >200 chars AND hit | 41 | 31 |
+| shares >200 chars but MISSED | 34 | 85 |
+| shares <=200 chars but HIT | **48** | **47** |
+
+Only 46% of hits had the immediately previous same-model call sharing a long
+prefix, and 54% hit without one. A strict one-slot-per-model cache cannot
+produce that. `OLLAMA_NUM_PARALLEL` is unset, so the server runs its default
+parallelism (4 in recent versions), which is consistent with several recent
+prompts per model staying cached.
+
+**Consequence:** do not model Ollama as a single slot. An `ollama_single_slot`
+retention policy was planned on this hypothesis and deliberately NOT built,
+because the data contradicts its premise. A small-N-slot model may be worth
+testing, but N is not established.
+
 ## 14a. Corrections to the Phase 2 and Phase 4 reuse figures
 
 Two errors were found after those phases were written. Numbers quoted from
