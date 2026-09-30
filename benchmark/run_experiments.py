@@ -600,7 +600,7 @@ def main():
 
     print(f"\n{'='*60}")
     print("ALL EXPERIMENTS COMPLETE")
-    print(f"Results saved to benchmark/results.jsonl")
+    print(f"Results saved to {results_file}")
     print(f"Run: python benchmark/analyze_results.py to see pass@1 scores")
     print(f"{'='*60}\n")
 

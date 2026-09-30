@@ -254,6 +254,19 @@ class Kind(Enum):
     CPU = "cpu"
 
 
+# tracing.py labels calls by agent module name; the simulator labels nodes by
+# pipeline stage. Phase 2's loader uses this to translate a real trace into
+# Nodes. Kept here so the two vocabularies are reconciled in exactly one place.
+ROLE_TO_STAGE = {
+    "issue_parser": "parse_issue",
+    "retriever": "navigate",
+    "evaluator": "evaluate_plan",
+    "coder": "generate_fix",
+    "debugger": "diagnose",
+}
+STAGE_TO_ROLE = {v: k for k, v in ROLE_TO_STAGE.items()}
+
+
 @dataclass
 class Node:
     """One unit of work in a task's realized DAG."""
@@ -272,6 +285,17 @@ class Node:
 
     # CPU fields
     cpu_seconds: float = 0.0
+
+    # Position in the two loops. Names match tracing.py's row schema so the
+    # Phase 2 loader can copy them across without translation.
+    #
+    # Semantics mirror tracing.py exactly, including one quirk worth knowing:
+    # set_replan() is never reset, so once the Sentinel loop has run, every
+    # later node in the task carries the FINAL replan number rather than
+    # reverting to 0. A synthetic trace that zeroed it would not match a real
+    # one, and Phase 2 would see a spurious difference.
+    attempt_index: int = 0
+    replan_index: int = 0
 
     # Filled in by the generator, consumed by Phase-2 schedulers.
     # ORACLE FIELDS - an online policy must not read these.
@@ -360,10 +384,16 @@ def _build_task(task_id: int, arrival: float, rng: random.Random,
     n_attempts = _weighted_choice(rng, cfg.attempt_weights) + 1
     succeeded = n_attempts < cfg.max_attempts or rng.random() < 0.5
 
+    # Loop position, stamped onto every node as it is created. Mirrors how
+    # tracing.py's contextvars behave: both are "current position", and neither
+    # is reset when a loop exits.
+    ctx = {"attempt": 0, "replan": 0}
+
     def add(stage, kind, deps, **kw) -> int:
         nid = len(nodes)
         nodes.append(Node(node_id=nid, task_id=task_id, stage=stage, kind=kind,
-                          deps=list(deps), **kw))
+                          deps=list(deps), attempt_index=ctx["attempt"],
+                          replan_index=ctx["replan"], **kw))
         return nid
 
     issue_key = f"t{task_id}:issue"
@@ -382,7 +412,10 @@ def _build_task(task_id: int, arrival: float, rng: random.Random,
     # Step 2.5: Sentinel gate, with the replan loop from orchestrator.py:71-83
     n_replans = 0
     if cfg.use_sentinel:
-        for _ in range(cfg.max_replan):
+        for _replan_i in range(cfg.max_replan):
+            # orchestrator.py calls tracing.set_replan(replan + 1) here, so the
+            # first Sentinel evaluation is replan_index 1, not 0.
+            ctx["replan"] = _replan_i + 1
             prev = add("evaluate_plan", Kind.LLM, [prev], model=SENTINEL_MODEL,
                        prefix_key=None, suffix_tokens=sz(tok.eval_prompt_tokens),
                        output_tokens=sz(tok.eval_output_tokens))
@@ -397,6 +430,7 @@ def _build_task(task_id: int, arrival: float, rng: random.Random,
 
     # Retry loop: generate_fix (fan-out over files) -> apply_and_test -> diagnose
     for attempt in range(1, n_attempts + 1):
+        ctx["attempt"] = attempt
         first = attempt == 1
         suffix = tok.fix_suffix_tokens if first else tok.fix_suffix_retry_tokens
         fix_nodes = [

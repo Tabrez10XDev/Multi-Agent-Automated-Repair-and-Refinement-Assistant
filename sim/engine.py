@@ -33,8 +33,11 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 
-from sim.workload import (CostModel, CpuStageSeconds, Kind, StageTokens,
-                          WorkloadConfig, describe_trace, generate_trace)
+from sim.policies import (ESTIMATORS, RETENTIONS, SCHEDULERS, ExecutionEstimator,
+                          FCFSScheduler, LRURetention, ReqView)
+from sim.workload import (CODER_MODEL, CostModel, CpuStageSeconds, Kind,
+                          StageTokens, WorkloadConfig, describe_trace,
+                          generate_trace)
 
 
 @dataclass
@@ -45,6 +48,12 @@ class EngineConfig:
     # of weights stay resident. PLACEHOLDER - a real Ollama deployment that has
     # to swap weights would pay seconds here.
     model_switch_seconds: float = 0.0
+
+    # Task deadline = arrival + slack_factor * estimated isolated task time
+    # (the task run alone, no contention). 1.5 means "we promise a task will
+    # finish in 1.5x what it would take on an idle server".
+    # PLACEHOLDER: not derived from any SLO anyone actually stated. Sweep it.
+    slack_factor: float = 1.5
 
     @property
     def kv_budget_bytes(self) -> int:
@@ -95,44 +104,18 @@ class Request:
     entry: Optional[KVEntry] = None
     prefix_hit: bool = False
     kv_blocked_seconds: float = 0.0
+    # Prediction recorded at enqueue, scored against the true output at
+    # completion. Kept per request so estimator error is measurable per role.
+    predicted_output: Optional[float] = None
 
     @property
     def model(self) -> str:
         return self.node.model
 
 
-# --------------------------------------------------------------------------
-# Baseline policies (Phase 2 replaces these)
-# --------------------------------------------------------------------------
-
-class LRURetention:
-    """Retain everything on completion; evict least-recently-used under pressure."""
-    name = "lru"
-
-    def on_complete(self, entry: KVEntry, now: float) -> bool:
-        return True
-
-    def choose_victims(self, candidates, need_bytes, now):
-        victims, freed = [], 0
-        for e in sorted(candidates, key=lambda e: e.last_used):
-            if freed >= need_bytes:
-                break
-            victims.append(e)
-            freed += e.nbytes
-        return victims
-
-
-class KeepAllRetention(LRURetention):
-    """Never voluntarily drop; still forced to evict when out of space."""
-    name = "keep-all"
-
-
-class FIFOScheduler:
-    """Admit in arrival order."""
-    name = "fifo"
-
-    def order(self, waiting, now):
-        return sorted(waiting, key=lambda r: r.enqueued_at)
+# Schedulers and retention policies live in sim/policies.py. There used to be a
+# second FIFOScheduler here; having two meant the CLI silently used one while
+# tests exercised the other.
 
 
 # --------------------------------------------------------------------------
@@ -141,14 +124,18 @@ class FIFOScheduler:
 
 class Engine:
     def __init__(self, tasks, cost: CostModel, cfg: EngineConfig,
-                 retention=None, scheduler=None, trace: bool = False):
+                 retention=None, scheduler=None, estimator=None,
+                 trace: bool = False):
         self.tasks = tasks
         self.cost = cost
         self.cfg = cfg
         self.retention = retention or LRURetention()
-        self.scheduler = scheduler or FIFOScheduler()
+        self.scheduler = scheduler or FCFSScheduler()
+        self.estimator = estimator
         self.do_trace = trace
         self.trace_log = []
+        # task_id -> absolute deadline, set once when the task arrives.
+        self.task_deadline = {}
 
         self.now = 0.0
         self.events = []            # heap of (time, seq, kind, payload)
@@ -191,9 +178,30 @@ class Engine:
             # one. Charging rent for that would blame the wrong mechanism.
             "blocked_with_evictable": 0, "blocked_no_evictable": 0,
             "pinned_samples": [], "retained_samples": [],
+            # Absolute percentage error of predicted vs true output tokens,
+            # collected per stage so a role with a badly-fitting prior is
+            # visible rather than averaged away.
+            "ape_by_stage": {},
+            # How much freedom the scheduler actually had. A scheduler can only
+            # matter when two or more requests are waiting; if the queue is
+            # almost always empty, every policy produces the same run and a
+            # flat comparison table means "no choice was available", not "the
+            # policies are equivalent".
+            "w_queue": 0.0, "max_queue": 0, "admit_calls": 0, "calls_with_choice": 0,
         }
 
+        # Isolated task time is computed ONCE, from the estimator's priors,
+        # before any learning has happened. Deadlines must be identical across
+        # policy runs on the same trace or the miss rates are not comparable --
+        # and if it were recomputed per arrival, a scheduler that happened to
+        # finish work sooner would teach the estimator faster and hand itself
+        # different deadlines.
+        self._isolated_task_s = (
+            self.estimator.estimate_task_total(CODER_MODEL) if self.estimator else None)
         for t in tasks:
+            if self._isolated_task_s is not None:
+                self.task_deadline[t.task_id] = (
+                    t.arrival_time + self.cfg.slack_factor * self._isolated_task_s)
             self._push(t.arrival_time, "arrival", t)
 
     # -- plumbing ----------------------------------------------------------
@@ -235,6 +243,13 @@ class Engine:
             else:
                 self._req_id += 1
                 r = Request(req_id=self._req_id, node=node, enqueued_at=self.now)
+                if self.estimator is not None:
+                    # Captured at enqueue, which is when the scheduler would
+                    # act on it. true_output is passed but ignored by the
+                    # online estimator; only OracleEstimator reads it.
+                    r.predicted_output = self.estimator.predict_output(
+                        node.stage, node.attempt_index,
+                        true_output=node.output_tokens)
                 self.waiting.append(r)
                 self.requests.append(r)
                 self._log(f"  queue t{task.task_id}/{node.stage} req{r.req_id} "
@@ -276,11 +291,16 @@ class Engine:
             if hit and entry in candidates:
                 candidates.remove(entry)   # never evict the thing we are about to use
             victims = self.retention.choose_victims(candidates, need - self.free_bytes, self.now)
-            freed = 0
             for v in victims:
-                if freed >= need - self.free_bytes:
+                # Test against live free space only. An earlier version also
+                # accumulated a `freed` counter and compared it to
+                # `need - self.free_bytes` -- but free_bytes already grows as
+                # entries are evicted, so the same bytes were counted twice and
+                # the loop stopped at roughly half the required eviction. That
+                # produced spurious admission failures, and a hard deadlock
+                # whenever nothing was running to free memory later.
+                if self.free_bytes >= need:
                     break
-                freed += v.nbytes
                 self._evict(v, forced=True)
             if need > self.free_bytes:
                 return False      # still blocked: caller records this as KV pressure
@@ -330,10 +350,46 @@ class Engine:
                   f"held {self.now - entry.created:.1f}s, "
                   f"rent {entry.rent_accrued:.2f}s)")
 
+    def _view(self, r: Request) -> ReqView:
+        """
+        Build the restricted view a scheduler is allowed to see.
+
+        Estimates are recomputed here rather than cached, so a scheduler sees
+        the estimator's CURRENT beliefs -- that is what makes online learning
+        visible in the ordering. The per-request noise factor is cached inside
+        the estimator, so this does not jitter.
+        """
+        n = r.node
+        est = self.estimator
+        return ReqView(
+            req_id=r.req_id, task_id=n.task_id, stage=n.stage, model=n.model,
+            enqueued_at=r.enqueued_at, prompt_tokens=n.prompt_tokens,
+            attempt_index=n.attempt_index, replan_index=n.replan_index,
+            priority=0, deadline=self.task_deadline.get(n.task_id),
+            est_service_s=est.service_s(n.model, n.prompt_tokens, n.stage,
+                                        n.attempt_index, req_id=r.req_id) if est else 0.0,
+            est_remaining_s=est.remaining_s(n.stage, n.attempt_index, n.model,
+                                            req_id=r.req_id) if est else 0.0,
+        )
+
     def _admit_loop(self):
         """Admit as many waiting requests as fit. Returns the KV-blocked ones."""
         blocked = []
-        for r in self.scheduler.order(list(self.waiting), self.now):
+        self._last_queue = len(self.waiting)
+        self.m["admit_calls"] += 1
+        self.m["max_queue"] = max(self.m["max_queue"], self._last_queue)
+        if self._last_queue >= 2:
+            self.m["calls_with_choice"] += 1
+        if not self.waiting:
+            return blocked
+
+        by_id = {r.req_id: r for r in self.waiting}
+        order = self.scheduler.order([self._view(r) for r in self.waiting], self.now)
+
+        for req_id in order:
+            r = by_id.get(req_id)
+            if r is None:
+                continue
             if len(self.running) >= self.cfg.max_batch:
                 break              # batch-slot limited, not memory limited
             if self._try_admit(r):
@@ -438,6 +494,14 @@ class Engine:
                         self._evict(r.entry, forced=False)
                 self._log(f"  DONE  req{r.req_id} t{r.node.task_id}/{r.node.stage} "
                           f"({r.finished_at - r.enqueued_at:.2f}s e2e)")
+                if self.estimator is not None:
+                    true_out = r.node.output_tokens
+                    if r.predicted_output is not None and true_out > 0:
+                        ape = abs(r.predicted_output - true_out) / true_out * 100.0
+                        self.m["ape_by_stage"].setdefault(r.node.stage, []).append(ape)
+                    # Learn from the completion. This is the only place the
+                    # online estimator ever sees a true output length.
+                    self.estimator.observe(r.node.stage, r.node.attempt_index, true_out)
                 self._finish_node(self._task_of(r.node), r.node)
 
     # -- main loop ---------------------------------------------------------
@@ -491,6 +555,7 @@ class Engine:
             self.m["w_kv"] += self.used_bytes * dt
             self.m["w_pinned"] += self.pinned_bytes * dt
             self.m["w_retained"] += (self.used_bytes - self.pinned_bytes) * dt
+            self.m["w_queue"] += getattr(self, "_last_queue", 0) * dt
             self.m["peak_kv_bytes"] = max(self.m["peak_kv_bytes"], self.used_bytes)
             self._retire()
 
@@ -508,6 +573,25 @@ class Engine:
                 return float("nan")
             return lat[min(len(lat) - 1, int(p * len(lat)))]
 
+        # Deadline accounting, over completed tasks only. Slack is signed:
+        # positive means finished early, negative means missed and by how much.
+        # Reporting the mean of the signed value rather than of |slack| keeps
+        # "just barely late" distinguishable from "hours late".
+        met, slacks = 0, []
+        for t in self.tasks:
+            done = self.task_done_at.get(t.task_id)
+            dl = self.task_deadline.get(t.task_id)
+            if done is None or dl is None:
+                continue
+            slacks.append(dl - done)
+            if done <= dl:
+                met += 1
+        n_dl = len(slacks)
+
+        all_ape = [x for v in self.m["ape_by_stage"].values() for x in v]
+        mape_by_stage = {stage: statistics.fmean(v)
+                         for stage, v in self.m["ape_by_stage"].items() if v}
+
         makespan = max(self.task_done_at.values()) if self.task_done_at else 0.0
         wt = self.m["w_time"]
 
@@ -519,10 +603,28 @@ class Engine:
         lookups = self.m["hits"] + self.m["cold_misses"] + self.m["recompute_misses"]
 
         return {
+            "scheduler": self.scheduler.name,
+            "retention": self.retention.name,
+            "estimator": self.estimator.name if self.estimator else "none",
+            "slack_factor": self.cfg.slack_factor,
+            "isolated_task_s": self._isolated_task_s,
+            "kv_budget_mb": self.cfg.kv_budget_mb,
+            "max_batch": self.cfg.max_batch,
             "tasks_completed": len(lat),
             "makespan_s": makespan,
             "p50_task_latency_s": pct(0.50),
             "p95_task_latency_s": pct(0.95),
+            "p99_task_latency_s": pct(0.99),
+            "deadline_miss_rate": (n_dl - met) / n_dl if n_dl else float("nan"),
+            "mean_slack_at_completion_s": (statistics.fmean(slacks) if slacks
+                                           else float("nan")),
+            "estimator_mape_pct": statistics.fmean(all_ape) if all_ape else float("nan"),
+            "estimator_mape_by_stage": mape_by_stage,
+            "mean_queue_depth": w("w_queue"),
+            "max_queue_depth": self.m["max_queue"],
+            "frac_decisions_with_choice": (
+                self.m["calls_with_choice"] / self.m["admit_calls"]
+                if self.m["admit_calls"] else 0.0),
             "mean_task_latency_s": statistics.fmean(lat) if lat else float("nan"),
             "throughput_tasks_per_s": len(lat) / makespan if makespan else 0.0,
             "gpu_busy_frac": busy / makespan if makespan else 0.0,
@@ -550,16 +652,61 @@ class Engine:
         }
 
 
+def scheduling_provenance(cfg: EngineConfig, estimator) -> str:
+    """
+    Provenance for the knobs CostModel does not own.
+
+    Kept separate from CostModel.provenance() because these are scheduling
+    policy parameters, not cost physics -- putting slack_factor on CostModel
+    would imply it was measured from the hardware.
+    """
+    lines = ["Scheduling provenance:"]
+    lines.append(f"  slack_factor         {cfg.slack_factor}  "
+                 f"[PLACEHOLDER - not derived from any stated SLO]")
+    if estimator is None:
+        lines.append("  estimator            none")
+        return "\n".join(lines)
+    tag = ("  [ORACLE - upper-bound reference, not a deployable policy]"
+           if estimator.is_oracle else "  [online, learns from completions]")
+    lines.append(f"  estimator            {estimator.name}{tag}")
+    lines.append(f"  estimator noise      sigma={estimator.noise_sigma}  "
+                 f"[PLACEHOLDER - sweep this]")
+    lines.append(f"  attempt distribution {estimator.attempt_weights}  "
+                 f"[MEASURED from benchmark/results.jsonl, 120 runs]")
+    lines.append(f"  isolated task time   "
+                 f"{estimator.estimate_task_total(CODER_MODEL):.1f}s  [DERIVED from the above]")
+    return "\n".join(lines)
+
+
 def format_report(rep: dict, engine: "Engine") -> str:
     L = [
         "=" * 68,
-        f"RUN  retention={engine.retention.name}  scheduler={engine.scheduler.name}  "
-        f"B={engine.cfg.max_batch}  KV={engine.cfg.kv_budget_mb:.0f}MB",
+        f"RUN  scheduler={rep['scheduler']}  retention={rep['retention']}  "
+        f"estimator={rep['estimator']}",
+        f"     B={engine.cfg.max_batch}  KV={engine.cfg.kv_budget_mb:.0f}MB  "
+        f"slack_factor={rep['slack_factor']}",
         "=" * 68,
         f"  tasks completed        {rep['tasks_completed']}",
         f"  makespan               {rep['makespan_s']:.1f}s",
-        f"  task latency p50/p95   {rep['p50_task_latency_s']:.1f}s / {rep['p95_task_latency_s']:.1f}s",
+        f"  task latency p50/95/99 {rep['p50_task_latency_s']:.1f}s / "
+        f"{rep['p95_task_latency_s']:.1f}s / {rep['p99_task_latency_s']:.1f}s",
         f"  throughput             {rep['throughput_tasks_per_s']:.4f} tasks/s",
+        "",
+        "  -- deadlines --------------------------------------------------",
+        f"  isolated task time     {rep['isolated_task_s']:.1f}s (estimated, no contention)",
+        f"  deadline miss rate     {rep['deadline_miss_rate']:.1%}",
+        f"  mean slack at finish   {rep['mean_slack_at_completion_s']:+.1f}s "
+        f"(positive = early)",
+        "",
+        "  -- scheduling headroom ----------------------------------------",
+        f"  queue depth mean/max   {rep['mean_queue_depth']:.2f} / {rep['max_queue_depth']}",
+        f"  decisions with choice  {rep['frac_decisions_with_choice']:.1%}  "
+        f"(>=2 waiting)",
+        "",
+        "  -- estimator --------------------------------------------------",
+        f"  output-length MAPE     {rep['estimator_mape_pct']:.1f}%",
+        *(f"    {stage:<20} {v:.1f}%"
+          for stage, v in sorted(rep["estimator_mape_by_stage"].items())),
         "",
         "  -- batching ---------------------------------------------------",
         f"  resident mean / max    {rep['mean_resident']:.2f} / {rep['max_resident']}  (holding KV)",
@@ -603,7 +750,17 @@ def main():
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--homogeneous", action="store_true",
                     help="collapse all models onto the qwen cost model")
-    ap.add_argument("--retention", choices=["lru", "keep-all"], default="lru")
+    ap.add_argument("--scheduler", choices=sorted(SCHEDULERS), default="fcfs")
+    ap.add_argument("--retention", choices=sorted(RETENTIONS), default="lru")
+    ap.add_argument("--estimator", choices=sorted(ESTIMATORS), default="online",
+                    help="'oracle' returns true output lengths; upper-bound "
+                         "reference only, labelled as such in output")
+    ap.add_argument("--estimator-noise", type=float, default=0.0,
+                    metavar="SIGMA",
+                    help="multiply each request's estimate by lognormal(0, sigma)")
+    ap.add_argument("--slack-factor", type=float, default=1.5,
+                    help="task deadline = arrival + this x isolated task time "
+                         "(PLACEHOLDER, not derived from a stated SLO)")
     ap.add_argument("--stable-tokens", type=int, default=None,
                     help="override the measured stable-context size (the parameter "
                          "that sets the whole memory-vs-recompute scale)")
@@ -630,12 +787,23 @@ def main():
     print(f"cpu stages: pytest={cpu.pytest_seconds}s rag={cpu.rag_index_seconds}s "
           f"({'measured' if cpu.measured else 'PLACEHOLDER'})")
     print()
+    estimator = ESTIMATORS[args.estimator](
+        cost, tok, cpu, noise_sigma=args.estimator_noise, seed=args.seed)
+    print(scheduling_provenance(
+        EngineConfig(kv_budget_mb=args.kv, max_batch=args.batch,
+                     slack_factor=args.slack_factor), estimator))
+    print()
     print(describe_trace(tasks))
     print()
 
-    retention = LRURetention() if args.retention == "lru" else KeepAllRetention()
-    eng = Engine(tasks, cost, EngineConfig(kv_budget_mb=args.kv, max_batch=args.batch),
-                 retention=retention, trace=args.trace)
+    eng = Engine(
+        tasks, cost,
+        EngineConfig(kv_budget_mb=args.kv, max_batch=args.batch,
+                     slack_factor=args.slack_factor),
+        retention=RETENTIONS[args.retention](),
+        scheduler=SCHEDULERS[args.scheduler](),
+        estimator=estimator,
+        trace=args.trace)
     rep = eng.run()
 
     if args.trace:

@@ -35,6 +35,19 @@ FORBIDDEN = [
 
 _PY_PATH = re.compile(r"[A-Za-z0-9_./-]+\.py")
 
+# pytest prints a session banner into test_output, which the debugger then
+# quotes verbatim in its prompt:
+#
+#   platform darwin -- ... -- /Users/.../self-healing-agent/venv/bin/python
+#   rootdir: /Users/.../self-healing-agent/benchmark/exp_sandbox
+#
+# Those are artefacts of running the tests, not evidence that the agent saw
+# repo source, and they matched "venv/" and "benchmark/" on the first pass.
+# Stripped before scanning so the check stays strict about everything else
+# rather than being loosened by deleting those two markers.
+_BENIGN_PATH = re.compile(
+    r"\S*/(?:venv|benchmark/exp_sandbox|benchmark/sandbox)(?:/\S*)?")
+
 
 def _read_rows(path):
     """Read JSONL, gz or plain, tolerating a file still being written."""
@@ -69,6 +82,7 @@ def check(path):
 
     for r in rows:
         text = " ".join(m.get("content", "") for m in r.get("messages", []))
+        text = _BENIGN_PATH.sub(" ", text)
         for marker in FORBIDDEN:
             if marker in text:
                 marker_hits[marker] = marker_hits.get(marker, 0) + 1

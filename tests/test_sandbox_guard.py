@@ -137,3 +137,62 @@ def test_sandbox_reproduces_the_original_available_files(tmp_path):
 
     tests = get_test_file_contents(str(sandbox))
     assert sorted(tests.keys()) == ["test_target.py"]
+
+
+# --- the trace-cleanliness gate ------------------------------------------
+
+def _write_prompts(tmp_path, texts):
+    import json
+    p = tmp_path / "t.prompts.jsonl"
+    with open(p, "w") as f:
+        for i, t in enumerate(texts):
+            f.write(json.dumps({
+                "call_id": f"c{i}", "task_id": "HumanEval/1", "agent_role": "coder",
+                "messages": [{"role": "user", "content": t}],
+            }) + "\n")
+    return str(p)
+
+
+def test_check_passes_on_a_clean_trace(tmp_path):
+    from sim.check_trace_clean import check
+    path = _write_prompts(tmp_path, [
+        "Current code in target.py:\n```python\ndef f(x): return x\n```",
+        "Here are the test assertions:\ntest_target.py:\ndef test_f(): assert True",
+    ])
+    assert check(path) is True
+
+
+def test_check_tolerates_the_pytest_banner(tmp_path):
+    """
+    Regression. pytest prints its interpreter path and rootdir into
+    test_output, which the debugger quotes verbatim:
+
+        -- /Users/x/self-healing-agent/venv/bin/python
+        rootdir: /Users/x/self-healing-agent/benchmark/exp_sandbox
+
+    Those matched "venv/" and "benchmark/" and failed a genuinely clean run.
+    They are artefacts of running the tests, not leaked source.
+    """
+    from sim.check_trace_clean import check
+    path = _write_prompts(tmp_path, [
+        "Test output showing what still fails:\n"
+        "platform darwin -- Python 3.13.3, pytest-9.0.3 -- "
+        "/Users/x/self-healing-agent/venv/bin/python\n"
+        "rootdir: /Users/x/self-healing-agent/benchmark/exp_sandbox\n"
+        "test_target.py::test_empty PASSED",
+    ])
+    assert check(path) is True
+
+
+def test_check_still_fails_on_real_leakage(tmp_path):
+    """The banner fix must not blunt the actual detection."""
+    from sim.check_trace_clean import check
+    assert check(_write_prompts(tmp_path, [
+        "Current code in sim/workload.py:\n```python\nclass CostModel:\n    pass\n```",
+    ])) is False
+    assert check(_write_prompts(tmp_path, [
+        "def prefill_seconds(self): return self.prefill_rate",
+    ])) is False
+    assert check(_write_prompts(tmp_path, [
+        "Current code in tracing.py: import contextvars",
+    ])) is False

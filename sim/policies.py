@@ -1,19 +1,37 @@
 """
-Schedulers and retention policies.
+Schedulers, retention policies, and the online execution-time estimator.
+
+WHAT THE SCHEDULER CONTROLS
+---------------------------
+Exactly one decision: **when a batch slot and KV space are free, which waiting
+request is admitted next.**
+
+Everything else is fixed:
+
+  * Running requests are NEVER preempted. Once admitted, a request holds its
+    slot and its KV until it finishes. A scheduler cannot evict, pause, or
+    reorder work that is already running.
+  * Priorities are recomputed from scratch on every engine iteration. A
+    scheduler returns an ordering, not a commitment -- a request that was first
+    last iteration may be third this one, because `now` advanced and slack
+    shrank. Schedulers must therefore be pure functions of (views, now).
+  * The scheduler does not decide whether a request *fits*. It proposes an
+    order; the engine walks that order and admits what fits. A request that
+    does not fit is skipped, not reordered around.
+  * The scheduler cannot see the future. See ORACLE DISCIPLINE.
 
 ORACLE DISCIPLINE (HANDOFF.md section 10)
 -----------------------------------------
 The trace contains the future: loop trip counts are sampled up front, so
-Node.next_reuse_node, Node.next_reuse_gap_s and Node.critical_path_remaining are
-oracle fields. Only the offline Belady baseline and the hint builder may read
-them.
+Node.next_reuse_node, Node.next_reuse_gap_s and Node.critical_path_remaining
+encode what will happen. Node.output_tokens is equally oracular for scheduling
+purposes -- a real server does not know how many tokens a request will emit
+before it emits them.
 
-Enforcement here is structural rather than by convention: online schedulers are
-handed ReqView objects, which simply do not carry those attributes, so an oracle
-read raises AttributeError at the point of the mistake rather than silently
-producing an unbeatable policy. OnlineNodeView additionally guards anything that
-does get handed a raw Node, and raises OracleLeakError with a pointed message.
-`assert_no_oracle_leak()` checks the views at import time.
+Enforcement is structural rather than by convention: schedulers are handed
+ReqView objects, which do not carry those attributes at all, and whose
+__getattr__ raises OracleLeakError with a pointed message if one is requested.
+Only the offline reference policy and the hint builder may read the real Node.
 """
 
 from __future__ import annotations
@@ -23,15 +41,23 @@ import random
 from dataclasses import dataclass
 from typing import Optional
 
-from sim.workload import CODER_MODEL, CostModel, Kind
+from sim.workload import CODER_MODEL, CostModel
 
+# Fields on a Node that encode the future.
 ORACLE_FIELDS = frozenset({
     "next_reuse_node", "next_reuse_gap_s", "critical_path_remaining",
 })
 
+# Additionally forbidden to schedulers. output_tokens is not "the future" in the
+# trace-construction sense, but knowing a request's exact output length before
+# running it is information no real scheduler has.
+FORBIDDEN_FOR_SCHEDULERS = ORACLE_FIELDS | {
+    "output_tokens", "node", "true_output_tokens", "expected_seconds",
+}
+
 
 class OracleLeakError(RuntimeError):
-    """An online policy tried to read a field that encodes the future."""
+    """An online policy tried to read information it cannot have at run time."""
 
 
 class OnlineNodeView:
@@ -42,10 +68,10 @@ class OnlineNodeView:
         object.__setattr__(self, "_node", node)
 
     def __getattr__(self, name):
-        if name in ORACLE_FIELDS:
+        if name in FORBIDDEN_FOR_SCHEDULERS:
             raise OracleLeakError(
-                f"online policy read oracle field {name!r}; only Belady and the "
-                f"hint builder may see the future (HANDOFF.md section 10)")
+                f"online policy read forbidden field {name!r}; only the offline "
+                f"reference and the hint builder may see it")
         return getattr(self._node, name)
 
 
@@ -54,10 +80,9 @@ class ReqView:
     """
     Everything an online scheduler is allowed to know about a queued request.
 
-    Deliberately excludes output_tokens. In a real serving system you do not know
-    how many tokens a request will emit before it emits them, so a scheduler that
-    reads the true value is cheating in a way the oracle-field guard would not
-    catch. Schedulers use ExecutionEstimator instead.
+    Note what is absent: output_tokens, and anything derived from the realized
+    trace. est_service_s and est_remaining_s come from ExecutionEstimator, which
+    learns from completions rather than reading ahead.
     """
     req_id: int
     task_id: int
@@ -66,60 +91,78 @@ class ReqView:
     enqueued_at: float
     prompt_tokens: int
     attempt_index: int
+    replan_index: int
     priority: int
     deadline: Optional[float]
     est_service_s: float
     est_remaining_s: float
 
+    def __getattr__(self, name):
+        # Only reached when normal dataclass lookup fails.
+        if name in FORBIDDEN_FOR_SCHEDULERS:
+            raise OracleLeakError(
+                f"scheduler read {name!r} off a ReqView. Schedulers must work "
+                f"from estimates (est_service_s / est_remaining_s), never from "
+                f"true values. See ORACLE DISCIPLINE in sim/policies.py.")
+        raise AttributeError(name)
+
 
 def assert_no_oracle_leak():
-    leaked = ORACLE_FIELDS & set(ReqView.__dataclass_fields__)
+    leaked = FORBIDDEN_FOR_SCHEDULERS & set(ReqView.__dataclass_fields__)
     if leaked:
-        raise OracleLeakError(f"ReqView exposes oracle fields: {sorted(leaked)}")
+        raise OracleLeakError(f"ReqView exposes forbidden fields: {sorted(leaked)}")
 
 
 assert_no_oracle_leak()
 
 
 # --------------------------------------------------------------------------
-# Online execution-time estimation
+# Execution-time estimation
 # --------------------------------------------------------------------------
 
-# Rough stage ordering of MAARA's pipeline, used to estimate remaining work.
-# This is a-priori structural knowledge of the harness, not the realized path:
-# it says what stages EXIST, never how many times this particular task will
-# actually loop.
+# Stage order of MAARA's pipeline. This is a-priori structural knowledge of the
+# harness -- what stages exist -- never how many times this task will loop.
 _STAGE_ORDER = ["parse_issue", "navigate", "evaluate_plan",
                 "generate_fix", "apply_and_test", "diagnose"]
 
 
 class ExecutionEstimator:
     """
-    Supplies the a-priori execution-time estimates that EDF and least-slack-first
-    require, without touching the trace's realized future.
+    Supplies the a-priori execution-time estimates EDF, SJF and LSF need.
 
-    Three legitimate sources:
-      1. CostModel physics applied to prompt_tokens, which is known at enqueue.
-      2. Output lengths learned ONLINE from requests that have already finished,
-         as a per-stage running mean. Cold-started from StageTokens priors.
+    Three legitimate information sources:
+      1. CostModel physics applied to prompt_tokens, known at enqueue time.
+      2. Output lengths learned ONLINE from completed requests, as a running
+         mean per (stage, attempt_index). Cold-started from StageTokens priors.
       3. The empirical retry distribution from benchmark/results.jsonl, which is
-         calibration data measured before the run, not knowledge of this task.
+         calibration measured before the run, not knowledge of this task.
 
-    The weak point, and it should be stated in the writeup: remaining work
-    depends on how many more retry attempts a task will need, which is genuinely
-    unknowable online. We use the conditional expectation given attempts so far.
-    A task that is about to succeed and one that will burn all three attempts
-    look identical to this estimator, which is exactly the uncertainty a real
-    scheduler faces.
+    Keying the running mean by (stage, attempt_index) matters: a retry prompt
+    carries the previous fix plus a diagnosis, so attempt 2's coder output is
+    not drawn from the same distribution as attempt 1's. Falls back to the
+    stage-only mean, then to the StageTokens prior.
+
+    The honest weakness, worth stating in the writeup: remaining work depends on
+    how many more retry attempts a task will need, which is genuinely unknowable
+    online. We use the conditional expectation given attempts so far, so a task
+    about to succeed and one that will burn all three look identical. That is
+    exactly the uncertainty a real scheduler faces.
     """
 
-    def __init__(self, cost: CostModel, tok, cpu, attempt_weights=(74, 13, 33)):
+    is_oracle = False
+    name = "online"
+
+    def __init__(self, cost: CostModel, tok, cpu, attempt_weights=(74, 13, 33),
+                 noise_sigma: float = 0.0, seed: int = 0):
         self.cost = cost
         self.tok = tok
         self.cpu = cpu
         self.attempt_weights = attempt_weights
-        self._out_sum = {}
-        self._out_n = {}
+        self.noise_sigma = noise_sigma
+        self._rng = random.Random(seed)
+        self._sum = {}
+        self._n = {}
+        self._noise = {}
         self._prior = {
             "parse_issue": tok.issue_output_tokens,
             "evaluate_plan": tok.eval_output_tokens,
@@ -127,55 +170,62 @@ class ExecutionEstimator:
             "diagnose": tok.diagnose_output_tokens,
         }
 
-    def observe(self, stage: str, output_tokens: int) -> None:
-        self._out_sum[stage] = self._out_sum.get(stage, 0) + output_tokens
-        self._out_n[stage] = self._out_n.get(stage, 0) + 1
+    # -- learning ---------------------------------------------------------
 
-    def expected_output(self, stage: str) -> float:
-        if self._out_n.get(stage):
-            return self._out_sum[stage] / self._out_n[stage]
-        return self._prior.get(stage, 250)
+    def observe(self, stage: str, attempt_index: int, output_tokens: int) -> None:
+        """Called by the engine on every completion. Updates both key levels."""
+        for key in ((stage, attempt_index), (stage, None)):
+            self._sum[key] = self._sum.get(key, 0) + output_tokens
+            self._n[key] = self._n.get(key, 0) + 1
 
-    def service_s(self, model: str, prompt_tokens: int, stage: str) -> float:
-        out = self.expected_output(stage)
-        return (self.cost.prefill_seconds(model, prompt_tokens)
+    def predict_output(self, stage: str, attempt_index: int = None,
+                       true_output: int = None) -> float:
+        """
+        Predicted output length. `true_output` is accepted but DELIBERATELY
+        ignored here -- only OracleEstimator uses it. There is a test asserting
+        this method's result does not change when true_output changes.
+        """
+        for key in ((stage, attempt_index), (stage, None)):
+            if self._n.get(key):
+                return self._sum[key] / self._n[key]
+        return float(self._prior.get(stage, 250))
+
+    # -- noise ------------------------------------------------------------
+
+    def noise_factor(self, req_id) -> float:
+        """
+        Per-request multiplicative error, drawn once and cached.
+
+        Drawn per request rather than per call because priorities are
+        recomputed every iteration: a fresh draw each time would make one
+        request's estimate jitter wildly during its own queue wait, which is not
+        how a real predictor behaves. A persistent per-request bias is.
+        """
+        if self.noise_sigma <= 0 or req_id is None:
+            return 1.0
+        if req_id not in self._noise:
+            self._noise[req_id] = math.exp(self._rng.gauss(0.0, self.noise_sigma))
+        return self._noise[req_id]
+
+    # -- derived times ----------------------------------------------------
+
+    def service_s(self, model: str, prompt_tokens: int, stage: str,
+                  attempt_index: int = None, true_output: int = None,
+                  req_id=None) -> float:
+        out = self.predict_output(stage, attempt_index, true_output)
+        base = (self.cost.prefill_seconds(model, prompt_tokens)
                 + out * self.cost.decode_iteration_seconds(model, 1))
+        return base * self.noise_factor(req_id)
 
     def _expected_further_attempts(self, attempt_index: int) -> float:
         """E[remaining attempts | already on attempt `attempt_index`]."""
         w = self.attempt_weights
-        tail = [(a, w[a - 1]) for a in range(max(attempt_index, 1), len(w) + 1)]
+        lo = max(attempt_index, 1)
+        tail = [(a, w[a - 1]) for a in range(lo, len(w) + 1)]
         total = sum(x for _, x in tail)
         if total <= 0:
             return 0.0
         return sum((a - attempt_index) * x for a, x in tail) / total
-
-    def remaining_s(self, stage: str, attempt_index: int, model: str) -> float:
-        """
-        Expected work left in this task from `stage` onward, in seconds.
-        Used as the critical-path estimate for slack.
-        """
-        try:
-            idx = _STAGE_ORDER.index(stage)
-        except ValueError:
-            idx = 0
-
-        est = 0.0
-        # Remainder of the current pass through the pipeline.
-        for s in _STAGE_ORDER[idx + 1:]:
-            if s == "navigate":
-                est += self.cpu.rag_index_seconds
-            elif s == "apply_and_test":
-                est += self.cpu.pytest_seconds
-            else:
-                est += self.service_s(model, self._typical_prompt(s), s)
-
-        # Plus however many more retry loops we expect to run.
-        loop = (self.service_s(model, self._typical_prompt("generate_fix"), "generate_fix")
-                + self.cpu.pytest_seconds
-                + self.service_s(model, self._typical_prompt("diagnose"), "diagnose"))
-        est += self._expected_further_attempts(attempt_index) * loop
-        return est
 
     def _typical_prompt(self, stage: str) -> int:
         t = self.tok
@@ -186,13 +236,75 @@ class ExecutionEstimator:
             "diagnose": t.diagnose_prompt_tokens,
         }.get(stage, 500)
 
+    def _stage_cost(self, stage: str, model: str, attempt_index: int = None) -> float:
+        if stage == "navigate":
+            return self.cpu.rag_index_seconds
+        if stage == "apply_and_test":
+            return self.cpu.pytest_seconds
+        return self.service_s(model, self._typical_prompt(stage), stage, attempt_index)
+
+    def remaining_s(self, stage: str, attempt_index: int, model: str,
+                    req_id=None) -> float:
+        """
+        Expected work left in this task from `stage` onward, in seconds. This is
+        the DAG's remaining critical path as estimated online, and it is what
+        LSF's slack and SJF's ordering are built from.
+        """
+        try:
+            idx = _STAGE_ORDER.index(stage)
+        except ValueError:
+            idx = -1
+
+        est = sum(self._stage_cost(s, model, attempt_index)
+                  for s in _STAGE_ORDER[idx + 1:])
+
+        # Plus however many more retry loops we expect to run.
+        loop = (self._stage_cost("generate_fix", model, attempt_index)
+                + self.cpu.pytest_seconds
+                + self._stage_cost("diagnose", model, attempt_index))
+        est += self._expected_further_attempts(attempt_index) * loop
+        return est * self.noise_factor(req_id)
+
+    def estimate_task_total(self, model: str = CODER_MODEL) -> float:
+        """
+        Estimated wall-clock for one task run ALONE, with no contention. Used to
+        set deadlines, so it deliberately does not depend on current load.
+        """
+        return (self._stage_cost("parse_issue", model, 1)
+                + self.remaining_s("parse_issue", 1, model))
+
+
+class OracleEstimator(ExecutionEstimator):
+    """
+    Upper-bound reference only. Returns true output lengths.
+
+    Not a policy anyone could deploy -- it is the "what if prediction were
+    perfect" line on the chart. Every output using it must say so; the engine
+    labels such runs estimator=oracle.
+    """
+
+    is_oracle = True
+    name = "oracle"
+
+    def predict_output(self, stage: str, attempt_index: int = None,
+                       true_output: int = None) -> float:
+        if true_output is None:
+            return super().predict_output(stage, attempt_index)
+        return float(true_output)
+
+
+ESTIMATORS = {"online": ExecutionEstimator, "oracle": OracleEstimator}
+
 
 # --------------------------------------------------------------------------
 # Schedulers
 # --------------------------------------------------------------------------
+#
+# All return req_ids in the order the engine should try to admit them. Ties are
+# broken by (enqueued_at, req_id) everywhere, so runs are reproducible and two
+# schedulers agreeing on the primary key produce identical orders.
 
 class Scheduler:
-    """Returns req_ids in the order they should be considered for admission."""
     name = "base"
     needs_deadlines = False
 
@@ -200,58 +312,82 @@ class Scheduler:
         raise NotImplementedError
 
 
-class FIFOScheduler(Scheduler):
-    """Arrival order. The incumbent."""
-    name = "fifo"
+class FCFSScheduler(Scheduler):
+    """
+    First come, first served. The incumbent.
+
+    Starvation: impossible. Strict arrival order means every request is admitted
+    after a bounded number of earlier ones, at any load.
+    """
+    name = "fcfs"
 
     def order(self, views, now):
-        return [v.req_id for v in sorted(views, key=lambda v: v.enqueued_at)]
+        return [v.req_id for v in sorted(views, key=lambda v: (v.enqueued_at, v.req_id))]
 
 
-class StaticPriorityScheduler(Scheduler):
+class SJFScheduler(Scheduler):
     """
-    Fixed per-stage priority, tie-broken by arrival.
+    Shortest estimated remaining work of the request's TASK, first.
 
-    The ordering encodes a plausible operator intuition: unblock work that is
-    nearly done, and get the cheap gate out of the way. It is a strawman for
-    least-slack-first precisely because it is workflow-blind -- it cannot tell a
-    task on its last attempt from one that just arrived.
+    Uses est_remaining_s (whole-task remaining work) rather than est_service_s
+    (this request alone), so it favours tasks that are nearly done over requests
+    that are merely individually cheap. That is the variant that actually moves
+    mean task latency.
+
+    Starvation: YES, and this is its known failure mode. Under sustained load a
+    steady stream of nearly-finished tasks keeps jumping ahead of a task that
+    still has three retry attempts to burn, deferring it indefinitely. Expect
+    p99 to degrade even as p50 improves; that trade is why it is here.
     """
-    name = "static-priority"
-    _RANK = {"apply_and_test": 0, "diagnose": 1, "generate_fix": 2,
-             "evaluate_plan": 3, "parse_issue": 4}
+    name = "sjf"
 
     def order(self, views, now):
         return [v.req_id for v in sorted(
-            views, key=lambda v: (self._RANK.get(v.stage, 9), v.enqueued_at))]
+            views, key=lambda v: (v.est_remaining_s, v.enqueued_at, v.req_id))]
 
 
 class EDFScheduler(Scheduler):
-    """Earliest deadline first. Deadlines come from the estimator, not the trace."""
+    """
+    Earliest deadline first. Deadlines come from the estimator, not the trace.
+
+    Starvation: under overload, yes, and badly. EDF is optimal while the system
+    is feasible, but when it is not it shows the classic domino effect -- it
+    keeps prioritising the most-overdue task, misses it anyway, and drags
+    everything behind it down too. Loose-deadline work is deferred indefinitely
+    while tighter work keeps arriving.
+    """
     name = "edf"
     needs_deadlines = True
 
     def order(self, views, now):
         return [v.req_id for v in sorted(
             views, key=lambda v: (v.deadline if v.deadline is not None else math.inf,
-                                  v.enqueued_at))]
+                                  v.enqueued_at, v.req_id))]
 
 
 class LeastSlackFirstScheduler(Scheduler):
     """
-    Slack = deadline - now - estimated remaining work on the task's critical path.
+    Slack = deadline - now - estimated remaining work on the task's critical
+    path. Lowest slack first.
 
-    The difference from EDF is the whole point of the mechanism. EDF orders by
-    deadline alone, so a request with a distant deadline but a long tail of
-    dependent work behind it gets deprioritised even when it is about to become
-    the bottleneck. Slack accounts for that tail, and the tail comes from the
-    workflow DAG.
+    The difference from EDF is the entire mechanism. EDF orders by deadline
+    alone, so a request with a distant deadline but a long tail of dependent
+    work behind it stays deprioritised right up until it becomes the
+    bottleneck. Slack subtracts that tail, and the tail comes from the workflow
+    DAG. Two requests with the same deadline but different amounts of remaining
+    work are indistinguishable to EDF and correctly ordered by LSF.
 
-    est_remaining_s is computed by ExecutionEstimator from stage position and the
+    est_remaining_s comes from ExecutionEstimator via stage position and the
     empirical retry distribution -- never from Node.critical_path_remaining,
     which is oracle.
+
+    Starvation: same shape as EDF. A task whose deadline is far away keeps
+    losing to tighter work and can be deferred indefinitely under sustained
+    overload. Unlike EDF it also keeps prioritising already-late tasks (slack
+    goes negative), which can pour service into work that will miss regardless
+    -- worth watching in the deadline-miss numbers.
     """
-    name = "least-slack-first"
+    name = "lsf"
     needs_deadlines = True
 
     def order(self, views, now):
@@ -259,10 +395,85 @@ class LeastSlackFirstScheduler(Scheduler):
             if v.deadline is None:
                 return math.inf
             return v.deadline - now - v.est_remaining_s
-        return [v.req_id for v in sorted(views, key=lambda v: (slack(v), v.enqueued_at))]
+        return [v.req_id for v in sorted(
+            views, key=lambda v: (slack(v), v.enqueued_at, v.req_id))]
 
 
-SCHEDULERS = {
-    s.name: s for s in
-    [FIFOScheduler, StaticPriorityScheduler, EDFScheduler, LeastSlackFirstScheduler]
-}
+class StaticPriorityScheduler(Scheduler):
+    """
+    Fixed per-stage rank, tie-broken by arrival.
+
+    Encodes a plausible operator intuition: finish what is nearly done, and get
+    the cheap gate out of the way. It is a baseline for LSF precisely because it
+    is workflow-blind -- rank depends only on which stage a request is, so it
+    cannot tell a task on its last attempt from one that just arrived.
+
+    Starvation: yes. Under open arrivals parse_issue (lowest rank) is deferred
+    whenever any later-stage work exists, so new tasks stop entering the system
+    while in-flight ones churn.
+    """
+    name = "static-priority"
+    _RANK = {"apply_and_test": 0, "diagnose": 1, "generate_fix": 2,
+             "evaluate_plan": 3, "parse_issue": 4}
+
+    def order(self, views, now):
+        return [v.req_id for v in sorted(
+            views, key=lambda v: (self._RANK.get(v.stage, 9), v.enqueued_at, v.req_id))]
+
+
+SCHEDULERS = {c.name: c for c in [
+    FCFSScheduler, SJFScheduler, EDFScheduler, LeastSlackFirstScheduler,
+    StaticPriorityScheduler,
+]}
+
+
+# --------------------------------------------------------------------------
+# Retention policies
+# --------------------------------------------------------------------------
+#
+# Duck-typed on the engine's KVEntry (needs .key, .nbytes, .last_used,
+# .evictable) so this module does not import engine.py. Phase 5 adds ski-rental
+# and the offline reference here.
+
+class RetentionPolicy:
+    name = "base"
+
+    def on_complete(self, entry, now: float) -> bool:
+        """True to retain the entry after its last user finishes."""
+        raise NotImplementedError
+
+    def choose_victims(self, candidates, need_bytes, now: float):
+        """Entries to evict, in order, until need_bytes is freed."""
+        raise NotImplementedError
+
+
+class LRURetention(RetentionPolicy):
+    """
+    Retain everything; evict least-recently-used under pressure.
+
+    The incumbent: this is what vLLM's automatic prefix caching does, so it is
+    the real baseline rather than a strawman. Its weakness is that it only looks
+    backward -- it knows when an entry was last used, never when it will be
+    wanted again.
+    """
+    name = "lru"
+
+    def on_complete(self, entry, now):
+        return True
+
+    def choose_victims(self, candidates, need_bytes, now):
+        victims, freed = [], 0
+        for e in sorted(candidates, key=lambda e: (e.last_used, e.key)):
+            if freed >= need_bytes:
+                break
+            victims.append(e)
+            freed += e.nbytes
+        return victims
+
+
+class KeepAllRetention(LRURetention):
+    """Never voluntarily drop. Still forced to evict when out of space."""
+    name = "keep-all"
+
+
+RETENTIONS = {c.name: c for c in [LRURetention, KeepAllRetention]}
