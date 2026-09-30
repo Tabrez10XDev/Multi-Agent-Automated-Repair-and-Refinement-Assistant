@@ -472,3 +472,36 @@ The grid is complete, so `run_experiments.py` resumes into a no-op. Collecting a
 fresh trace needs either `MAARA_IGNORE_RESUME=1` or, better,
 `MAARA_RESULTS_PATH` pointed at a new file — which gives an empty resume set and
 keeps the original results untouched.
+
+### The existing 120 runs are NOT contaminated
+
+On 2026-09-29 a traced run retrieved `sim/workload.py` as "relevant code" for a
+HumanEval bug and overwrote it (see §15). The obvious follow-up question is
+whether any *historical* result is affected. It is not. Timeline:
+
+| event | when | source |
+|---|---|---|
+| `benchmark/results/run_*.json` written | 2026-04-18 15:36–16:02 | file mtimes |
+| `benchmark/results.jsonl` last written | 2026-05-05 01:30 | file mtime |
+| ...and committed | 2026-05-04 / 05-05 | `3215189`, `a01af03` |
+| `sim/` first appeared on disk | **2026-09-15 16:12** | `sim/__init__.py` mtime |
+| `sim/` first committed | 2026-09-29 15:16 | `4ba38ac` |
+| `tracing.py` created | 2026-09-29 | this session |
+
+The simulator post-dates the last results row by **about four months**, and
+`results.jsonl` has not been appended to since 2026-05-05. No run that produced
+the 120 rows could have seen simulator code, because none of it existed.
+
+Confirmed structurally as well. Applying orchestrator's `available_files` filter
+to the tree at `472f18e` (the last commit before `sim/`) yields:
+
+```
+['target.py']
+```
+
+Applying the same filter to the tree today yields eleven files, including
+`sim/engine.py`, `tracing.py` and `tests/conftest.py`. That difference is
+exactly the regression, and it did not exist when the 120 rows were produced.
+
+**The existing `results.jsonl` and `benchmark/results/*.json` remain usable.**
+The contaminated artefacts are only the 2026-09-29 traced run's outputs.
