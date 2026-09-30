@@ -460,6 +460,28 @@ batching with load-dependent rent is not proven here.
 
 ---
 
+## 14a. Corrections to the Phase 2 and Phase 4 reuse figures
+
+Two errors were found after those phases were written. Numbers quoted from
+them before 2026-09-30 are wrong.
+
+**Prefix matching ignored the model.** A KV cache belongs to one model
+instance, so a prefix qwen computed cannot serve a llama3.2 call however
+identical the text. `compute_prefixes` compared across models and counted
+those as reuse. Now model-aware, with the model in the cache key and a guard
+in the engine. Effect on the original layout is small — reusable fraction
+13.8% -> 13.7%, saved prefill 50.1s -> 49.6s — because almost all of its reuse
+was same-role and therefore already same-model. Effect on the shared-first
+layout is large: 20.2% -> 12.0%. `same_model_only=False` reproduces the old
+figures.
+
+**Segmentation merged two processes sharing a run_id.** `MAARA_RUN_ID` pins
+the trace filename, so a run resumed under the same id appends a second `seq`
+sequence starting again at 1. Sorting by `seq` interleaved them and fabricated
+a task-run boundary on nearly every row — the shared-first trace segmented
+into 305 blocks instead of 60. Now ordered by `t_start` with a new process
+group wherever `seq` fails to advance.
+
 ## 14. MAARA writeup issues
 
 Found while wiring trace logging. **No code was changed for any of these** —

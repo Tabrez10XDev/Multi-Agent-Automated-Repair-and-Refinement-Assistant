@@ -127,13 +127,21 @@ def segment_task_runs(rows):
 
     blocks = []
     for _, rs in sorted(by_run.items(), key=lambda kv: run_start(kv[1])):
-        cur = None
-        for r in sorted(rs, key=lambda r: r["seq"]):
-            if cur is None or r["task_id"] != cur[-1]["task_id"]:
-                cur = [r]
-                blocks.append(cur)
+        # Two processes can share a run_id: MAARA_RUN_ID pins the filename, so
+        # an interrupted run resumed under the same id appends a SECOND seq
+        # sequence starting again at 1. Sorting by seq then interleaves them
+        # and fabricates a task-run boundary on every other row.
+        #
+        # Order chronologically -- t_start is comparable across processes --
+        # and start a new process group wherever seq fails to advance.
+        for r in sorted(rs, key=lambda r: (r.get("t_start") or 0.0, r["seq"])):
+            new_process = blocks and r["seq"] <= blocks[-1][-1]["seq"] and \
+                r["task_id"] == blocks[-1][-1]["task_id"]
+            if (not blocks or r["task_id"] != blocks[-1][-1]["task_id"]
+                    or new_process):
+                blocks.append([r])
             else:
-                cur.append(r)
+                blocks[-1].append(r)
     return blocks
 
 
@@ -256,9 +264,10 @@ class PrefixInfo:
     chars_per_token: float = 0.0
     prefix_key: Optional[str] = None
     prompt_chars: int = 0
+    model: str = ""
 
 
-def compute_prefixes(block, prompts_by_call, run_key: str):
+def compute_prefixes(block, prompts_by_call, run_key: str, same_model_only=True):
     """
     For each call, the longest common prefix against every EARLIER call in the
     same task run, any role.
@@ -279,11 +288,19 @@ def compute_prefixes(block, prompts_by_call, run_key: str):
         msgs = prompts_by_call.get(r["call_id"])
         text = render_prompt(msgs) if msgs else ""
         pt = r.get("prompt_tokens") or 0
-        info = PrefixInfo(call_id=r["call_id"], prompt_chars=len(text),
+        model = r.get("model", "")
+        info = PrefixInfo(call_id=r["call_id"], prompt_chars=len(text), model=model,
                           chars_per_token=(len(text) / pt) if pt else 0.0)
 
         best_len, best_id = 0, None
-        for prev_id, prev_text in texts:
+        for prev_id, prev_text, prev_model in texts:
+            # A KV cache belongs to one model instance. A prefix computed by
+            # qwen cannot serve a llama3.2 call however identical the text, so
+            # cross-model matches are not reuse -- they are a measurement
+            # error. same_model_only=False reproduces the earlier, wrong
+            # figures for comparison.
+            if same_model_only and prev_model != model:
+                continue
             n = _lcp_len(text, prev_text)
             if n > best_len:
                 best_len, best_id = n, prev_id
@@ -293,10 +310,12 @@ def compute_prefixes(block, prompts_by_call, run_key: str):
             info.shared_tokens = int(best_len / info.chars_per_token)
             info.shares_with = best_id
             digest = hashlib.sha1(text[:best_len].encode()).hexdigest()[:10]
-            info.prefix_key = f"{run_key}:{digest}"
+            # Model in the key so the simulator can never match across models
+            # even if two of them produce byte-identical prefixes.
+            info.prefix_key = f"{run_key}:{model}:{digest}"
 
         out[r["call_id"]] = info
-        texts.append((r["call_id"], text))
+        texts.append((r["call_id"], text, model))
     return out
 
 

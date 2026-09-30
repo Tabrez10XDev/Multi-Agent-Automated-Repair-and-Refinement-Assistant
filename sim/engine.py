@@ -315,6 +315,12 @@ class Engine:
         node = r.node
         key = node.prefix_key
         entry = self.entries.get(key) if key else None
+        if entry is not None and entry.model != r.model:
+            # A KV cache belongs to one model instance, so an entry another
+            # model produced cannot be reused however identical the text.
+            # Keys already carry the model; this is defence in depth against a
+            # trace or generator that forgets to include it.
+            entry = None
         hit = entry is not None
 
         # KV is allocated in whole blocks, so a 4-token shared prefix still

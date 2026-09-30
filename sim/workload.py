@@ -396,8 +396,10 @@ def _build_task(task_id: int, arrival: float, rng: random.Random,
                           replan_index=ctx["replan"], **kw))
         return nid
 
-    issue_key = f"t{task_id}:issue"
-    stable_key = f"t{task_id}:stable_ctx"
+    # Model is part of the key: a KV cache belongs to one model instance, so
+    # two calls can only share an entry if they ran on the same model.
+    issue_key = f"t{task_id}:{CODER_MODEL}:issue"
+    stable_key = f"t{task_id}:{CODER_MODEL}:stable_ctx"
 
     # Step 1: parse_issue
     prev = add("parse_issue", Kind.LLM, [], model=CODER_MODEL,

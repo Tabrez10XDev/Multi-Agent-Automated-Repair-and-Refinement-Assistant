@@ -125,19 +125,21 @@ def test_prefix_finds_the_shared_opening():
     assert pf["b"].shared_tokens == int(len(shared) / (len(shared + "a completely different tail") / 75))
 
 
-def test_prefix_matches_across_roles_not_just_within():
+def test_prefix_matches_across_roles_on_the_same_model():
     """
-    Cross-role is the point: the coder and the Sentinel both carry the issue
-    text. Restricting to same-role would miss exactly the reuse under study.
+    Cross-role matching is the point -- the coder and the debugger both carry
+    the target file, and restricting to same-role would miss it. But the two
+    roles must be on the same model: the evaluator runs llama3.2 while the
+    coder usually runs qwen, and those cannot share a KV cache at all.
     """
-    shared = "ISSUE TEXT " * 30
-    prompts = {"e": [{"role": "user", "content": shared + "evaluate"}],
-               "c": [{"role": "user", "content": shared + "write code"}]}
-    block = [row(1, "T/1", "evaluator", "e", pt=80, model="llama3.2"),
-             row(2, "T/1", "coder", "c", pt=82)]
+    shared = "TARGET FILE " * 30
+    prompts = {"c": [{"role": "user", "content": shared + "write code"}],
+               "d": [{"role": "user", "content": shared + "diagnose"}]}
+    block = [row(1, "T/1", "coder", "c", pt=80, model="qwen2.5-coder:7b"),
+             row(2, "T/1", "debugger", "d", pt=82, model="qwen2.5-coder:7b")]
     pf = compute_prefixes(block, prompts, "r0")
-    assert pf["c"].shares_with == "e"
-    assert pf["c"].shared_tokens > 0
+    assert pf["d"].shares_with == "c"
+    assert pf["d"].shared_tokens > 0
 
 
 def test_prefix_picks_the_longest_of_several_earlier_calls():
@@ -302,3 +304,70 @@ def test_real_timing_is_sequential_and_retiming_creates_overlap():
     fast_span = max(t.arrival_time for t in fast)
     assert fast_span < seq_span
     assert [len(t.nodes) for t in seq] == [len(t.nodes) for t in fast]
+
+
+# --- model-aware prefix matching -----------------------------------------
+
+def test_prefix_does_not_match_across_models():
+    """
+    A KV cache belongs to one model instance. Two calls can carry byte-identical
+    prompts and still share nothing if they ran on different models -- counting
+    that as reuse overstates what any prefix cache could deliver.
+    """
+    shared = "IDENTICAL PREFIX " * 20
+    prompts = {"q": [{"role": "user", "content": shared + "qwen tail"}],
+               "l": [{"role": "user", "content": shared + "llama tail"}]}
+    block = [row(1, "T/1", "coder", "q", pt=90, model="qwen2.5-coder:7b"),
+             row(2, "T/1", "evaluator", "l", pt=92, model="llama3.2")]
+
+    pf = compute_prefixes(block, prompts, "r0")
+    assert pf["l"].shared_tokens == 0 and pf["l"].shares_with is None
+
+    # The uncorrected view, kept only to reproduce the earlier figures.
+    old = compute_prefixes(block, prompts, "r0", same_model_only=False)
+    assert old["l"].shares_with == "q" and old["l"].shared_tokens > 0
+
+
+def test_prefix_still_matches_within_a_model():
+    shared = "IDENTICAL PREFIX " * 20
+    prompts = {"a": [{"role": "user", "content": shared + "one"}],
+               "b": [{"role": "user", "content": shared + "two"}]}
+    block = [row(1, "T/1", "coder", "a", pt=90, model="qwen2.5-coder:7b"),
+             row(2, "T/1", "debugger", "b", pt=90, model="qwen2.5-coder:7b")]
+    pf = compute_prefixes(block, prompts, "r0")
+    assert pf["b"].shares_with == "a" and pf["b"].shared_tokens > 0
+
+
+def test_prefix_key_carries_the_model():
+    prompts = {"a": [{"role": "user", "content": "P" * 200 + "x"}],
+               "b": [{"role": "user", "content": "P" * 200 + "y"}]}
+    block = [row(1, "T/1", "coder", "a", pt=50, model="qwen2.5-coder:7b"),
+             row(2, "T/1", "coder", "b", pt=50, model="qwen2.5-coder:7b")]
+    pf = compute_prefixes(block, prompts, "r0")
+    assert "qwen2.5-coder:7b" in pf["b"].prefix_key
+
+
+def test_engine_refuses_a_cross_model_entry(tmp_path):
+    """Defence in depth: even if a key collided, the engine must not reuse an
+    entry another model produced."""
+    from sim.engine import Engine, EngineConfig, KVEntry
+    from sim.policies import ExecutionEstimator, FCFSScheduler, LRURetention
+    from sim.workload import (CostModel, CpuStageSeconds, StageTokens,
+                              WorkloadConfig, generate_trace)
+
+    cost, tok, cpu = CostModel(), StageTokens.from_measured(), CpuStageSeconds.from_measured()
+    tasks = generate_trace(WorkloadConfig(n_tasks=3, seed=1), cost, tok, cpu)
+    eng = Engine(tasks, cost, EngineConfig(kv_budget_mb=4096.0, max_batch=4),
+                 retention=LRURetention(), scheduler=FCFSScheduler(),
+                 estimator=ExecutionEstimator(cost, tok, cpu))
+
+    node = next(n for t in tasks for n in t.nodes if n.prefix_key)
+    planted = KVEntry(key=node.prefix_key, model="some-other-model", tokens=999,
+                      nbytes=cost.kv_bytes("llama3.2", 999), useful_tokens=999,
+                      recompute_s=1.0)
+    eng.entries[node.prefix_key] = planted
+
+    from sim.engine import Request
+    r = Request(req_id=9999, node=node, enqueued_at=0.0)
+    assert eng._try_admit(r) is True
+    assert r.prefix_hit is False, "reused an entry belonging to another model"
