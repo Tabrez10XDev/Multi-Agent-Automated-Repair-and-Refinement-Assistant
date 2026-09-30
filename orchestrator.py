@@ -13,6 +13,24 @@ from agents.retriever import update_index
 from agents.evaluator import evaluate_plan
 
 
+def results_path() -> str:
+    """
+    Where experiment rows are appended.
+
+    MAARA_RESULTS_PATH sends a traced re-run to its own file, so collecting a
+    trace does not append duplicate rows to the primary results.jsonl and make
+    analyze_results.py double-count. Unset, behaviour is unchanged.
+    """
+    return os.environ.get("MAARA_RESULTS_PATH") or "benchmark/results.jsonl"
+
+
+def _append_result(experiment_log: dict) -> None:
+    path = results_path()
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "a") as f:
+        f.write(json.dumps(experiment_log) + "\n")
+
+
 def run(
     issue_text: str,
     repo_path: str,
@@ -152,9 +170,7 @@ def _run_impl(
                 "rag_chunks_retrieved": nav_result.get("chunks_retrieved", 0),
                 "latency_seconds": round(time.time() - start_time, 2),
             }
-            os.makedirs("benchmark", exist_ok=True)
-            with open("benchmark/results.jsonl", "a") as f:
-                f.write(json.dumps(experiment_log) + "\n")
+            _append_result(experiment_log)
 
             return True
 
@@ -194,9 +210,7 @@ def _run_impl(
         "rag_chunks_retrieved": nav_result.get("chunks_retrieved", 0),
         "latency_seconds": round(time.time() - start_time, 2),
     }
-    os.makedirs("benchmark", exist_ok=True)
-    with open("benchmark/results.jsonl", "a") as f:
-        f.write(json.dumps(experiment_log) + "\n")
+    _append_result(experiment_log)
 
     return False
 

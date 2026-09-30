@@ -9,7 +9,7 @@ import shutil
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator import run
+from orchestrator import results_path, run
 
 TASKS = [
     {
@@ -488,10 +488,12 @@ def main():
     os.makedirs(os.path.join(REPO_PATH, "benchmark"), exist_ok=True)
 
     # load already completed runs so we can skip them on resume
-    results_path = os.path.join(REPO_PATH, "benchmark", "results.jsonl")
+    # Honours MAARA_RESULTS_PATH for BOTH reading and writing, so pointing a
+    # traced run at a fresh file also gives it an empty resume set.
+    results_file = results_path()
     logged = set()
-    if os.path.exists(results_path):
-        with open(results_path) as f:
+    if os.path.exists(results_file):
+        with open(results_file) as f:
             for line in f:
                 try:
                     r = json.loads(line)
@@ -573,7 +575,7 @@ def main():
                         "latency_seconds": 0,
                         "error": str(e)
                     }
-                    with open(os.path.join(REPO_PATH, "benchmark", "results.jsonl"), "a") as f:
+                    with open(results_file, "a") as f:
                         f.write(json.dumps(error_log) + "\n")
 
                 finally:

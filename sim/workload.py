@@ -165,6 +165,12 @@ class CostModel:
                          f"kv={r.kv_bytes_per_token/1024:>5.0f} KiB/tok  [{tag}]")
         lines.append(f"  batch_decode_coeff   {self.batch_decode_coeff}  [PLACEHOLDER - sweep this]")
         lines.append(f"  homogeneous          {self.homogeneous}")
+        # Applies whenever a trace-derived workload is used (sim/trace_loader.py).
+        # Ollama templates prompts server-side, so a prefix recovered from logged
+        # message strings is an estimate, not a measurement. See tracing.py,
+        # "PROMPT SIDECAR", for the three sources of error.
+        lines.append("  trace prefix sizes   longest-common-prefix on raw prompts, "
+                     "chars->tokens by per-call ratio  [APPROXIMATE]")
         return "\n".join(lines)
 
 

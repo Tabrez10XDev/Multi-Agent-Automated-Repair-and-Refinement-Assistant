@@ -43,6 +43,35 @@ ROW SCHEMA
 Durations are stored in seconds rather than ollama's native nanoseconds so they
 are directly comparable with everything else in sim/, which is all seconds.
 
+PROMPT SIDECAR
+--------------
+The full messages list of every call goes to a separate file,
+traces/<run_id>.prompts.jsonl(.gz), one row per call: run_id, call_id, task_id,
+agent_role, model, messages. Joined to the main trace on call_id. Kept separate
+so the main trace stays small enough to scan quickly, while the prompts -- which
+are orders of magnitude larger -- are read only when needed.
+
+Phase 2's loader uses these to recover the reusable prefix: for each call, the
+longest common prefix against every EARLIER call in the same task (any role, not
+only the same role, since coder and evaluator both carry the issue text and the
+test files), converted from characters to tokens using that call's own
+prompt_tokens / prompt character length.
+
+That number is APPROXIMATE and is labelled as such in CostModel.provenance().
+Three reasons it is not a measurement:
+
+  1. Ollama applies its chat template server-side, so what the model actually
+     tokenizes is not the concatenation of these message strings. Template
+     tokens, role markers and BOS/EOS are invisible from here.
+  2. chars -> tokens via one per-call ratio is a linear approximation, and
+     tokenization density is not uniform across code, prose and JSON within a
+     single prompt.
+  3. The common prefix is measured in characters, so it can end mid-token,
+     whereas a real KV prefix cache matches at token boundaries.
+
+The error is small relative to the effect under study (prefix sizes span roughly
+480 to 27,000 tokens), but it must never be reported as measured.
+
 PARENT EDGES
 ------------
 A parent is a call whose *output text* appears in this call's prompt. Derived by
@@ -101,10 +130,12 @@ _run = None
 
 
 class _Run:
-    def __init__(self, run_id, path, fh):
+    def __init__(self, run_id, path, fh, prompt_path, prompt_fh):
         self.run_id = run_id
         self.path = path
         self.fh = fh
+        self.prompt_path = prompt_path
+        self.prompt_fh = prompt_fh
         self.seq = 0
         self.lock = threading.Lock()
 
@@ -118,12 +149,18 @@ class _Run:
             self.fh.flush()
         return row["seq"]
 
+    def write_prompt(self, row):
+        with self.lock:
+            self.prompt_fh.write(json.dumps(row) + "\n")
+            self.prompt_fh.flush()
+
     def close(self):
         with self.lock:
-            try:
-                self.fh.close()
-            except Exception:
-                pass
+            for fh in (self.fh, self.prompt_fh):
+                try:
+                    fh.close()
+                except Exception:
+                    pass
 
 
 def enabled() -> bool:
@@ -152,14 +189,19 @@ def _get_run():
             d = os.path.join(base, "smoke")
             os.makedirs(d, exist_ok=True)
             path = os.path.join(d, f"{run_id}.jsonl")
+            ppath = os.path.join(d, f"{run_id}.prompts.jsonl")
             fh = open(path, "a", encoding="utf-8")
+            pfh = open(ppath, "a", encoding="utf-8")
         else:
             os.makedirs(base, exist_ok=True)
             path = os.path.join(base, f"{run_id}.jsonl.gz")
+            ppath = os.path.join(base, f"{run_id}.prompts.jsonl.gz")
             fh = gzip.open(path, "at", encoding="utf-8")
-        _run = _Run(run_id, path, fh)
+            pfh = gzip.open(ppath, "at", encoding="utf-8")
+        _run = _Run(run_id, path, fh, ppath, pfh)
         atexit.register(_run.close)
         print(f"[tracing] writing {path}")
+        print(f"[tracing] writing {ppath}")
         return _run
 
 
@@ -278,6 +320,13 @@ def chat(model, messages, role, parents=(), prev_attempt_parents=(), **kwargs):
                   + _resolve(prev_attempt_parents, _prev_attempt_by_role.get()))
 
     t_start = time.time()
+    # Written BEFORE the call: the prompt exists regardless of outcome, so a
+    # process killed mid-call still leaves the prompt recoverable. Joined to the
+    # main trace on call_id, so no seq is needed here.
+    run.write_prompt({
+        "run_id": run.run_id, "call_id": call_id, "task_id": _task_id.get(),
+        "agent_role": role, "model": model, "messages": messages,
+    })
     try:
         response = ollama.chat(model=model, messages=messages, **kwargs)
     except Exception as e:

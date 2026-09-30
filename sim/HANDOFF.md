@@ -416,3 +416,59 @@ moves with load and with which victim is currently marginal. The textbook
 Measure the realized ratio against the offline reference instead, and label that
 baseline "offline reference" rather than "optimal" — exact OPT under continuous
 batching with load-dependent rent is not proven here.
+
+---
+
+## 14. MAARA writeup issues
+
+Found while wiring trace logging. **No code was changed for any of these** —
+they are recorded because they affect what the existing results can be claimed
+to show.
+
+### `single_agent` is not a single agent
+
+The config name says single-agent, but `orchestrator.py` gates the mechanisms by
+*exclusion*:
+
+```python
+use_rag = (config != "hetero_no_rag")        # orchestrator.py:54
+if config != "hetero_no_sentinel":            # orchestrator.py:70
+```
+
+so anything not named `hetero_no_rag` gets RAG, and anything not named
+`hetero_no_sentinel` gets the Sentinel. The four arms are actually:
+
+| config | RAG | Sentinel | coder model |
+|---|---|---|---|
+| `single_agent` | yes | yes | qwen2.5-coder:7b |
+| `homo_llama3` | yes | yes | llama3.2 |
+| `hetero_no_rag` | **no** | yes | qwen2.5-coder:7b |
+| `hetero_no_sentinel` | yes | **no** | llama3.2 |
+
+`single_agent` runs the **full multi-agent pipeline** and differs from
+`homo_llama3` only in the coder model. So the grid contains no single-agent
+baseline, and **any claim of the form "multi-agent beats single-agent" is not
+supported by `benchmark/results.jsonl`.** What the data does support is an
+ablation of RAG and of the Sentinel, plus a coder-model comparison.
+
+Also note there is no config named `hetero`, even though that is
+`orchestrator.run`'s default and the value a bare `python orchestrator.py`
+produces. Its rows would be functionally identical to `single_agent`.
+
+### The run_experiments header is wrong
+
+`benchmark/run_experiments.py:2` claims:
+
+> Runs all 6 configurations x 3 prompting strategies across 30 HumanEval tasks
+
+Actual: **4 configurations x 2 prompting strategies x 15 tasks = 120 runs**,
+which matches the 120 rows in `results.jsonl` exactly. If the writeup quotes
+30 tasks or 6 configs from this comment, it is quoting the comment rather than
+the experiment.
+
+### Consequence
+
+The grid is complete, so `run_experiments.py` resumes into a no-op. Collecting a
+fresh trace needs either `MAARA_IGNORE_RESUME=1` or, better,
+`MAARA_RESULTS_PATH` pointed at a new file — which gives an empty resume set and
+keeps the original results untouched.
