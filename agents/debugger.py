@@ -1,11 +1,13 @@
 import tracing
+from agents import prompt_layout
 
 
 def diagnose(
     original_code: str,
     fixed_code: str,
     test_output: str,
-    previous_diagnoses: list = None
+    previous_diagnoses: list = None,
+    filename: str = "target.py"
 ) -> dict:
     """
     Looks at what was tried and why it failed.
@@ -43,6 +45,34 @@ Return a JSON object with exactly these keys:
 
 Raw JSON only. No markdown. No explanation."""
 
+    system_msg = "You are a precise debugging analyst. Return only valid JSON."
+
+    if prompt_layout.is_shared_first():
+        # The original file leads, rendered exactly as the coder renders it, so
+        # the two share that head once the retry loop has rewritten
+        # relevant_code from disk. The debugger has no tests or issue block:
+        # it is not given them today, and rule 2 forbids adding them.
+        system_msg, prompt = prompt_layout.compose(
+            code={filename: original_code},
+            role="diagnose the failed fix",
+            role_body=f"""Fix that was attempted:
+```python
+{fixed_code}
+```
+
+Test output showing what still fails:
+{test_output}
+{history}
+
+Analyze why the fix failed. Be specific and technical.
+Return a JSON object with exactly these keys:
+- diagnosis: one paragraph explaining exactly why the fix failed
+- approach: one paragraph describing a different specific approach to try next
+- error_type: one of [logic_error, syntax_error, edge_case_missed, \
+wrong_function_modified, incomplete_fix]
+
+Raw JSON only. No markdown. No explanation.""")
+
     response = tracing.chat(
         model="qwen2.5-coder:7b",
         role="debugger",
@@ -53,7 +83,7 @@ Raw JSON only. No markdown. No explanation."""
         messages=[
             {
                 "role": "system",
-                "content": "You are a precise debugging analyst. Return only valid JSON."
+                "content": system_msg
             },
             {
                 "role": "user",

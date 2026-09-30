@@ -350,8 +350,23 @@ class LoadedTrace:
     configs: list = field(default_factory=list)
 
 
-DEFAULT_TRACES = ["traces/full_zs_4cfg.jsonl.gz",
-                  "traces/full_zs_4cfg_smoke5.jsonl.gz"]
+# Named trace sets, so the two prompt layouts can be analysed side by side
+# without either overwriting the other's figures.
+TRACE_SETS = {
+    "original": ["traces/full_zs_4cfg.jsonl.gz",
+                 "traces/full_zs_4cfg_smoke5.jsonl.gz"],
+    "shared_first": ["traces/full_zs_4cfg_sharedfirst.jsonl.gz"],
+}
+DEFAULT_TRACES = TRACE_SETS["original"]
+
+
+def trace_set(name):
+    """Absolute paths for a named set. Missing files are dropped, so a set can
+    be analysed before every part of it has been collected."""
+    import os as _os
+    repo = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+    paths = [_os.path.join(repo, p) for p in TRACE_SETS[name]]
+    return [p for p in paths if _os.path.exists(p)]
 
 
 def load_trace(main_path, prompts_path=None,

@@ -1,6 +1,7 @@
 # agents/evaluator.py
 
 import tracing
+from agents import prompt_layout
 
 def evaluate_plan(issue: dict, relevant_code: dict, test_files: dict) -> dict:
     """
@@ -43,6 +44,27 @@ SCORE: 0-10
 FEEDBACK: <one paragraph explaining what is missing or looks good>
 """
 
+    system_msg = "You are a strict but fair plan evaluator. Be concise and specific."
+
+    if prompt_layout.is_shared_first():
+        # Code and tests move to the front, rendered exactly as the coder
+        # renders them, so the two share that whole head. The issue block keeps
+        # only the fields the evaluator receives today (intent, affected_files).
+        system_msg, prompt = prompt_layout.compose(
+            code=relevant_code, tests=test_files,
+            issue=f"Intent: {issue['intent']}\nAffected files: {issue['affected_files']}",
+            role="review the proposed fix plan",
+            role_body="""Evaluate the plan against these three criteria:
+1. Requirement traceability: does the plan address every failing test?
+2. Logical consistency: are there any contradictions or circular dependencies?
+3. Feasibility: is the approach implementable given the existing code structure?
+
+Respond in this exact format:
+APPROVED: yes/no
+SCORE: 0-10
+FEEDBACK: <one paragraph explaining what is missing or looks good>
+""")
+
     response = tracing.chat(
         model="llama3.2",
         role="evaluator",
@@ -52,7 +74,7 @@ FEEDBACK: <one paragraph explaining what is missing or looks good>
         messages=[
             {
                 "role": "system",
-                "content": "You are a strict but fair plan evaluator. Be concise and specific."
+                "content": system_msg
             },
             {
                 "role": "user",

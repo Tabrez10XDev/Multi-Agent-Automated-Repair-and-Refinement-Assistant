@@ -182,7 +182,8 @@ def _run_impl(
             original_code=original_code,
             fixed_code=previous_fix,
             test_output=test_result["output"],
-            previous_diagnoses=previous_diagnoses
+            previous_diagnoses=previous_diagnoses,
+            filename=original_file
         )
         previous_diagnoses.append(debug_result.get("diagnosis", ""))
 

@@ -1,4 +1,5 @@
 import tracing
+from agents import prompt_layout
 
 
 def generate_fix(
@@ -143,6 +144,26 @@ Current code in {filename}:
             prompt = base_prompt
             prompt += f"\nReturn ONLY the complete fixed Python code for {filename}.\nNo explanation. No markdown fences. Raw Python only."
             system_msg = "You are a Python debugging expert. Return ONLY raw Python code. No markdown. No explanation."
+
+        if prompt_layout.is_shared_first():
+            # Code and tests lead, rendered identically to the evaluator's, so
+            # the two share that head. The strategy's own wording (few-shot
+            # examples, chain-of-thought instruction) moves into the role
+            # section, and the strategy-specific system message is replaced by
+            # the common one -- otherwise the shared head would end there.
+            examples = FEW_SHOT_EXAMPLES + "\n" if prompting_strategy == "few_shot" else ""
+            closing = (COT_INSTRUCTION if prompting_strategy == "chain_of_thought"
+                       else f"\nReturn ONLY the complete fixed Python code for "
+                            f"{filename}.\nNo explanation. No markdown fences. "
+                            f"Raw Python only.")
+            system_msg, prompt = prompt_layout.compose(
+                code={filename: source_code},
+                tests=test_files,
+                issue=(f"{issue['intent']}\n\nExpected behavior:\n"
+                       f"{issue['expected_behavior']}\n\nEdge cases to handle:\n"
+                       f"{', '.join(issue.get('test_hints', []))}"),
+                role="write the fixed code",
+                role_body=f"{examples}{retry_context}\n{closing}")
 
         print(f"\n[Coder] Strategy: {prompting_strategy} | Model: {model} | File: {filename}")
 

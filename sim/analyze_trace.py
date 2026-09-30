@@ -25,10 +25,11 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
-from sim.trace_loader import (DEFAULT_TRACES, compute_prefixes,  # noqa: E402
+from sim.trace_loader import (TRACE_SETS, compute_prefixes,  # noqa: E402
                               default_prompts_path, detect_cache_hits,
                               fingerprint_config, load_rows, render_prompt,
-                              segment_task_runs, validate_segmentation)
+                              segment_task_runs, trace_set,
+                              validate_segmentation)
 from sim.workload import CostModel  # noqa: E402
 
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -383,25 +384,35 @@ def _fig_attempt(by_attempt, path):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("trace", nargs="*",
-                    default=[os.path.join(_REPO, p) for p in DEFAULT_TRACES])
+    ap.add_argument("trace", nargs="*", default=None,
+                    help="explicit trace paths; overrides --set")
+    ap.add_argument("--set", dest="set_name", choices=sorted(TRACE_SETS),
+                    default="original",
+                    help="named trace set; figures and stats are namespaced by it")
     ap.add_argument("--prompts", default=None)
     args = ap.parse_args()
 
-    os.makedirs(FIGURES, exist_ok=True)
-    traces = args.trace or [os.path.join(_REPO, p) for p in DEFAULT_TRACES]
-    stats, gaps, reuse, bp, bo, ba = analyse(traces, args.prompts)
+    traces = args.trace or trace_set(args.set_name)
+    if not traces:
+        print(f"no trace files present for set {args.set_name!r}; "
+              f"expected {TRACE_SETS[args.set_name]}")
+        return 1
 
-    _fig_gaps(gaps, stats, os.path.join(FIGURES, "gap_histogram.png"))
-    _fig_tokens(bp, bo, os.path.join(FIGURES, "tokens_by_role.png"))
-    _fig_reuse(reuse, os.path.join(FIGURES, "reuse_sizes.png"))
-    _fig_attempt(ba, os.path.join(FIGURES, "tokens_by_attempt.png"))
+    figdir = os.path.join(FIGURES, args.set_name)
+    os.makedirs(figdir, exist_ok=True)
+    stats, gaps, reuse, bp, bo, ba = analyse(traces, args.prompts)
+    stats["set"] = args.set_name
+
+    _fig_gaps(gaps, stats, os.path.join(figdir, "gap_histogram.png"))
+    _fig_tokens(bp, bo, os.path.join(figdir, "tokens_by_role.png"))
+    _fig_reuse(reuse, os.path.join(figdir, "reuse_sizes.png"))
+    _fig_attempt(ba, os.path.join(figdir, "tokens_by_attempt.png"))
 
     stats["figures"] = sorted(
-        os.path.relpath(os.path.join(FIGURES, f), _REPO)
-        for f in os.listdir(FIGURES) if f.endswith(".png"))
+        os.path.relpath(os.path.join(figdir, f), _REPO)
+        for f in os.listdir(figdir) if f.endswith(".png"))
 
-    path = os.path.join(RESULTS, "trace_stats.json")
+    path = os.path.join(RESULTS, f"trace_stats_{args.set_name}.json")
     with open(path, "w") as f:
         json.dump(stats, f, indent=2)
     print(json.dumps(stats, indent=2))

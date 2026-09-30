@@ -2,6 +2,7 @@ import json
 import re
 
 import tracing
+from agents import prompt_layout
 
 
 def parse_issue(issue_text: str, available_files: list = None) -> dict:
@@ -29,6 +30,25 @@ Return ONLY a JSON object with these exact keys:
 
 Return raw JSON only. No explanation. No markdown fences."""
 
+    system_msg = "You are a precise software engineering assistant. Return only valid JSON."
+
+    if prompt_layout.is_shared_first():
+        # Same information, reordered: issue first, then the file list and the
+        # output schema. issue_parser has no code or test blocks -- it runs
+        # before retrieval -- so it shares only the common system message.
+        system_msg, prompt = prompt_layout.compose(
+            issue=issue_text,
+            role="parse the issue",
+            role_body=f"""Analyze the issue above and extract structured information.
+{files_context}
+Return ONLY a JSON object with these exact keys:
+- intent: one sentence describing what needs to be fixed
+- affected_files: list of Python filenames likely involved (only from the list above)
+- expected_behavior: what the code should do when fixed
+- test_hints: list of edge cases the fix must handle
+
+Return raw JSON only. No explanation. No markdown fences.""")
+
     print(f"\n[Issue Parser] Sending prompt to LLM...")
 
     response = tracing.chat(
@@ -40,7 +60,7 @@ Return raw JSON only. No explanation. No markdown fences."""
         messages=[
             {
                 "role": "system",
-                "content": "You are a precise software engineering assistant. Return only valid JSON."
+                "content": system_msg
             },
             {
                 "role": "user",
