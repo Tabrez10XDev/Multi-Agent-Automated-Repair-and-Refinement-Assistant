@@ -25,10 +25,10 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
-from sim.trace_loader import (compute_prefixes, default_prompts_path,  # noqa: E402
-                              detect_cache_hits, fingerprint_config, load_rows,
-                              render_prompt, segment_task_runs,
-                              validate_segmentation)
+from sim.trace_loader import (DEFAULT_TRACES, compute_prefixes,  # noqa: E402
+                              default_prompts_path, detect_cache_hits,
+                              fingerprint_config, load_rows, render_prompt,
+                              segment_task_runs, validate_segmentation)
 from sim.workload import CostModel  # noqa: E402
 
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -40,6 +40,58 @@ FIGURES = os.path.join(RESULTS, "figures")
 # trace has no pressure at all, so break-even cannot be computed from the trace
 # -- it has to be shown as a band across assumed pressure.
 PRESSURE = {"low": 0.01, "medium": 0.1, "high": 1.0}   # evictions/second
+
+# Must match EngineConfig.block_tokens. PLACEHOLDER (vLLM default).
+BLOCK_TOKENS = 16
+
+MODEL = "qwen2.5-coder:7b"
+
+
+def break_even_table(cost, shared_sizes=(4, 64, 2048), shared_over_held=0.138):
+    """
+    Worked example: how long is it worth holding an entry?
+
+        rent_rate(E) = E.bytes x victim_recompute_s_per_byte x eviction_rate
+        break-even   = (recompute saved by keeping E) / rent_rate(E)
+
+    Each row is indexed by the REUSABLE prefix size, because that is what pays
+    back; the three retention units differ in how much you are obliged to store
+    to keep it:
+
+        hold only the shared prefix   held = shared            (the ideal)
+        hold whole context            held = shared / 0.138    (measured ratio)
+        block-quantised head          held = ceil(shared/16)*16 (vLLM-like)
+
+    Rent is charged on held bytes, benefit accrues on the reusable part. Showing
+    several sizes makes the key point visible: the size CANCELS in every unit,
+    since rent and benefit are both linear in tokens. What actually moves
+    break-even is useful/held -- and block quantisation only bites below one
+    block, which is exactly where this workload's median reuse sits.
+    """
+    rows = []
+    for shared in shared_sizes:
+        benefit_s = cost.recompute_seconds(MODEL, shared)
+        held_by_unit = (
+            ("hold only the shared prefix", float(shared)),
+            ("hold whole context", shared / shared_over_held),
+            (f"block-quantised head ({BLOCK_TOKENS}-tok blocks)",
+             float(-(-shared // BLOCK_TOKENS) * BLOCK_TOKENS)),
+        )
+        for unit, held in held_by_unit:
+            nbytes = cost.kv_bytes(MODEL, held)
+            # Victim drawn from the same distribution, so its recompute per
+            # byte equals ours: 1/(prefill_rate x bytes_per_token).
+            s_per_byte = cost.recompute_seconds(MODEL, held) / nbytes
+            row = {"reusable_tokens": shared, "unit": unit,
+                   "held_tokens": round(held, 1),
+                   "useful_over_held": round(shared / held, 3),
+                   "held_mb": round(nbytes / 1024 / 1024, 1),
+                   "benefit_s": round(benefit_s, 4), "t_star_s": {}}
+            for name, rate in PRESSURE.items():
+                rent_rate = nbytes * s_per_byte * rate
+                row["t_star_s"][name] = round(benefit_s / rent_rate, 3) if rent_rate else None
+            rows.append(row)
+    return rows
 
 
 def _stats(v):
@@ -56,14 +108,22 @@ def _stats(v):
 
 
 def analyse(main_path, prompts_path=None):
-    prompts_path = prompts_path or default_prompts_path(main_path)
-    rows = load_rows(main_path)
-    prompts = {p["call_id"]: p.get("messages", []) for p in load_rows(prompts_path)}
+    paths = [main_path] if isinstance(main_path, str) else list(main_path)
+    prompt_paths = ([default_prompts_path(p) for p in paths] if prompts_path is None
+                    else ([prompts_path] if isinstance(prompts_path, str)
+                          else list(prompts_path)))
+    rows = []
+    for p in paths:
+        rows.extend(load_rows(p))
+    prompts = {}
+    for pp in prompt_paths:
+        if os.path.exists(pp):
+            prompts.update({p["call_id"]: p.get("messages", []) for p in load_rows(pp)})
     blocks = segment_task_runs(rows)
     cost = CostModel()
 
     out = {
-        "trace": os.path.relpath(main_path, _REPO),
+        "trace": [os.path.relpath(p, _REPO) for p in paths],
         "validation": validate_segmentation(blocks),
         "ollama_cache": detect_cache_hits(rows, prompts),
     }
@@ -180,6 +240,18 @@ def analyse(main_path, prompts_path=None):
         for c, d in sorted(per_config.items())}
 
     # --- (d) break-even band ---------------------------------------------
+    # Block quantisation: a 4-token shared prefix still occupies a whole
+    # 16-token block, so the entry held is larger than the part that pays back.
+    ratios = [min(1.0, t / (-(-t // BLOCK_TOKENS) * BLOCK_TOKENS))
+              for t in reuse_tokens if t > 0]
+    block_ratio = st.median(ratios) if ratios else 1.0
+    out["block_quantisation"] = {
+        "block_tokens": BLOCK_TOKENS,
+        "median_useful_over_held": round(block_ratio, 4),
+        "note": ("median reusable prefix is smaller than one block, so most of "
+                 "each retained head is padding that can never be matched"),
+    }
+    out["break_even_worked_example"] = break_even_table(cost)
     # t* = E_recompute / (victim_recompute x eviction_rate). Assuming the
     # marginal victim is the same size as E -- true on average when entries are
     # drawn from one distribution -- the size terms cancel and t* = 1/rate.
@@ -207,20 +279,51 @@ def analyse(main_path, prompts_path=None):
 # --------------------------------------------------------------------------
 
 def _fig_gaps(gaps, stats, path):
-    fig, ax = plt.subplots(figsize=(9, 5))
-    if gaps:
-        ax.hist(gaps, bins=40, color="#4C72B0", edgecolor="white")
+    """
+    Two bands, because the retention unit changes the answer.
+
+    Reference (dashed): entry holds exactly the reusable prefix, so break-even
+    is 1/eviction_rate and the entry size cancels out.
+
+    Chosen unit (solid): KV is allocated in whole blocks, so a 4-token shared
+    prefix occupies a 16-token block. Only the useful fraction pays back, and
+    break-even shrinks by that ratio.
+    """
+    import numpy as np
+
+    ratio = stats["block_quantisation"]["median_useful_over_held"]
+    fig, ax = plt.subplots(figsize=(10, 5.6))
+
+    # Log x-axis with log-spaced bins. Gaps span 0.01s to 40s, so a linear axis
+    # collapses three quarters of the distribution into the first bin. Zero and
+    # sub-10ms gaps are floored so they stay visible on a log scale.
+    floor = 0.01
+    vals = [max(floor, g) for g in gaps] or [floor]
+    lo, hi = floor, max(max(vals) * 1.3, 1.0)
+    bins = np.logspace(np.log10(lo), np.log10(hi), 45)
+    ax.hist(vals, bins=bins, color="#4C72B0", edgecolor="white", linewidth=0.4)
+
     colours = {"low": "#7f7f7f", "medium": "#DD8452", "high": "#C44E52"}
     for name, t in stats["break_even"]["t_star_seconds"].items():
-        ax.axvline(t, color=colours[name], linestyle="--", linewidth=1.6,
-                   label=f"break-even, {name} pressure ({t:g}s)")
-    ax.set_xlabel("gap from prefix produced to prefix wanted again (s)")
+        ax.axvline(t, color=colours[name], linestyle=":", linewidth=1.4, alpha=0.8,
+                   label=f"exact-prefix reference, {name} pressure ({t:g}s)")
+        ax.axvline(t * ratio, color=colours[name], linestyle="-", linewidth=2.2,
+                   label=f"block-quantised (chosen), {name} ({t * ratio:.2f}s)")
+
+    ax.set_xscale("log")
+    ax.set_xlim(lo, hi)
+    ax.set_xlabel(f"gap from prefix produced to prefix wanted again "
+                  f"(s, log; values below {floor}s floored)")
     ax.set_ylabel("number of reuses")
     ax.set_title("Reuse gaps vs ski-rental break-even\n"
-                 "single-stream trace: no queueing, so gaps are pure pipeline latency")
-    ax.legend(fontsize=8)
+                 f"solid = chosen unit ({BLOCK_TOKENS}-token blocks, median useful/held "
+                 f"{ratio:.2f});  dotted = exact-prefix reference\n"
+                 "single-stream trace: no queueing, so gaps are pure pipeline latency",
+                 fontsize=10)
+    ax.legend(fontsize=7, ncol=2, loc="upper center",
+              bbox_to_anchor=(0.5, -0.16), frameon=False)
     fig.tight_layout()
-    fig.savefig(path, dpi=130)
+    fig.savefig(path, dpi=130, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -280,13 +383,14 @@ def _fig_attempt(by_attempt, path):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("trace", nargs="?",
-                    default=os.path.join(_REPO, "traces", "full_zs_4cfg.jsonl.gz"))
+    ap.add_argument("trace", nargs="*",
+                    default=[os.path.join(_REPO, p) for p in DEFAULT_TRACES])
     ap.add_argument("--prompts", default=None)
     args = ap.parse_args()
 
     os.makedirs(FIGURES, exist_ok=True)
-    stats, gaps, reuse, bp, bo, ba = analyse(args.trace, args.prompts)
+    traces = args.trace or [os.path.join(_REPO, p) for p in DEFAULT_TRACES]
+    stats, gaps, reuse, bp, bo, ba = analyse(traces, args.prompts)
 
     _fig_gaps(gaps, stats, os.path.join(FIGURES, "gap_histogram.png"))
     _fig_tokens(bp, bo, os.path.join(FIGURES, "tokens_by_role.png"))

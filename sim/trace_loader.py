@@ -110,14 +110,30 @@ def render_prompt(messages) -> str:
 # --------------------------------------------------------------------------
 
 def segment_task_runs(rows):
-    """Split rows into contiguous per-task-run blocks, ordered by seq."""
-    blocks, cur = [], None
-    for r in sorted(rows, key=lambda r: r["seq"]):
-        if cur is None or r["task_id"] != cur[-1]["task_id"]:
-            cur = [r]
-            blocks.append(cur)
-        else:
-            cur.append(r)
+    """
+    Split rows into contiguous per-task-run blocks.
+
+    Grouped by run_id first. `seq` is per-process and restarts at 1 in every
+    trace file, so sorting the merged rows by seq alone would interleave two
+    files and fabricate task-run boundaries. Runs are then ordered by their
+    earliest t_start so merged output stays chronological.
+    """
+    by_run = {}
+    for r in rows:
+        by_run.setdefault(r.get("run_id"), []).append(r)
+
+    def run_start(rs):
+        return min((r.get("t_start") or 0.0) for r in rs)
+
+    blocks = []
+    for _, rs in sorted(by_run.items(), key=lambda kv: run_start(kv[1])):
+        cur = None
+        for r in sorted(rs, key=lambda r: r["seq"]):
+            if cur is None or r["task_id"] != cur[-1]["task_id"]:
+                cur = [r]
+                blocks.append(cur)
+            else:
+                cur.append(r)
     return blocks
 
 
@@ -334,7 +350,11 @@ class LoadedTrace:
     configs: list = field(default_factory=list)
 
 
-def load_trace(main_path: str, prompts_path: str = None,
+DEFAULT_TRACES = ["traces/full_zs_4cfg.jsonl.gz",
+                  "traces/full_zs_4cfg_smoke5.jsonl.gz"]
+
+
+def load_trace(main_path, prompts_path=None,
                arrival_rate: float = None, seed: int = 7,
                use_sidecar_prompt_size: bool = True) -> LoadedTrace:
     """
@@ -351,12 +371,23 @@ def load_trace(main_path: str, prompts_path: str = None,
     prompt_eval_count when the latter looks like an Ollama cache hit. See
     detect_cache_hits.
     """
-    prompts_path = prompts_path or default_prompts_path(main_path)
-    rows = load_rows(main_path)
+    # main_path may be one path or several. The committed dataset is split in
+    # two: the 55 runs of full_zs_4cfg, plus the 5 single_agent runs the smoke
+    # run had already completed, which the full run then resumed past.
+    paths = [main_path] if isinstance(main_path, str) else list(main_path)
+    if prompts_path is None:
+        prompt_paths = [default_prompts_path(p) for p in paths]
+    else:
+        prompt_paths = [prompts_path] if isinstance(prompts_path, str) else list(prompts_path)
+
+    rows = []
+    for p in paths:
+        rows.extend(load_rows(p))
     prompts_by_call = {}
-    if os.path.exists(prompts_path):
-        for p in load_rows(prompts_path):
-            prompts_by_call[p["call_id"]] = p.get("messages", [])
+    for pp in prompt_paths:
+        if os.path.exists(pp):
+            for p in load_rows(pp):
+                prompts_by_call[p["call_id"]] = p.get("messages", [])
 
     blocks = segment_task_runs(rows)
     validation = validate_segmentation(blocks)

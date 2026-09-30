@@ -381,7 +381,48 @@ constant. It is an **estimator** parameter, not a price — it changes how noisi
 an observable is measured, not how much memory costs. It should still be listed
 as a PLACEHOLDER and swept.
 
-### OPEN QUESTION — rent should scale with E's footprint (raised before Phase 1)
+### RESOLVED in Phase 4 — retention unit and footprint scaling
+
+Decided: **the retention unit is the block-quantised prefix head, plus a
+separately-keyed tail**, following vLLM. KV is allocated in fixed blocks
+(`EngineConfig.block_tokens`, default 16, PLACEHOLDER), and a finished call
+leaves *all* its prompt blocks cached — not only the part a later call happens
+to match. So each completed call leaves two things behind:
+
+* a **head** entry: the shared prefix, rounded up to a whole block, genuinely
+  reusable;
+* a **tail** entry: every block past the divergence point, which costs exactly
+  as much memory and can never be matched.
+
+Online, a head and a tail are indistinguishable at creation time. That is the
+decision retention actually has to get right, and modelling only the head would
+have assumed the problem away.
+
+Rent is charged on **held** bytes; benefit accrues on **useful** tokens:
+
+```
+rent_rate(E) = E.bytes x victim_recompute_s_per_byte x eviction_rate
+break-even   = recompute_saved(useful tokens) / rent_rate(E)
+```
+
+The footprint question resolves cleanly, and the cancellation worry was real
+but harmless. Rent and benefit are *both* linear in tokens, so entry size
+cancels in every retention unit — break-even is the same for a 64-token and a
+2,048-token entry. What does move it is `useful / held`:
+
+| retention unit | useful/held | break-even at eviction rate r |
+|---|---|---|
+| hold only the shared prefix | 1.0 | `1 / r` |
+| block-quantised head (chosen) | `shared / ceil(shared/16)*16` | `(useful/held) / r` |
+| hold whole context | 0.138 (measured) | `0.138 / r` |
+
+Measured on the committed trace, the median reusable prefix is **4 tokens**, so
+the median head occupies a full 16-token block for a useful/held of **0.25**.
+Block quantisation therefore quarters the break-even at this workload's median
+and is negligible above one block. `results/figures/gap_histogram.png` draws
+both bands: solid for the chosen unit, dotted for the exact-prefix reference.
+
+### OPEN QUESTION as originally raised (kept for the record)
 
 As written, rule 2 charges a 20,000-token entry exactly the same rent as a
 500-token one, because the rate depends only on the *victim's* recompute cost

@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import heapq
+import math
 import statistics
 from dataclasses import dataclass, field
 from enum import Enum
@@ -55,9 +56,30 @@ class EngineConfig:
     # PLACEHOLDER: not derived from any SLO anyone actually stated. Sweep it.
     slack_factor: float = 1.5
 
+    # KV is allocated in fixed-size blocks, as in vLLM's prefix cache. 16 is
+    # vLLM's default. PLACEHOLDER: not measured, and it matters here because
+    # the median reusable prefix in the real trace is 4 tokens -- smaller than
+    # one block -- so quantisation dominates at the median.
+    block_tokens: int = 16
+
+    # "derived"  : rent_rate(E) = E.bytes x victim recompute s/byte x eviction rate
+    # "blocking" : the Phase 1 model, charged only while a request is hard-blocked
+    rent_model: str = "derived"
+
+    # Smoothing constant for the observed eviction rate, seconds. PLACEHOLDER:
+    # an estimator parameter, not a price -- it changes how noisily an
+    # observable is measured, not what memory costs.
+    ewma_tau_s: float = 30.0
+
     @property
     def kv_budget_bytes(self) -> int:
         return int(self.kv_budget_mb * 1024 * 1024)
+
+    def blocks_for(self, tokens: int) -> int:
+        """Tokens rounded up to whole KV blocks."""
+        if tokens <= 0:
+            return 0
+        return -(-int(tokens) // self.block_tokens) * self.block_tokens
 
 
 class State(Enum):
@@ -81,12 +103,27 @@ class KVEntry:
     refcount: int = 0
     last_used: float = 0.0
     created: float = 0.0
-    rent_accrued: float = 0.0       # seconds of blocking attributed to this entry
+    rent_accrued: float = 0.0       # recompute-seconds of damage attributed to this entry
     retained: bool = True
+    # Seconds of prefill needed to rebuild this entry: its "buy" cost.
+    recompute_s: float = 0.0
+    # How many of this entry's tokens a later call can actually match. Below
+    # `tokens` whenever block quantisation rounded the entry up, and zero for a
+    # tail. Accounting only -- an online policy must not read it, since at
+    # creation time a head and a tail are indistinguishable.
+    useful_tokens: int = 0
+    # Prompt blocks left behind after the shared head: everything past the point
+    # where this call's prompt diverged from its predecessor. vLLM caches them
+    # like any other block; nothing will ever match them.
+    is_tail: bool = False
 
     @property
     def evictable(self) -> bool:
         return self.refcount == 0
+
+    @property
+    def recompute_s_per_byte(self) -> float:
+        return (self.recompute_s / self.nbytes) if self.nbytes else 0.0
 
 
 @dataclass
@@ -146,6 +183,10 @@ class Engine:
         self.pinned_bytes = 0       # private (non-shared) KV of running requests
         self.active_model = None
 
+        # Smoothed evictions per second. Bumped by 1/tau on each eviction and
+        # decayed by exp(-dt/tau) each iteration, which is an EWMA of an event
+        # rate. This is the only estimator knob in derived rent.
+        self._evict_rate = 0.0
         self._req_id = 0
         self.done_nodes = {}        # (task_id, node_id) -> finish time
         self.task_done_at = {}
@@ -188,6 +229,7 @@ class Engine:
             # flat comparison table means "no choice was available", not "the
             # policies are equivalent".
             "w_queue": 0.0, "max_queue": 0, "admit_calls": 0, "calls_with_choice": 0,
+            "tail_entries_created": 0, "tail_evictions": 0, "w_evict_rate": 0.0,
         }
 
         # Isolated task time is computed ONCE, from the estimator's priors,
@@ -275,8 +317,13 @@ class Engine:
         entry = self.entries.get(key) if key else None
         hit = entry is not None
 
-        prefix_new_bytes = 0 if hit else self.cost.kv_bytes(r.model, node.prefix_tokens)
-        private_bytes = self.cost.kv_bytes(r.model, node.suffix_tokens + node.output_tokens)
+        # KV is allocated in whole blocks, so a 4-token shared prefix still
+        # occupies a full 16-token block. At this workload's median reuse that
+        # quantisation is the dominant cost, not a rounding detail.
+        held_prefix_tokens = self.cfg.blocks_for(node.prefix_tokens)
+        prefix_new_bytes = 0 if hit else self.cost.kv_bytes(r.model, held_prefix_tokens)
+        private_bytes = self.cost.kv_bytes(
+            r.model, self.cfg.blocks_for(node.suffix_tokens + node.output_tokens))
         need = prefix_new_bytes + private_bytes
 
         if need > self.cfg.kv_budget_bytes:
@@ -320,9 +367,15 @@ class Engine:
                 self.m["cold_misses"] += 1
             r.prefill_tokens = node.prompt_tokens
             if key is not None:
-                entry = KVEntry(key=key, model=r.model, tokens=node.prefix_tokens,
-                                nbytes=self.cost.kv_bytes(r.model, node.prefix_tokens),
-                                created=self.now, last_used=self.now)
+                entry = KVEntry(
+                    key=key, model=r.model, tokens=held_prefix_tokens,
+                    nbytes=self.cost.kv_bytes(r.model, held_prefix_tokens),
+                    created=self.now, last_used=self.now,
+                    # Benefit of keeping it is the prefill a later call avoids,
+                    # which is the tokens it actually matches -- not the
+                    # block-rounded amount we are obliged to store.
+                    useful_tokens=node.prefix_tokens,
+                    recompute_s=self.cost.recompute_seconds(r.model, node.prefix_tokens))
                 self.entries[key] = entry
                 self.seen_keys.add(key)
 
@@ -341,9 +394,42 @@ class Engine:
                   f"{self.cfg.kv_budget_mb:.0f}MB")
         return True
 
+    def _retain_tail(self, r: Request):
+        """
+        Cache the prompt blocks past the shared head, as vLLM would.
+
+        A finished sequence leaves ALL its prompt blocks in the cache, not only
+        the part some later call happens to match. Those trailing blocks cost
+        exactly as much memory as useful ones and pay back nothing, and an
+        online policy cannot tell them apart at creation time -- which is
+        precisely the decision retention has to get right. Modelling only the
+        shared head would quietly assume the problem away.
+
+        Generated tokens are not retained: a follow-up call in this workload
+        rebuilds its prompt rather than continuing the previous sequence.
+        """
+        node = r.node
+        tail_tokens = self.cfg.blocks_for(node.suffix_tokens)
+        if tail_tokens <= 0:
+            return
+        entry = KVEntry(
+            key=f"tail:{r.req_id}", model=r.model, tokens=tail_tokens,
+            nbytes=self.cost.kv_bytes(r.model, tail_tokens),
+            created=self.now, last_used=self.now, refcount=0,
+            useful_tokens=0, recompute_s=0.0, is_tail=True)
+        if not self.retention.on_complete(entry, self.now):
+            return
+        if entry.nbytes > self.free_bytes:
+            return          # no room; the tail is worthless, so never force an eviction for it
+        self.entries[entry.key] = entry
+        self.m["tail_entries_created"] += 1
+
     def _evict(self, entry: KVEntry, forced: bool):
         del self.entries[entry.key]
+        self._evict_rate += 1.0 / max(1e-9, self.cfg.ewma_tau_s)
         self.m["evictions"] += 1
+        if entry.is_tail:
+            self.m["tail_evictions"] += 1
         if forced:
             self.m["forced_evictions"] += 1
         self._log(f"  EVICT {entry.key} ({entry.nbytes/1024/1024:.0f}MB, "
@@ -456,22 +542,62 @@ class Engine:
         self.m["max_resident"] = max(self.m["max_resident"], self._last_resident)
         return dt
 
-    def _accrue_rent(self, dt: float, blocked):
+    def _decay_evict_rate(self, dt: float) -> float:
         """
-        Charge retained entries for the delay they are causing. This is the only
-        place rent enters the simulation, and it comes from observed blocking.
+        EWMA of an event rate: each eviction adds 1/tau, and the accumulator
+        decays by exp(-dt/tau). A steady e evictions/second settles at e.
         """
-        if not blocked or dt <= 0:
-            return
-        self.m["kv_blocked_seconds"] += dt * len(blocked)
-        for r in blocked:
-            r.kv_blocked_seconds += dt
+        self._evict_rate *= math.exp(-dt / max(1e-9, self.cfg.ewma_tau_s))
+        return self._evict_rate
 
+    def _need_bytes(self, r: Request) -> int:
+        """KV a request must be given to run: new prefix blocks plus private blocks."""
+        node = r.node
+        entry = self.entries.get(node.prefix_key) if node.prefix_key else None
+        prefix = 0 if entry else self.cost.kv_bytes(
+            r.model, self.cfg.blocks_for(node.prefix_tokens))
+        private = self.cost.kv_bytes(
+            r.model, self.cfg.blocks_for(node.suffix_tokens + node.output_tokens))
+        return prefix + private
+
+    def _under_pressure(self) -> bool:
+        """
+        True when the budget is full enough that admitting pending work would
+        require evicting something.
+
+        Deliberately wider than "a request is hard-blocked": under LRU the
+        engine almost never blocks, it just evicts, so blocking-only rent is
+        far too sparse to drive a policy (HANDOFF section 9.2).
+        """
+        free = self.free_bytes
+        return any(self._need_bytes(r) > free for r in self.waiting)
+
+    def _accrue_rent(self, dt: float, blocked, pressure=None, evictable=None):
+        """Dispatch to the configured rent model. Blocking stats are recorded
+        either way so the two remain comparable."""
+        if dt > 0 and blocked:
+            self.m["kv_blocked_seconds"] += dt * len(blocked)
+            for r in blocked:
+                r.kv_blocked_seconds += dt
+        if dt <= 0:
+            return
+        if self.cfg.rent_model == "blocking":
+            self._accrue_blocking_rent(dt, blocked)
+        else:
+            if pressure is None:
+                pressure = self._under_pressure()
+            if evictable is None:
+                evictable = [e for e in self.entries.values() if e.evictable]
+            self._accrue_derived_rent(dt, pressure, evictable)
+
+    def _accrue_blocking_rent(self, dt: float, blocked):
+        """Phase 1 model, kept selectable for comparison. Charges only while a
+        request is hard-blocked, splitting the blocked time by entry size."""
+        if not blocked:
+            return
         evictable = [e for e in self.entries.values() if e.evictable]
         total = sum(e.nbytes for e in evictable)
         if total <= 0:
-            # Budget is full of ACTIVE request KV. Retention had no lever here,
-            # so no entry is charged.
             self.m["blocked_no_evictable"] += 1
             return
         self.m["blocked_with_evictable"] += 1
@@ -479,6 +605,42 @@ class Engine:
         self.m["total_rent"] += charge
         for e in evictable:
             e.rent_accrued += charge * (e.nbytes / total)
+
+    def _accrue_derived_rent(self, dt: float, pressure: bool, evictable):
+        """
+        rent_rate(E) = E.bytes x (marginal victim's recompute seconds per byte)
+                       x smoothed eviction rate
+
+        Accrued rent is therefore in recompute-seconds, directly comparable to
+        E's own recompute cost -- which is the ski-rental comparison in
+        consistent units. Both factors are observed: the victim's cost comes
+        from CostModel prefill physics, the rate is counted from the engine.
+        There is no memory price anywhere.
+
+        The marginal victim excludes E itself. Charging E at its own rate would
+        make break-even exactly one time unit for every entry, which is
+        degenerate and unit-dependent.
+        """
+        if not pressure:
+            return
+        # Entries evicted during this iteration's admissions are gone; charging
+        # them for the interval would be charging a corpse.
+        evictable = [e for e in evictable if self.entries.get(e.key) is e]
+        if len(evictable) < 2:
+            # With no other evictable entry there is no victim, so holding E
+            # displaces nothing. Rule 3 of HANDOFF section 13.
+            self.m["blocked_no_evictable"] += 1
+            return
+        self.m["blocked_with_evictable"] += 1
+
+        order = sorted(evictable, key=lambda e: (e.last_used, e.key))
+        first, second = order[0], order[1]
+        rate = self._evict_rate
+        for e in evictable:
+            victim = second if e is first else first
+            rent_rate = e.nbytes * victim.recompute_s_per_byte * rate
+            e.rent_accrued += rent_rate * dt
+            self.m["total_rent"] += rent_rate * dt
 
     def _retire(self):
         for r in list(self.running):
@@ -492,6 +654,7 @@ class Engine:
                     r.entry.last_used = self.now
                     if r.entry.refcount == 0 and not self.retention.on_complete(r.entry, self.now):
                         self._evict(r.entry, forced=False)
+                self._retain_tail(r)
                 self._log(f"  DONE  req{r.req_id} t{r.node.task_id}/{r.node.stage} "
                           f"({r.finished_at - r.enqueued_at:.2f}s e2e)")
                 if self.estimator is not None:
@@ -521,6 +684,13 @@ class Engine:
                     task, node = payload
                     self._finish_node(task, node)
 
+            # Snapshot BEFORE admitting. _try_admit evicts whatever it needs to
+            # fit, so by the time the admit loop returns the evictable set has
+            # already been drained and the cache looks empty even though those
+            # entries were held for the whole interval being charged.
+            pressure = self._under_pressure()
+            evictable_before = [e for e in self.entries.values() if e.evictable]
+
             blocked = self._admit_loop()
 
             if not self.running:
@@ -547,7 +717,7 @@ class Engine:
                               f"retained {(self.used_bytes-self.pinned_bytes)/1024/1024:.0f}MB)")
 
             dt = self._iteration()
-            self._accrue_rent(dt, blocked)
+            self._accrue_rent(dt, blocked, pressure, evictable_before)
             self.now += dt
             self.m["w_time"] += dt
             self.m["w_batch"] += self._last_batch * dt
@@ -556,6 +726,8 @@ class Engine:
             self.m["w_pinned"] += self.pinned_bytes * dt
             self.m["w_retained"] += (self.used_bytes - self.pinned_bytes) * dt
             self.m["w_queue"] += getattr(self, "_last_queue", 0) * dt
+            self._decay_evict_rate(dt)
+            self.m["w_evict_rate"] += self._evict_rate * dt
             self.m["peak_kv_bytes"] = max(self.m["peak_kv_bytes"], self.used_bytes)
             self._retire()
 
@@ -620,6 +792,12 @@ class Engine:
                                            else float("nan")),
             "estimator_mape_pct": statistics.fmean(all_ape) if all_ape else float("nan"),
             "estimator_mape_by_stage": mape_by_stage,
+            "rent_model": self.cfg.rent_model,
+            "block_tokens": self.cfg.block_tokens,
+            "ewma_tau_s": self.cfg.ewma_tau_s,
+            "tail_entries_created": self.m["tail_entries_created"],
+            "tail_evictions": self.m["tail_evictions"],
+            "mean_eviction_rate_per_s": w("w_evict_rate"),
             "mean_queue_depth": w("w_queue"),
             "max_queue_depth": self.m["max_queue"],
             "frac_decisions_with_choice": (
@@ -727,7 +905,12 @@ def format_report(rep: dict, engine: "Engine") -> str:
         f"    retention could help {rep['blocked_with_evictable']}",
         f"    active KV was full   {rep['blocked_no_evictable']}",
         f"  KV-blocked time        {rep['kv_blocked_seconds']:.1f}s (summed over blocked reqs)",
-        f"  total rent charged     {rep['total_rent_s']:.1f}s",
+        f"  rent model             {rep['rent_model']}  "
+        f"(block={rep['block_tokens']}tok, tau={rep['ewma_tau_s']:g}s)",
+        f"  total rent charged     {rep['total_rent_s']:.1f} recompute-s",
+        f"  mean eviction rate     {rep['mean_eviction_rate_per_s']:.3f}/s",
+        f"  tail entries created   {rep['tail_entries_created']} "
+        f"({rep['tail_evictions']} evicted)",
         "=" * 68,
     ]
     if rep["blocked_iterations"] == 0:
@@ -758,6 +941,11 @@ def main():
     ap.add_argument("--estimator-noise", type=float, default=0.0,
                     metavar="SIGMA",
                     help="multiply each request's estimate by lognormal(0, sigma)")
+    ap.add_argument("--rent-model", choices=["derived", "blocking"], default="derived")
+    ap.add_argument("--block-tokens", type=int, default=16,
+                    help="KV block size (PLACEHOLDER, vLLM default)")
+    ap.add_argument("--ewma-tau", type=float, default=30.0,
+                    help="eviction-rate smoothing constant, seconds (PLACEHOLDER)")
     ap.add_argument("--slack-factor", type=float, default=1.5,
                     help="task deadline = arrival + this x isolated task time "
                          "(PLACEHOLDER, not derived from a stated SLO)")
@@ -791,7 +979,8 @@ def main():
         cost, tok, cpu, noise_sigma=args.estimator_noise, seed=args.seed)
     print(scheduling_provenance(
         EngineConfig(kv_budget_mb=args.kv, max_batch=args.batch,
-                     slack_factor=args.slack_factor), estimator))
+                     slack_factor=args.slack_factor, rent_model=args.rent_model,
+                     block_tokens=args.block_tokens, ewma_tau_s=args.ewma_tau), estimator))
     print()
     print(describe_trace(tasks))
     print()
@@ -799,7 +988,8 @@ def main():
     eng = Engine(
         tasks, cost,
         EngineConfig(kv_budget_mb=args.kv, max_batch=args.batch,
-                     slack_factor=args.slack_factor),
+                     slack_factor=args.slack_factor, rent_model=args.rent_model,
+                     block_tokens=args.block_tokens, ewma_tau_s=args.ewma_tau),
         retention=RETENTIONS[args.retention](),
         scheduler=SCHEDULERS[args.scheduler](),
         estimator=estimator,
