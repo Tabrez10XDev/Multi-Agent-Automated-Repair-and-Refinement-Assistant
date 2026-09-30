@@ -2,6 +2,8 @@ import subprocess
 import os
 import shutil
 
+from agents.paths import assert_within_root
+
 
 def apply_fix(fixed_code: dict, repo_path: str) -> dict:
     """
@@ -12,7 +14,11 @@ def apply_fix(fixed_code: dict, repo_path: str) -> dict:
     backups = {}
 
     for filename, code in fixed_code.items():
-        filepath = os.path.join(repo_path, filename)
+        # Last line of defence. Everything upstream is a filter that can be
+        # bypassed by a model returning an unexpected filename; this resolves
+        # the path and refuses anything outside the root, including absolute
+        # paths, `..` traversal and escaping symlinks.
+        filepath = assert_within_root(repo_path, os.path.join(repo_path, filename))
         backup_path = filepath + ".backup"
 
         # save backup before overwriting
@@ -31,7 +37,7 @@ def apply_fix(fixed_code: dict, repo_path: str) -> dict:
 def restore_backups(backups: dict, repo_path: str):
     """Restore original files if tests fail badly."""
     for filename, backup_path in backups.items():
-        filepath = os.path.join(repo_path, filename)
+        filepath = assert_within_root(repo_path, os.path.join(repo_path, filename))
         if os.path.exists(backup_path):
             shutil.copy2(backup_path, filepath)
             os.remove(backup_path)

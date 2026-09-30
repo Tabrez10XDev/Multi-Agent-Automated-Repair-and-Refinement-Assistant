@@ -3,6 +3,7 @@ import json
 import time
 
 import tracing
+from agents.paths import is_agent_visible
 from agents.issue_parser import parse_issue
 from agents.navigator import navigate
 from agents.coder import generate_fix
@@ -66,14 +67,7 @@ def _run_impl(
     # Step 1: parse the issue
     print("\n[Step 1/6] Parsing issue...")
     structure = get_file_structure(repo_path)
-    available_files = [
-        f for f in structure.keys()
-        if not f.startswith("test_")
-        and not f.startswith("agents/")
-        and f.endswith(".py")
-        and not f.startswith("benchmark/")
-        and f not in ("orchestrator.py", "agent.py")
-    ]
+    available_files = [f for f in structure.keys() if is_agent_visible(f)]
     print(f"  Available files: {available_files}")
 
     issue = parse_issue(issue_text, available_files=available_files)

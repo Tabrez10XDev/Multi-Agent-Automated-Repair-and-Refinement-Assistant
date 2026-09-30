@@ -1,5 +1,6 @@
 import os
 import ast
+from agents.paths import is_agent_visible
 from agents.retriever import build_index, retrieve_relevant_code
 
 
@@ -70,9 +71,7 @@ def navigate(repo_path: str, issue_text: str, affected_files: list, use_rag: boo
         collection = build_index(repo_path)
         relevant_code = retrieve_relevant_code(collection, issue_text, top_k=5)
         relevant_code = {
-            k: v for k, v in relevant_code.items()
-            if not k.startswith("benchmark/")
-            and not k.startswith("agents/")
+            k: v for k, v in relevant_code.items() if is_agent_visible(k)
         }
         if not relevant_code:
             print("[Navigator] Retrieval returned nothing, falling back to affected_files")

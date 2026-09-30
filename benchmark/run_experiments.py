@@ -466,22 +466,40 @@ CONFIGURATIONS = [
 
 PROMPTING_STRATEGIES = ["zero_shot", "few_shot"]
 REPO_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-TARGET_FILE = os.path.join(REPO_PATH, "target.py")
-TEST_FILE = os.path.join(REPO_PATH, "test_target.py")
+# Each task runs against its own throwaway directory rather than the repo. The
+# agent's repo_path IS this directory, so get_file_structure, build_index and
+# apply_and_test can only ever see the two files the task is about.
+#
+# Before this, repo_path was REPO_PATH, which is how a HumanEval run came to
+# retrieve and overwrite sim/workload.py. See agents/paths.py.
+SANDBOX_DIR = os.path.join(REPO_PATH, "benchmark", "exp_sandbox")
 
 
-def write_task(task: dict):
-    with open(TARGET_FILE, "w") as f:
+def setup_task_sandbox(task: dict) -> str:
+    """
+    Build a clean directory holding exactly the two files the task is about.
+
+    That file set is not arbitrary: before sim/ existed, orchestrator's
+    available_files filter over the whole repo resolved to exactly
+    ['target.py'], and get_test_file_contents to exactly {'test_target.py'}.
+    A sandbox containing those two files reproduces that view, so traces stay
+    comparable with the original 120 runs.
+    """
+    if os.path.exists(SANDBOX_DIR):
+        shutil.rmtree(SANDBOX_DIR)
+    os.makedirs(SANDBOX_DIR)
+
+    with open(os.path.join(SANDBOX_DIR, "target.py"), "w") as f:
         f.write(task["buggy_code"])
-    with open(TEST_FILE, "w") as f:
+    with open(os.path.join(SANDBOX_DIR, "test_target.py"), "w") as f:
         f.write(task["test_code"])
 
+    return SANDBOX_DIR
 
-def restore_originals(original_target: str, original_test: str):
-    with open(TARGET_FILE, "w") as f:
-        f.write(original_target)
-    with open(TEST_FILE, "w") as f:
-        f.write(original_test)
+
+def teardown_task_sandbox():
+    if os.path.exists(SANDBOX_DIR):
+        shutil.rmtree(SANDBOX_DIR)
 
 
 def main():
@@ -510,10 +528,8 @@ def main():
         print("Resume disabled (MAARA_IGNORE_RESUME) — re-running everything in scope.")
 
     # back up original files
-    with open(TARGET_FILE, "r") as f:
-        original_target = f.read()
-    with open(TEST_FILE, "r") as f:
-        original_test = f.read()
+    # No backup/restore of repo files needed any more: tasks run in a sandbox
+    # and the repo's own target.py / test_target.py are never written.
 
     # Optional scoping, for smoke runs and for collecting a trace without
     # paying for the whole grid. All unset => identical behaviour to before.
@@ -547,10 +563,10 @@ def main():
                     continue
 
                 try:
-                    write_task(task)
+                    sandbox = setup_task_sandbox(task)
                     run(
                         issue_text=task["issue"],
-                        repo_path=REPO_PATH,
+                        repo_path=sandbox,
                         test_file="test_target.py",
                         max_attempts=3,
                         config=cfg["config"],
@@ -580,7 +596,7 @@ def main():
 
                 finally:
                     # always restore originals after each task
-                    restore_originals(original_target, original_test)
+                    teardown_task_sandbox()
 
     print(f"\n{'='*60}")
     print("ALL EXPERIMENTS COMPLETE")

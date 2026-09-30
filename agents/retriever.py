@@ -4,6 +4,7 @@ import chromadb
 from chromadb.utils import embedding_functions
 
 import tracing
+from agents.paths import is_agent_visible
 
 
 def extract_functions(source_code: str, filename: str) -> list:
@@ -108,14 +109,9 @@ def build_index(repo_path: str, collection_name: str = "codebase") -> chromadb.C
             filepath = os.path.join(root, filename)
             relative = os.path.relpath(filepath, repo_path)
 
-            # skip everything except user source files
-            if relative.startswith("agents/"):
-                continue
-            if filename in ("orchestrator.py", "agent.py"):
-                continue
-            if filename.startswith("test_"):
-                continue
-            if "_tests" in filename:
+            # Single source of truth in agents/paths.py. Previously this list
+            # was inlined here and diverged from the other two copies.
+            if not is_agent_visible(relative):
                 continue
 
             with open(filepath, "r") as f:
@@ -168,15 +164,8 @@ def retrieve_relevant_code(collection, issue_text: str, top_k: int = 5) -> dict:
         filename = metadata["filename"]
         code = metadata["code"]
 
-        # never return agent infrastructure files as relevant code
-        # these should never be modified by the coder
-        protected = [
-            "orchestrator.py",
-            "agent.py",
-        ]
-        if filename.startswith("agents/"):
-            continue
-        if filename in protected:
+        # Never return infrastructure as relevant code; the coder would rewrite it.
+        if not is_agent_visible(filename):
             continue
 
         if filename not in relevant:
