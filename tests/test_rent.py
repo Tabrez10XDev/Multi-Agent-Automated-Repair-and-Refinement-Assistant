@@ -20,8 +20,19 @@ from sim.workload import (CODER_MODEL, CostModel, CpuStageSeconds, StageTokens,
 
 
 def build_engine(kv_mb=4096.0, batch=8, n_tasks=10, rate=0.05,
-                 stable_tokens=4000, rent_model="derived", tau=30.0, seed=3):
-    cost = CostModel()
+                 stable_tokens=4000, rent_model="derived", tau=30.0, seed=3,
+                 rent_impl="sweep", homogeneous=False):
+    """
+    Defaults to the SWEEP implementation.
+
+    The per-entry rules in HANDOFF section 13 -- rent proportional to bytes,
+    marginal victim excluding E -- are the specification, and the sweep is its
+    reference implementation. The lazy clock is an optimisation that must agree
+    with it, which the equivalence tests check on a real trace. Asserting the
+    rules against the lazy path directly would be testing the optimisation's
+    shortcut, not the rule.
+    """
+    cost = CostModel(homogeneous=homogeneous)
     tok = StageTokens.from_measured()
     tok.stable_prefix_tokens = stable_tokens
     cpu = CpuStageSeconds.from_measured()
@@ -30,8 +41,10 @@ def build_engine(kv_mb=4096.0, batch=8, n_tasks=10, rate=0.05,
     est = ExecutionEstimator(cost, tok, cpu)
     cfg = EngineConfig(kv_budget_mb=kv_mb, max_batch=batch,
                        rent_model=rent_model, ewma_tau_s=tau)
-    return Engine(tasks, cost, cfg, retention=LRURetention(),
-                  scheduler=FCFSScheduler(), estimator=est)
+    eng = Engine(tasks, cost, cfg, retention=LRURetention(),
+                 scheduler=FCFSScheduler(), estimator=est)
+    eng._rent_impl = rent_impl
+    return eng
 
 
 def entry(key, tokens, engine, last_used=0.0, recompute_s=None):
@@ -306,3 +319,101 @@ def test_every_prompt_block_is_cached_not_only_the_shared_head():
     blocks_per_call = [len(r.node.block_keys) for r in eng.requests]
     assert min(blocks_per_call) > 1          # prompts span many blocks
     assert eng.m["cold_misses"] > 0
+
+
+# --- Phase 5b step 2: lazy rent accrual ----------------------------------
+
+def _run_with(impl, kv_mb=1024.0, n_tasks=8, seed=3, stable_tokens=2000):
+    """
+    Equivalence runs use a HOMOGENEOUS cost model on purpose.
+
+    The lazy clock advances one counter shared by every block, so it needs the
+    marginal victim's rebuild cost to be a constant. That holds when all blocks
+    belong to one model. With two models -- qwen blocks and llama blocks differ
+    in both size and rebuild cost -- the sweep charges each entry against
+    whichever is LRU while the lazy path uses the majority model's, so they
+    agree closely but not exactly. Equivalence is asserted where it is exact.
+    """
+    eng = build_engine(kv_mb=kv_mb, n_tasks=n_tasks, seed=seed,
+                       stable_tokens=stable_tokens, rent_impl=impl,
+                       homogeneous=True)
+    rep = eng.run()
+    return eng, rep
+
+
+def test_lazy_is_the_production_default():
+    from sim.workload import WorkloadConfig, generate_trace
+    cost, tok, cpu = CostModel(), StageTokens.from_measured(), CpuStageSeconds.from_measured()
+    tasks = generate_trace(WorkloadConfig(n_tasks=2, seed=1), cost, tok, cpu)
+    eng = Engine(tasks, cost, EngineConfig(), retention=LRURetention(),
+                 scheduler=FCFSScheduler())
+    assert eng._rent_impl == "lazy"
+
+
+def test_lazy_and_sweep_agree_on_metrics():
+    """
+    Equivalence. The lazy clock advances one counter per iteration instead of
+    touching every entry; it must produce the same run, not merely a similar
+    one. Every block is the same size and rebuild cost, so the marginal victim
+    is a per-model constant and the two formulations coincide exactly.
+    """
+    lazy_eng, lazy = _run_with("lazy")
+    sweep_eng, sweep = _run_with("sweep")
+
+    for key in ("recompute_seconds", "evictions", "tasks_completed",
+                "prefix_hit_rate", "makespan_s", "p50_task_latency_s",
+                "p95_task_latency_s", "voluntary_evictions"):
+        assert lazy[key] == pytest.approx(sweep[key], rel=1e-9), key
+    assert lazy["total_rent_s"] == pytest.approx(sweep["total_rent_s"], rel=1e-6)
+
+
+def test_lazy_and_sweep_agree_on_eviction_order():
+    lazy_eng, _ = _run_with("lazy")
+    sweep_eng, _ = _run_with("sweep")
+    assert lazy_eng.m["cold_misses"] == sweep_eng.m["cold_misses"]
+    assert lazy_eng.m["recompute_misses"] == sweep_eng.m["recompute_misses"]
+    assert sorted(lazy_eng.entries) == sorted(sweep_eng.entries)
+
+
+def test_lazy_and_sweep_agree_on_per_entry_rent():
+    lazy_eng, _ = _run_with("lazy")
+    sweep_eng, _ = _run_with("sweep")
+    shared = set(lazy_eng.entries) & set(sweep_eng.entries)
+    assert shared
+    for k in shared:
+        assert lazy_eng.entries[k].rent_accrued == pytest.approx(
+            sweep_eng.entries[k].rent_accrued, rel=1e-6, abs=1e-9), k
+
+
+def test_rent_accrued_setter_round_trips():
+    """Tests and policies assign rent_accrued directly; banking must make the
+    value read back unchanged."""
+    eng = build_engine()
+    e = entry("e", 1000, eng)
+    e.clock = eng._clock
+    eng._clock.cum = 5.0
+    e.rent_accrued = 42.0
+    assert e.rent_accrued == pytest.approx(42.0)
+    eng._clock.cum = 9.0
+    assert e.rent_accrued > 42.0          # accrues from the new baseline
+
+
+def test_pinned_entries_do_not_accrue():
+    """A pinned entry cannot be displaced, so it causes no damage."""
+    eng = build_engine()
+    e = entry("e", 1000, eng)
+    e.clock = eng._clock
+    e.refcount = 1
+    eng._clock.cum = 100.0
+    assert e.rent_accrued == 0.0
+
+
+def test_used_bytes_is_maintained_incrementally():
+    """
+    Regression on the hot loop. used_bytes summed every entry and free_bytes
+    called it several times per iteration; the profile showed 1.29e9 generator
+    calls and 115s of a 167s run. It must now agree with the explicit sum.
+    """
+    eng, _ = _run_with("lazy", kv_mb=1024.0, n_tasks=6)
+    explicit = eng.pinned_bytes + sum(e.nbytes for e in eng.entries.values())
+    assert eng.used_bytes == explicit

@@ -36,10 +36,19 @@ def run(retention="lru", kv_mb=4096.0, batch=8, n_tasks=12, rate=0.05,
 
 
 def entry(key, tokens, cost, **kw):
+    """
+    rent_accrued is a property now, not a constructor field: the lazy clock
+    derives it from a shared counter. Assign it after construction, which the
+    setter banks so it reads back unchanged.
+    """
+    rent = kw.pop("rent_accrued", None)
     kw.setdefault("useful_tokens", tokens)
     kw.setdefault("recompute_s", cost.recompute_seconds(CODER_MODEL, tokens))
-    return KVEntry(key=key, model=CODER_MODEL, tokens=tokens,
-                   nbytes=cost.kv_bytes(CODER_MODEL, tokens), **kw)
+    e = KVEntry(key=key, model=CODER_MODEL, tokens=tokens,
+                nbytes=cost.kv_bytes(CODER_MODEL, tokens), **kw)
+    if rent is not None:
+        e.rent_accrued = rent
+    return e
 
 
 # --- the two extremes ----------------------------------------------------

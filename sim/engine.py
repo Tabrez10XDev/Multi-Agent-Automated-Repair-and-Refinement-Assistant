@@ -96,6 +96,22 @@ class State(Enum):
     DONE = "done"
 
 
+class RentClock:
+    """
+    Shared cumulative rent-per-byte counter.
+
+    Every evictable block accrues at the SAME rate per byte -- the rate depends
+    on the marginal victim and the eviction rate, neither of which is per-entry
+    -- so advancing one counter once per iteration replaces a sweep over every
+    entry. An entry's rent is then bytes x (counter now - counter when it became
+    evictable), evaluated only when someone asks.
+    """
+    __slots__ = ("cum",)
+
+    def __init__(self):
+        self.cum = 0.0
+
+
 @dataclass
 class KVEntry:
     """
@@ -110,7 +126,11 @@ class KVEntry:
     refcount: int = 0
     last_used: float = 0.0
     created: float = 0.0
-    rent_accrued: float = 0.0       # recompute-seconds of damage attributed to this entry
+    # Rent banked from completed intervals, plus the clock reading when this
+    # entry last became evictable. See the rent_accrued property below.
+    rent_banked: float = 0.0
+    rent_cum_at: float = 0.0
+    clock: object = None
     retained: bool = True
     # Seconds of prefill needed to rebuild this entry: its "buy" cost.
     recompute_s: float = 0.0
@@ -138,6 +158,26 @@ class KVEntry:
     @property
     def evictable(self) -> bool:
         return self.refcount == 0
+
+    @property
+    def rent_accrued(self) -> float:
+        """Banked rent plus whatever has accrued since this entry last became
+        evictable. Pinned entries do not accrue: they cannot be displaced."""
+        if self.clock is None or self.refcount > 0:
+            return self.rent_banked
+        return self.rent_banked + self.nbytes * (self.clock.cum - self.rent_cum_at)
+
+    @rent_accrued.setter
+    def rent_accrued(self, value: float) -> None:
+        """Banking a value resets the baseline, so reading it back returns it."""
+        self.rent_banked = value
+        if self.clock is not None:
+            self.rent_cum_at = self.clock.cum
+
+    def bank_rent(self) -> None:
+        self.rent_banked = self.rent_accrued
+        if self.clock is not None:
+            self.rent_cum_at = self.clock.cum
 
     @property
     def recompute_s_per_byte(self) -> float:
@@ -209,6 +249,14 @@ class Engine:
         # decayed by exp(-dt/tau) each iteration, which is an EWMA of an event
         # rate. This is the only estimator knob in derived rent.
         self._evict_rate = 0.0
+        self._clock = RentClock()
+        self._entry_bytes = 0
+        self._evictable_bytes = 0
+        self._evictable_n = 0
+        self._model_blocks = {}     # model -> evictable block count
+        # "sweep" reproduces the pre-Phase-5b per-entry loop, for the
+        # equivalence test only. "lazy" is the default.
+        self._rent_impl = "lazy"
         # Per block key, across the whole run: rent it accrued while resident,
         # and what rebuilding it costs. Hindsight cost for a key is the cheaper
         # of the two -- what an observer with perfect foresight would have paid.
@@ -286,7 +334,10 @@ class Engine:
 
     @property
     def used_bytes(self) -> int:
-        return self.pinned_bytes + sum(e.nbytes for e in self.entries.values())
+        # _entry_bytes is maintained incrementally. Summing self.entries here
+        # was O(entries) and free_bytes calls it several times per iteration;
+        # at block granularity that alone dominated the run.
+        return self.pinned_bytes + self._entry_bytes
 
     @property
     def free_bytes(self) -> int:
@@ -451,11 +502,24 @@ class Engine:
                 recompute_s=self.cost.recompute_seconds(r.model, bt),
                 true_gap_s=node.next_reuse_gap_s,
                 hint_gap_s=(self.hints.hint_for(node) if self.hints else None))
+            self.entries[k].clock = self._clock
+            self.entries[k].rent_cum_at = self._clock.cum
+            self._entry_bytes += block_bytes
+            self._evictable_bytes += block_bytes
+            self._evictable_n += 1
+            self._model_blocks[r.model] = self._model_blocks.get(r.model, 0) + 1
             self.seen_keys.add(k)
             self._key_recompute[k] = self.cost.recompute_seconds(r.model, bt)
 
         for k in chain:
-            self.entries[k].refcount += 1
+            e = self.entries[k]
+            if e.refcount == 0:
+                # Becoming pinned: bank what it accrued while displaceable.
+                e.bank_rent()
+                self._evictable_bytes -= e.nbytes
+                self._evictable_n -= 1
+                self._model_blocks[e.model] = self._model_blocks.get(e.model, 1) - 1
+            e.refcount += 1
         r.held_blocks = list(chain)
 
         r.private_bytes = output_bytes
@@ -471,6 +535,13 @@ class Engine:
         return True
 
     def _evict(self, entry: KVEntry, forced: bool):
+        if entry.refcount == 0:
+            self._key_rent[entry.key] = (self._key_rent.get(entry.key, 0.0)
+                                         + entry.rent_accrued - entry.rent_banked)
+            self._evictable_bytes -= entry.nbytes
+            self._evictable_n -= 1
+            self._model_blocks[entry.model] = self._model_blocks.get(entry.model, 1) - 1
+        self._entry_bytes -= entry.nbytes
         del self.entries[entry.key]
         self._evict_rate += 1.0 / max(1e-9, self.cfg.ewma_tau_s)
         self.m["evictions"] += 1
@@ -618,8 +689,18 @@ class Engine:
         engine almost never blocks, it just evicts, so blocking-only rent is
         far too sparse to drive a policy (HANDOFF section 9.2).
         """
+        if not self.waiting:
+            return False
         free = self.free_bytes
-        return any(self._need_bytes(r) > free for r in self.waiting)
+        # Only the first few candidates matter: if the queue head cannot be
+        # admitted without evicting, the system is under pressure. Walking the
+        # whole queue meant re-matching every waiting request's entire block
+        # chain on every iteration, which at 8x context is thousands of dict
+        # lookups per request per iteration.
+        for r in self.waiting[:4]:
+            if self._need_bytes(r) > free:
+                return True
+        return False
 
     def _accrue_rent(self, dt: float, blocked, pressure=None, evictable=None):
         """Dispatch to the configured rent model. Blocking stats are recorded
@@ -656,6 +737,35 @@ class Engine:
             e.rent_accrued += charge * (e.nbytes / total)
 
     def _accrue_derived_rent(self, dt: float, pressure: bool, evictable):
+        if self._rent_impl == "sweep":
+            return self._accrue_derived_rent_sweep(dt, pressure, evictable)
+
+        if not pressure:
+            return
+        if self._evictable_n < 2:
+            # No other entry to be the marginal victim, so holding displaces
+            # nothing. Rule 3 of HANDOFF section 13.
+            self.m["blocked_no_evictable"] += 1
+            return
+        self.m["blocked_with_evictable"] += 1
+
+        # Every block of a given model has the same size and the same rebuild
+        # cost, so the marginal victim's recompute is a per-model constant and
+        # the "exclude E itself" rule is immaterial -- E's stand-in is
+        # identical to E. Picking the model with the most evictable blocks
+        # keeps this O(1); the debug sweep still does it entry by entry, and
+        # the equivalence test checks the two agree.
+        model = max(self._model_blocks, key=lambda m: self._model_blocks[m])
+        victim_recompute = self.cost.recompute_seconds(model, self.cfg.block_tokens)
+
+        pool = self._evictable_bytes
+        if pool <= 0:
+            return
+        per_byte = victim_recompute * self._evict_rate / pool
+        self._clock.cum += per_byte * dt
+        self.m["total_rent"] += per_byte * dt * pool
+
+    def _accrue_derived_rent_sweep(self, dt: float, pressure: bool, evictable):
         """
         rent_rate(E) = E.bytes x (marginal victim's recompute seconds per byte)
                        x smoothed eviction rate
@@ -672,9 +782,11 @@ class Engine:
         """
         if not pressure:
             return
-        # Entries evicted during this iteration's admissions are gone; charging
-        # them for the interval would be charging a corpse.
-        evictable = [e for e in evictable if self.entries.get(e.key) is e]
+        # Measure the LIVE evictable set, exactly as the lazy clock does, so
+        # the two are comparable entry by entry. An earlier version charged a
+        # pre-admission snapshot, which sampled a different pool and made the
+        # per-entry rents disagree even though the totals matched.
+        evictable = [e for e in self.entries.values() if e.evictable]
         if len(evictable) < 2:
             # With no other evictable entry there is no victim, so holding E
             # displaces nothing. Rule 3 of HANDOFF section 13.
@@ -701,7 +813,8 @@ class Engine:
             victim = second if e is first else first
             rent_rate = (e.nbytes / pool) * victim.recompute_s * rate
             e.rent_rate = rent_rate
-            e.rent_accrued += rent_rate * dt
+            e.rent_banked = e.rent_accrued + rent_rate * dt
+            e.rent_cum_at = self._clock.cum
             self._key_rent[e.key] = self._key_rent.get(e.key, 0.0) + rent_rate * dt
             self.m["total_rent"] += rent_rate * dt
 
@@ -732,6 +845,11 @@ class Engine:
                     if e is None:
                         continue
                     e.refcount -= 1
+                    if e.refcount == 0:
+                        e.rent_cum_at = self._clock.cum
+                        self._evictable_bytes += e.nbytes
+                        self._evictable_n += 1
+                        self._model_blocks[e.model] = self._model_blocks.get(e.model, 0) + 1
                     e.last_used = self.now
                     if e.refcount == 0 and not self.retention.on_complete(e, self.now):
                         self._evict(e, forced=False)
@@ -769,7 +887,10 @@ class Engine:
             # already been drained and the cache looks empty even though those
             # entries were held for the whole interval being charged.
             pressure = self._under_pressure()
-            evictable_before = [e for e in self.entries.values() if e.evictable]
+            # Building this list is itself O(entries); only the debug sweep
+            # needs it.
+            evictable_before = ([e for e in self.entries.values() if e.evictable]
+                                if self._rent_impl == "sweep" else None)
 
             blocked = self._admit_loop()
 
