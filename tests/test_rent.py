@@ -323,22 +323,32 @@ def test_every_prompt_block_is_cached_not_only_the_shared_head():
 
 # --- Phase 5b step 2: lazy rent accrual ----------------------------------
 
-def _run_with(impl, kv_mb=1024.0, n_tasks=8, seed=3, stable_tokens=2000):
+def _run_with(impl, kv_mb=1024.0, n_tasks=8, seed=3, stable_tokens=2000,
+              homogeneous=False):
     """
-    Equivalence runs use a HOMOGENEOUS cost model on purpose.
+    Equivalence must hold on the MIXED-model trace, which is the real case:
+    evaluate_plan runs llama3.2 while everything else runs qwen, and the two
+    differ in both block size and rebuild cost.
 
-    The lazy clock advances one counter shared by every block, so it needs the
-    marginal victim's rebuild cost to be a constant. That holds when all blocks
-    belong to one model. With two models -- qwen blocks and llama blocks differ
-    in both size and rebuild cost -- the sweep charges each entry against
-    whichever is LRU while the lazy path uses the majority model's, so they
-    agree closely but not exactly. Equivalence is asserted where it is exact.
+    It does hold, because rent per byte depends on the VICTIM's rebuild cost,
+    not the holder's -- one number shared by every entry whatever model it
+    belongs to. An earlier lazy version approximated the victim by "the model
+    with the most evictable blocks", which is what made the two disagree; it
+    now uses the true LRU entry, with the LRU entry itself charged against the
+    second-LRU since it cannot be its own victim.
     """
     eng = build_engine(kv_mb=kv_mb, n_tasks=n_tasks, seed=seed,
                        stable_tokens=stable_tokens, rent_impl=impl,
-                       homogeneous=True)
+                       homogeneous=homogeneous)
     rep = eng.run()
     return eng, rep
+
+
+def test_the_equivalence_trace_really_has_two_models():
+    """Guards the test above from silently degrading into a single-model case."""
+    eng, _ = _run_with("lazy")
+    models = {n.model for t in eng.tasks for n in t.nodes if n.model}
+    assert len(models) >= 2, models
 
 
 def test_lazy_is_the_production_default():
@@ -348,6 +358,15 @@ def test_lazy_is_the_production_default():
     eng = Engine(tasks, cost, EngineConfig(), retention=LRURetention(),
                  scheduler=FCFSScheduler())
     assert eng._rent_impl == "lazy"
+
+
+@pytest.mark.parametrize("homogeneous", [False, True])
+def test_lazy_and_sweep_agree_on_metrics_mixed_and_single_model(homogeneous):
+    lazy_eng, lazy = _run_with("lazy", homogeneous=homogeneous)
+    sweep_eng, sweep = _run_with("sweep", homogeneous=homogeneous)
+    for key in ("recompute_seconds", "evictions", "tasks_completed",
+                "prefix_hit_rate", "makespan_s", "total_rent_s"):
+        assert lazy[key] == pytest.approx(sweep[key], rel=1e-9), key
 
 
 def test_lazy_and_sweep_agree_on_metrics():

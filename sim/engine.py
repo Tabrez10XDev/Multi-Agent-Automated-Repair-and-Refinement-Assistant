@@ -250,6 +250,10 @@ class Engine:
         # rate. This is the only estimator knob in derived rent.
         self._evict_rate = 0.0
         self._clock = RentClock()
+        # Lazy min-heap of evictable entries by last_used, so the true marginal
+        # victim is available in O(log n) instead of sorting every entry.
+        # Stale rows are discarded on read.
+        self._lru_heap = []
         self._entry_bytes = 0
         self._evictable_bytes = 0
         self._evictable_n = 0
@@ -505,6 +509,7 @@ class Engine:
             self.entries[k].clock = self._clock
             self.entries[k].rent_cum_at = self._clock.cum
             self._entry_bytes += block_bytes
+            heapq.heappush(self._lru_heap, (self.now, k))
             self._evictable_bytes += block_bytes
             self._evictable_n += 1
             self._model_blocks[r.model] = self._model_blocks.get(r.model, 0) + 1
@@ -664,6 +669,24 @@ class Engine:
         self.m["max_resident"] = max(self.m["max_resident"], self._last_resident)
         return dt
 
+    def _lru_evictable(self, k=2):
+        """The k least-recently-used evictable entries, cheapest first.
+
+        Rows go stale when an entry is evicted, pinned, or touched, so they are
+        validated against the live entry and discarded on the way past."""
+        out = []
+        while self._lru_heap and len(out) < k:
+            lu, key = self._lru_heap[0]
+            e = self.entries.get(key)
+            if e is None or e.refcount > 0 or e.last_used != lu:
+                heapq.heappop(self._lru_heap)
+                continue
+            out.append(e)
+            heapq.heappop(self._lru_heap)
+        for e in out:
+            heapq.heappush(self._lru_heap, (e.last_used, e.key))
+        return out
+
     def _decay_evict_rate(self, dt: float) -> float:
         """
         EWMA of an event rate: each eviction adds 1/tau, and the accumulator
@@ -747,23 +770,37 @@ class Engine:
             # nothing. Rule 3 of HANDOFF section 13.
             self.m["blocked_no_evictable"] += 1
             return
-        self.m["blocked_with_evictable"] += 1
 
-        # Every block of a given model has the same size and the same rebuild
-        # cost, so the marginal victim's recompute is a per-model constant and
-        # the "exclude E itself" rule is immaterial -- E's stand-in is
-        # identical to E. Picking the model with the most evictable blocks
-        # keeps this O(1); the debug sweep still does it entry by entry, and
-        # the equivalence test checks the two agree.
-        model = max(self._model_blocks, key=lambda m: self._model_blocks[m])
-        victim_recompute = self.cost.recompute_seconds(model, self.cfg.block_tokens)
+        pair = self._lru_evictable(2)
+        if len(pair) < 2:
+            self.m["blocked_no_evictable"] += 1
+            return
+        self.m["blocked_with_evictable"] += 1
+        first, second = pair
 
         pool = self._evictable_bytes
         if pool <= 0:
             return
-        per_byte = victim_recompute * self._evict_rate / pool
+        rate = self._evict_rate
+
+        # Everyone is charged against `first`, the entry that would actually go
+        # next -- rent per byte depends on the VICTIM, not on the holder, so it
+        # is one number shared by every entry regardless of model. Using the
+        # true LRU entry rather than a per-model stand-in is what makes this
+        # exact with a mixed-model trace.
+        per_byte = first.recompute_s * rate / pool
+
+        # `first` cannot be its own victim, so it is charged against `second`.
+        # Bank what it accrued at the shared rate before advancing the clock,
+        # then add its own term and re-baseline so the interval is not counted
+        # twice.
+        first.bank_rent()
         self._clock.cum += per_byte * dt
-        self.m["total_rent"] += per_byte * dt * pool
+        first_rate = first.nbytes * second.recompute_s * rate / pool
+        first.rent_banked += first_rate * dt
+        first.rent_cum_at = self._clock.cum
+
+        self.m["total_rent"] += per_byte * dt * (pool - first.nbytes) + first_rate * dt
 
     def _accrue_derived_rent_sweep(self, dt: float, pressure: bool, evictable):
         """
@@ -847,6 +884,7 @@ class Engine:
                     e.refcount -= 1
                     if e.refcount == 0:
                         e.rent_cum_at = self._clock.cum
+                        heapq.heappush(self._lru_heap, (self.now, e.key))
                         self._evictable_bytes += e.nbytes
                         self._evictable_n += 1
                         self._model_blocks[e.model] = self._model_blocks.get(e.model, 0) + 1

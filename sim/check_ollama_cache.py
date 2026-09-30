@@ -51,6 +51,7 @@ sim/measure_context.py calibrated with /api/generate, and they may not share a
 cache path.
 """
 
+import argparse
 import json
 import random
 import urllib.request
@@ -76,7 +77,7 @@ LAST_ORIGINAL = "Summarise the module in one sentence."
 LAST_CHANGED = "Summarise the module in two sentences."
 
 
-def call(endpoint, prompt, label):
+def call(endpoint, prompt, label, quiet=False):
     if endpoint == "chat":
         payload = {"model": MODEL, "stream": False, "keep_alive": KEEP_ALIVE,
                    "options": {"num_predict": 1, "temperature": 0, "num_ctx": 8192},
@@ -97,12 +98,60 @@ def call(endpoint, prompt, label):
     secs = (d.get("prompt_eval_duration") or 0) / 1e9
     load = (d.get("load_duration") or 0) / 1e9
     rate = n / secs if secs else float("nan")
-    print(f"  {label:<34} count={n:>6}  prefill={secs:7.3f}s  "
-          f"{rate:8.1f} tok/s  load={load:6.3f}s")
+    if not quiet:
+        print(f"  {label:<34} count={n:>6}  prefill={secs:7.3f}s  "
+              f"{rate:8.1f} tok/s  load={load:6.3f}s")
     return n, secs
 
 
+def slot_probe(endpoint="generate", k_max=8):
+    """
+    How many prompts does Ollama keep cached per model?
+
+    For each K, build K distinct ~2,000-token prompts, send them all once to
+    fill whatever cache exists, then send them all again in the same order. On
+    the second pass every prompt is K calls old. If the server keeps N prompts,
+    repeats hit while K <= N and stop hitting once K > N, because each prompt
+    has been pushed out by the K-1 that followed it.
+
+    Each prompt carries its own nonce as the FIRST token, so no two share any
+    prefix at all -- otherwise a partial match would look like a slot hit.
+    """
+    print(f"--- slot probe on /api/{endpoint} ---")
+    print(f"  {'K':>3}  {'fill p50':>10}  {'repeat p50':>11}  {'speedup':>8}  verdict")
+    last_hit = 0
+    for k in range(1, k_max + 1):
+        prompts = [f"# probe k{k} slot {i} {random.randint(10**9, 10**10)}\n"
+                   + PROMPT + LAST_ORIGINAL for i in range(k)]
+        fill = [call(endpoint, p, f"k={k} fill {i}", quiet=True)[1]
+                for i, p in enumerate(prompts)]
+        rep = [call(endpoint, p, f"k={k} repeat {i}", quiet=True)[1]
+               for i, p in enumerate(prompts)]
+        f50, r50 = sorted(fill)[len(fill) // 2], sorted(rep)[len(rep) // 2]
+        speedup = f50 / r50 if r50 else float("inf")
+        hit = speedup > 3.0
+        if hit:
+            last_hit = k
+        print(f"  {k:>3}  {f50:>9.3f}s  {r50:>10.3f}s  {speedup:>7.1f}x  "
+              f"{'HIT' if hit else 'miss'}")
+    print()
+    if last_hit == 0:
+        print("  => no repeat ever hit; caching is not per-prompt on this path")
+    elif last_hit == k_max:
+        print(f"  => still hitting at K={k_max}; N is at least {k_max}, raise k_max")
+    else:
+        print(f"  => repeats hit up to K={last_hit} and stop at K={last_hit + 1}, "
+              f"so Ollama holds about N={last_hit} prompts per model")
+    print()
+    return last_hit
+
+
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--slots", action="store_true",
+                    help="also probe how many prompts are cached per model")
+    ap.add_argument("--k-max", type=int, default=8)
+    args = ap.parse_args()
     print(f"model={MODEL}  keep_alive={KEEP_ALIVE}  prompt ~{len(PROMPT)//4} tokens\n")
     for endpoint in ("chat", "generate"):
         print(f"--- /api/{endpoint} ---")
@@ -140,6 +189,9 @@ def main():
         else:
             print("  => no cross-call prefix reuse visible on this endpoint.")
         print()
+
+    if args.slots:
+        slot_probe("generate", args.k_max)
     return 0
 
 
