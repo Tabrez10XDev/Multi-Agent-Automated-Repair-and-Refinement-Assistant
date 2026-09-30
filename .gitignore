@@ -3,3 +3,13 @@ venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Smoke traces are throwaway. Full-run traces (traces/*.jsonl.gz) ARE committed:
+# they are the measured data the calibration rests on.
+/traces/smoke/
+
+# Simulator outputs are regenerable from trace + git hash + seed, so only the
+# writeup and figures are tracked. Leading slash keeps benchmark/results/ alone.
+/results/*
+!/results/SUMMARY.md
+!/results/figures/

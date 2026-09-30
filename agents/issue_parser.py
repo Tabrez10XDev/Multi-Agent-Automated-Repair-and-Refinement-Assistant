@@ -1,6 +1,7 @@
-import ollama
 import json
 import re
+
+import tracing
 
 
 def parse_issue(issue_text: str, available_files: list = None) -> dict:
@@ -30,8 +31,12 @@ Return raw JSON only. No explanation. No markdown fences."""
 
     print(f"\n[Issue Parser] Sending prompt to LLM...")
 
-    response = ollama.chat(
+    response = tracing.chat(
         model="qwen2.5-coder:7b",
+        role="issue_parser",
+        # Resolves to no parent on the first call, since no evaluator has run
+        # yet, and to the rejecting evaluator on a replan (orchestrator.py:80).
+        parents=("evaluator",),
         messages=[
             {
                 "role": "system",

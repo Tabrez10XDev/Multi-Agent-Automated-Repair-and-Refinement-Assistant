@@ -3,6 +3,8 @@ import os
 import chromadb
 from chromadb.utils import embedding_functions
 
+import tracing
+
 
 def extract_functions(source_code: str, filename: str) -> list:
     chunks = []
@@ -135,11 +137,14 @@ def build_index(repo_path: str, collection_name: str = "codebase") -> chromadb.C
                 ids.append(doc_id)
 
     if documents:
-        collection.upsert(
-            documents=documents,
-            metadatas=metadatas,
-            ids=ids
-        )
+        # Embedding work, not decode work: logged with kind="embedding" so
+        # downstream analysis can exclude it from GPU decode accounting.
+        with tracing.embedding_op("build_index", n_documents=len(documents)):
+            collection.upsert(
+                documents=documents,
+                metadatas=metadatas,
+                ids=ids
+            )
         print(f"[Retriever] Indexed {len(documents)} functions from repo")
     else:
         print("[Retriever] Warning: no functions found to index")
@@ -148,10 +153,11 @@ def build_index(repo_path: str, collection_name: str = "codebase") -> chromadb.C
 
 
 def retrieve_relevant_code(collection, issue_text: str, top_k: int = 5) -> dict:
-    results = collection.query(
-        query_texts=[issue_text],
-        n_results=min(top_k, collection.count())
-    )
+    with tracing.embedding_op("retrieve", n_documents=1):
+        results = collection.query(
+            query_texts=[issue_text],
+            n_results=min(top_k, collection.count())
+        )
 
     relevant = {}
 
@@ -211,9 +217,10 @@ def update_index(collection, repo_path: str, filename: str):
         ids.append(doc_id)
 
     if documents:
-        collection.upsert(
-            documents=documents,
-            metadatas=metadatas,
-            ids=ids
-        )
+        with tracing.embedding_op("update_index", n_documents=len(documents)):
+            collection.upsert(
+                documents=documents,
+                metadatas=metadatas,
+                ids=ids
+            )
         print(f"[Retriever] Updated index for {filename}")

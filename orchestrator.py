@@ -2,6 +2,7 @@ import os
 import json
 import time
 
+import tracing
 from agents.issue_parser import parse_issue
 from agents.navigator import navigate
 from agents.coder import generate_fix
@@ -13,6 +14,22 @@ from agents.evaluator import evaluate_plan
 
 
 def run(
+    issue_text: str,
+    repo_path: str,
+    test_file: str = "test_target.py",
+    max_attempts: int = 3,
+    config: str = "hetero",
+    prompting_strategy: str = "zero_shot",
+    task_id: str = "unknown",
+    model: str = "qwen2.5-coder:7b"
+):
+    """Thin tracing wrapper. All behaviour lives in _run_impl, unchanged."""
+    with tracing.task(task_id):
+        return _run_impl(issue_text, repo_path, test_file, max_attempts,
+                         config, prompting_strategy, task_id, model)
+
+
+def _run_impl(
     issue_text: str,
     repo_path: str,
     test_file: str = "test_target.py",
@@ -70,6 +87,7 @@ def run(
     if config != "hetero_no_sentinel":
         MAX_REPLAN = 2
         for replan in range(MAX_REPLAN):
+            tracing.set_replan(replan + 1)
             eval_result = evaluate_plan(issue, relevant_code, test_files)
             print(f"  Score: {eval_result['score']}/10 | Approved: {eval_result['approved']}")
             print(f"  Feedback: {eval_result['feedback']}")
@@ -91,6 +109,7 @@ def run(
     previous_fix = None
 
     for attempt in range(1, max_attempts + 1):
+        tracing.set_attempt(attempt)
         print(f"\n{'='*50}")
         print(f"ATTEMPT {attempt}/{max_attempts}")
         print("="*50)

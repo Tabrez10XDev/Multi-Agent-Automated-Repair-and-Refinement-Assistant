@@ -381,6 +381,33 @@ constant. It is an **estimator** parameter, not a price — it changes how noisi
 an observable is measured, not how much memory costs. It should still be listed
 as a PLACEHOLDER and swept.
 
+### OPEN QUESTION — rent should scale with E's footprint (raised before Phase 1)
+
+As written, rule 2 charges a 20,000-token entry exactly the same rent as a
+500-token one, because the rate depends only on the *victim's* recompute cost
+and the eviction rate. That is wrong in the direction that matters: a large
+entry displaces proportionally more of the budget, so it should accrue rent
+faster. Two candidate forms:
+
+```
+(a)  rent_rate(E) = (E.bytes / victim.bytes) × victim_recompute × eviction_rate
+(b)  rent_rate(E) = per_byte_rent_price × E.bytes
+     where per_byte_rent_price = (victim_recompute / victim.bytes) × eviction_rate
+```
+
+These are algebraically identical; (b) just names the intermediate quantity.
+Note that under either form, if E and the victim are the same size the rule
+reduces to rule 2 as originally written, so this is a generalisation rather than
+a contradiction.
+
+Unresolved consequence to check when implementing: E's break-even time becomes
+`E_recompute / rent_rate(E)`. Both numerator and denominator scale with E's
+size, so the scaling may cancel and leave break-even size-invariant — which
+would defeat the purpose. Whether it cancels depends on whether recompute is
+linear in tokens (it is, under the current CostModel) and whether bytes are
+linear in tokens (they are). **Decide and justify at Phase 4, with a worked
+example at two entry sizes.**
+
 ### Consequence for the competitive-ratio claim
 
 Classic ski-rental assumes **constant** rent. Derived rent is not constant: it

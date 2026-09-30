@@ -6,6 +6,7 @@ import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import tracing
 from benchmark.metrics import MetricsTracker
 from agents.issue_parser import parse_issue
 from agents.navigator import navigate, get_file_structure
@@ -46,6 +47,12 @@ def setup_sandbox(case: dict) -> str:
 
 
 def run_case(case: dict, tracker: MetricsTracker, max_attempts: int = 3) -> bool:
+    """Thin tracing wrapper. All behaviour lives in _run_case_impl, unchanged."""
+    with tracing.task(case["id"]):
+        return _run_case_impl(case, tracker, max_attempts)
+
+
+def _run_case_impl(case: dict, tracker: MetricsTracker, max_attempts: int = 3) -> bool:
     """Run a single benchmark case. Returns True if solved."""
     print(f"\n{'='*50}")
     print(f"Case {case['id']} [{case['difficulty'].upper()}]")
@@ -85,6 +92,7 @@ def run_case(case: dict, tracker: MetricsTracker, max_attempts: int = 3) -> bool
         previous_fix = None
 
         for attempt in range(1, max_attempts + 1):
+            tracing.set_attempt(attempt)
             print(f"\n  Attempt {attempt}/{max_attempts}...")
 
             diagnosis_text = previous_diagnoses[-1] if previous_diagnoses else None

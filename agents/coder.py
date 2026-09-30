@@ -1,4 +1,4 @@
-import ollama
+import tracing
 
 
 def generate_fix(
@@ -146,8 +146,14 @@ Current code in {filename}:
 
         print(f"\n[Coder] Strategy: {prompting_strategy} | Model: {model} | File: {filename}")
 
-        response = ollama.chat(
+        response = tracing.chat(
             model=model,
+            role="coder",
+            # Stable context comes from issue_parser and retrieval; on a retry
+            # the prompt also carries the previous attempt's fix and the
+            # diagnosis of why it failed (coder.py:97-131).
+            parents=("issue_parser", "retriever"),
+            prev_attempt_parents=("coder", "debugger"),
             messages=[
                 {
                     "role": "system",

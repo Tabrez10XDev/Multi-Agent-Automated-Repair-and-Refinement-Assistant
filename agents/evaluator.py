@@ -1,6 +1,6 @@
 # agents/evaluator.py
 
-import ollama
+import tracing
 
 def evaluate_plan(issue: dict, relevant_code: dict, test_files: dict) -> dict:
     """
@@ -43,8 +43,12 @@ SCORE: 0-10
 FEEDBACK: <one paragraph explaining what is missing or looks good>
 """
 
-    response = ollama.chat(
+    response = tracing.chat(
         model="llama3.2",
+        role="evaluator",
+        # Prompt carries issue.intent/affected_files from issue_parser and
+        # relevant_code selected by retrieval (evaluator.py:11-22).
+        parents=("issue_parser", "retriever"),
         messages=[
             {
                 "role": "system",

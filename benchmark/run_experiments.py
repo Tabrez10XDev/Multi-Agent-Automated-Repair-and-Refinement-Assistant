@@ -500,24 +500,43 @@ def main():
                     continue
         print(f"Resuming — {len(logged)} runs already completed, skipping those.")
 
+    # The grid is already complete in results.jsonl, so resume would skip every
+    # combination and a trace run would capture nothing. This forces a re-run.
+    # Note it APPENDS duplicate rows to results.jsonl.
+    if os.environ.get("MAARA_IGNORE_RESUME"):
+        logged = set()
+        print("Resume disabled (MAARA_IGNORE_RESUME) — re-running everything in scope.")
+
     # back up original files
     with open(TARGET_FILE, "r") as f:
         original_target = f.read()
     with open(TEST_FILE, "r") as f:
         original_test = f.read()
 
-    total = len(TASKS) * len(CONFIGURATIONS) * len(PROMPTING_STRATEGIES)
+    # Optional scoping, for smoke runs and for collecting a trace without
+    # paying for the whole grid. All unset => identical behaviour to before.
+    tasks = TASKS
+    configs = CONFIGURATIONS
+    strategies = PROMPTING_STRATEGIES
+    if os.environ.get("MAARA_LIMIT_TASKS"):
+        tasks = tasks[:int(os.environ["MAARA_LIMIT_TASKS"])]
+    if os.environ.get("MAARA_ONLY_CONFIG"):
+        configs = [c for c in configs if c["config"] == os.environ["MAARA_ONLY_CONFIG"]]
+    if os.environ.get("MAARA_ONLY_STRATEGY"):
+        strategies = [s for s in strategies if s == os.environ["MAARA_ONLY_STRATEGY"]]
+
+    total = len(tasks) * len(configs) * len(strategies)
     completed = 0
 
     print(f"\n{'='*60}")
     print(f"MAARA EXPERIMENT RUNNER")
-    print(f"Tasks: {len(TASKS)} | Configs: {len(CONFIGURATIONS)} | Strategies: {len(PROMPTING_STRATEGIES)}")
+    print(f"Tasks: {len(tasks)} | Configs: {len(configs)} | Strategies: {len(strategies)}")
     print(f"Total runs: {total}")
     print(f"{'='*60}\n")
 
-    for cfg in CONFIGURATIONS:
-        for strategy in PROMPTING_STRATEGIES:
-            for task in TASKS:
+    for cfg in configs:
+        for strategy in strategies:
+            for task in tasks:
                 completed += 1
                 print(f"\n[{completed}/{total}] Config: {cfg['config']} | Strategy: {strategy} | Task: {task['task_id']}")
 
