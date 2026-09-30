@@ -15,12 +15,31 @@ from sim.workload import (CODER_MODEL, SENTINEL_MODEL, CostModel, StageTokens,
 
 
 def test_provenance_labels_every_model_rate():
+    """
+    Each model line carries TWO provenance tags now: one for the prefill and
+    decode rates, one for kv_bytes_per_token. They have different origins --
+    the rates were measured against ollama, while qwen's KV figure was
+    confirmed against an ollama 0.33.3 prompt-cache log line and llama3.2's is
+    still derived from published config.
+    """
     text = CostModel().provenance()
     for model in (CODER_MODEL, SENTINEL_MODEL):
         line = next((l for l in text.splitlines() if model in l), None)
         assert line is not None, f"{model} missing from provenance()"
-        assert "[MEASURED]" in line or "[PLACEHOLDER]" in line, \
+        assert "rates MEASURED" in line or "rates PLACEHOLDER" in line, \
             f"{model} rate has no provenance label: {line!r}"
+        assert "kv MEASURED" in line or "kv DERIVED" in line, \
+            f"{model} kv_bytes_per_token has no provenance label: {line!r}"
+
+
+def test_kv_bytes_provenance_distinguishes_the_two_models():
+    """qwen's KV constant is confirmed against a log line; llama3.2's is not,
+    and conflating them would let an unverified number be quoted as measured."""
+    text = CostModel().provenance()
+    qwen = next(l for l in text.splitlines() if CODER_MODEL in l)
+    llama = next(l for l in text.splitlines() if SENTINEL_MODEL in l)
+    assert "kv MEASURED" in qwen
+    assert "kv DERIVED" in llama
 
 
 def test_batch_decode_coeff_is_declared_placeholder():
