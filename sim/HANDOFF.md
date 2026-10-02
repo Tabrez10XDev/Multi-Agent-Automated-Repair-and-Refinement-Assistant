@@ -697,3 +697,49 @@ exactly the regression, and it did not exist when the 120 rows were produced.
 
 **The existing `results.jsonl` and `benchmark/results/*.json` remain usable.**
 The contaminated artefacts are only the 2026-09-29 traced run's outputs.
+
+## 15. Ollama prompt-cache model — UNVALIDATED, does not match measurement
+
+`sim/ollama_cache_model.py` models the confirmed mechanism (one slot per model,
+0.10 prefix-similarity threshold, host-RAM cache of displaced states) and
+replays both committed traces against the duration-based hit detector. It does
+not reproduce the measurement, so it is **not** adopted as a baseline.
+
+| rule | original | shared_first |
+|---|---|---|
+| displaced state destroyed on in-place reuse | 36 / 89 | 16 / 78 (10 FP) |
+| displaced state always saved, slot path wins | 56 / 89 | 20 / 78 (10 FP) |
+
+Both rules predict the affinity probe correctly, because in that probe A and B
+were the same length and sat in symmetric positions — it cannot separate them.
+The traces can, and neither survives.
+
+### Where it fails, and the part that is not explained
+
+`issue_parser` accounts for almost all of the gap: 45 measured hits in each
+trace, 20 predicted on `original` and 0 on `shared_first`. These are real hits,
+not an artefact of the detector — the prompts are the same size in both buckets
+(~165 tokens), but hits take 0.04s and non-hits 0.55s, and the non-hits land on
+the calibrated 268 tok/s exactly. An upper-bound scan confirms why they should
+be cheap: for every one of those 45 calls, an **exact** duplicate prompt
+(best-match prefix fraction 1.000, 100% exact) exists earlier in the trace,
+a median of 152 calls back on `original` and 107 on `shared_first`. The same
+HumanEval task is re-run under each of the four configs, so its issue_parser
+prompt recurs byte-identically.
+
+The model loses those states before they can be restored. On `shared_first`
+every prompt shares a long prefix with every other by construction, so slot
+reuse fires on 186 of 214 calls and the RAM cache is consulted 5 times — yet
+reality still restores all 45. So the real server must reach a saved state that
+the slot-priority rule says is unreachable, and no rule tried here does that
+while remaining consistent with the probe.
+
+Two candidates not yet tested, in order of promise:
+1. More than one state is resident. `-np 1` is one *slot*, but the host cache
+   may be consulted on every prompt, not only when the slot match is poor.
+2. Similarity may be computed over tokens against the *slot's* length rather
+   than the incoming prompt's. This changes which branch fires for the short
+   issue_parser prompts specifically, which is exactly where the gap is.
+
+Both are distinguishable by a probe where A and B have **different lengths** —
+the symmetry that defeated the last one. Design that before modelling further.
