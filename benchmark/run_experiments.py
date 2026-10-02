@@ -9,7 +9,7 @@ import shutil
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from orchestrator import results_path, run
+from maara.orchestrator import results_path, run
 
 TASKS = [
     {

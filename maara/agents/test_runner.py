@@ -2,7 +2,7 @@ import subprocess
 import os
 import shutil
 
-from agents.paths import assert_within_root
+from maara.sandbox import assert_within_root
 
 
 def apply_fix(fixed_code: dict, repo_path: str) -> dict:

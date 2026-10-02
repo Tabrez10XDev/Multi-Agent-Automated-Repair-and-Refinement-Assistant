@@ -15,7 +15,7 @@ import os
 
 import pytest
 
-from agents import prompt_layout
+from maara import prompt_layout
 from sim.trace_loader import DEFAULT_TRACES, default_prompts_path, load_rows
 
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -33,7 +33,7 @@ FAKE_EVAL = "APPROVED: yes\nSCORE: 8\nFEEDBACK: looks fine"
 @pytest.fixture
 def captured(monkeypatch):
     """Capture the messages each agent would send, without calling ollama."""
-    import tracing
+    from maara import tracing
     seen = []
 
     def fake_chat(model, messages, role, **kw):
@@ -97,7 +97,7 @@ def test_original_reproduces_a_recorded_issue_parser_prompt(captured, monkeypatc
     file_list = tail.split("\n\nYou MUST only reference", 1)[0]
     files = [l[2:] for l in file_list.split("\n") if l.startswith("- ")]
 
-    from agents.issue_parser import parse_issue
+    from maara.agents.issue_parser import parse_issue
     parse_issue(issue_text, available_files=files)
 
     got = captured[0]["messages"]
@@ -115,7 +115,7 @@ def test_original_system_messages_match_the_trace(role):
 
 def test_original_coder_prompt_is_unchanged(captured, monkeypatch):
     monkeypatch.delenv("MAARA_PROMPT_LAYOUT", raising=False)
-    from agents.coder import generate_fix
+    from maara.agents.coder import generate_fix
     generate_fix(issue={"intent": "fix f", "expected_behavior": "works",
                         "test_hints": ["empty"]},
                  relevant_code={"target.py": "def f(): pass"},
@@ -129,10 +129,10 @@ def test_original_coder_prompt_is_unchanged(captured, monkeypatch):
 # --- shared_first behaviour ----------------------------------------------
 
 def _run_all_roles(monkeypatch):
-    from agents.coder import generate_fix
-    from agents.debugger import diagnose
-    from agents.evaluator import evaluate_plan
-    from agents.issue_parser import parse_issue
+    from maara.agents.coder import generate_fix
+    from maara.agents.debugger import diagnose
+    from maara.agents.evaluator import evaluate_plan
+    from maara.agents.issue_parser import parse_issue
 
     issue = {"intent": "fix f", "affected_files": ["target.py"],
              "expected_behavior": "works", "test_hints": ["empty"]}

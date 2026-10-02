@@ -11,7 +11,7 @@ import os
 
 import pytest
 
-import tracing
+from maara import tracing
 
 
 def _fake_response(prompt_tok=100, out_tok=50):

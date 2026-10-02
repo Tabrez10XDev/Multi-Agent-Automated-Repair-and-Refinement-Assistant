@@ -1,7 +1,7 @@
 # agents/evaluator.py
 
-import tracing
-from agents import prompt_layout
+from maara import tracing
+from maara import prompt_layout
 
 def evaluate_plan(issue: dict, relevant_code: dict, test_files: dict) -> dict:
     """

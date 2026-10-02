@@ -1,8 +1,8 @@
 import json
 import re
 
-import tracing
-from agents import prompt_layout
+from maara import tracing
+from maara import prompt_layout
 
 
 def parse_issue(issue_text: str, available_files: list = None) -> dict:

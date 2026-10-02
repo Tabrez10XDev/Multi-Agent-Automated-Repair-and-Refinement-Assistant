@@ -13,9 +13,9 @@ import os
 
 import pytest
 
-from agents.paths import (EXCLUDED_DIRS, SandboxViolation, assert_within_root,
+from maara.sandbox import (EXCLUDED_DIRS, SandboxViolation, assert_within_root,
                           is_agent_visible)
-from agents.test_runner import apply_fix
+from maara.agents.test_runner import apply_fix
 
 
 # --- the exclusion list --------------------------------------------------
@@ -124,7 +124,7 @@ def test_sandbox_reproduces_the_original_available_files(tmp_path):
     {target.py, test_target.py} must resolve to the same thing, or traces
     collected now are not comparable with the original 120 runs.
     """
-    from agents.navigator import get_file_structure, get_test_file_contents
+    from maara.agents.navigator import get_file_structure, get_test_file_contents
 
     sandbox = tmp_path / "exp_sandbox"
     sandbox.mkdir()

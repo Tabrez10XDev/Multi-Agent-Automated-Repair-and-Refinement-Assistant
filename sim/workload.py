@@ -200,25 +200,25 @@ class StageTokens:
     stable_prefix_tokens is THE number that sets the scale of the whole
     memory-vs-recompute tradeoff. Everything else is secondary.
     """
-    # generate_fix - from agents/coder.py:113-131
+    # generate_fix - from maara/agents/coder.py:113-131
     stable_prefix_tokens: int = 2000        # PLACEHOLDER until measured
     fix_suffix_tokens: int = 350            # PLACEHOLDER: source block, first attempt
     fix_suffix_retry_tokens: int = 700      # PLACEHOLDER: source + prev fix + diagnosis
     fix_output_tokens: int = 400            # PLACEHOLDER: coder returns the whole file
 
-    # parse_issue - from agents/issue_parser.py:16-29
+    # parse_issue - from maara/agents/issue_parser.py:16-29
     # The replan call is parse_issue(issue_text + feedback), so the preamble and
     # the original issue text are a genuine shared prefix across replans.
     issue_prefix_tokens: int = 320          # PLACEHOLDER
     issue_suffix_tokens: int = 140          # PLACEHOLDER: file list + JSON instructions
     issue_output_tokens: int = 180          # PLACEHOLDER
 
-    # evaluate_plan - from agents/evaluator.py:24-44. Different model, so its KV
+    # evaluate_plan - from maara/agents/evaluator.py:24-44. Different model, so its KV
     # can never be shared with the coder's even though the text overlaps.
     eval_prompt_tokens: int = 1800          # PLACEHOLDER
     eval_output_tokens: int = 200           # PLACEHOLDER
 
-    # diagnose - from agents/debugger.py:22-44. original_code is re-read from
+    # diagnose - from maara/agents/debugger.py:22-44. original_code is re-read from
     # disk AFTER apply_fix overwrote it, so it differs every attempt: no
     # meaningful reusable prefix here.
     diagnose_prompt_tokens: int = 1100      # PLACEHOLDER

@@ -2,16 +2,16 @@ import os
 import json
 import time
 
-import tracing
-from agents.paths import is_agent_visible
-from agents.issue_parser import parse_issue
-from agents.navigator import navigate
-from agents.coder import generate_fix
-from agents.test_runner import apply_and_test
-from agents.debugger import diagnose
-from agents.navigator import get_file_structure
-from agents.retriever import update_index
-from agents.evaluator import evaluate_plan
+from maara import tracing
+from maara.sandbox import is_agent_visible
+from maara.agents.issue_parser import parse_issue
+from maara.agents.navigator import navigate
+from maara.agents.coder import generate_fix
+from maara.agents.test_runner import apply_and_test
+from maara.agents.debugger import diagnose
+from maara.agents.navigator import get_file_structure
+from maara.agents.retriever import update_index
+from maara.agents.evaluator import evaluate_plan
 
 
 def results_path() -> str:
@@ -221,7 +221,7 @@ if __name__ == "__main__":
     # The demo fixture lives in its own directory so a demo run cannot write
     # to tracked repo source. repo_path IS that directory, so the agent sees
     # exactly target.py and test_target.py.
-    repo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+    repo_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                              "data", "demo_target")
 
     run(

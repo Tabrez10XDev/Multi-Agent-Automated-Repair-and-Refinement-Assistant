@@ -1,7 +1,7 @@
 import os
 import ast
-from agents.paths import is_agent_visible
-from agents.retriever import build_index, retrieve_relevant_code
+from maara.sandbox import is_agent_visible
+from maara.agents.retriever import build_index, retrieve_relevant_code
 
 
 def get_file_structure(repo_path: str) -> dict:

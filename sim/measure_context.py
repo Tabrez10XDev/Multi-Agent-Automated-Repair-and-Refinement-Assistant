@@ -206,7 +206,7 @@ REPRESENTATIVE_ISSUE = {
 
 def measure_prompt_sizes(model):
     """Token counts for the real coder prompt, split stable vs variable."""
-    from agents.navigator import get_test_file_contents
+    from maara.agents.navigator import get_test_file_contents
 
     test_files = get_test_file_contents(REPO)
     target_path = os.path.join(REPO, "target.py")
@@ -275,7 +275,7 @@ def measure_realistic_repo(repo_path, model):
     480-token stable prefix measured there says more about the test fixture than
     about the design. This re-measures against a repo SWE-bench actually uses.
     """
-    from agents.navigator import get_test_file_contents
+    from maara.agents.navigator import get_test_file_contents
 
     out = {"repo": os.path.basename(os.path.abspath(repo_path))}
 
@@ -366,7 +366,7 @@ def measure_cpu_stages():
 
     print("  timing RAG index build (navigate)...")
     try:
-        from agents.retriever import build_index
+        from maara.agents.retriever import build_index
         t0 = time.time()
         build_index(REPO)
         out["rag_index_seconds"] = round(time.time() - t0, 3)

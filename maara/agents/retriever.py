@@ -3,8 +3,8 @@ import os
 import chromadb
 from chromadb.utils import embedding_functions
 
-import tracing
-from agents.paths import is_agent_visible
+from maara import tracing
+from maara.sandbox import is_agent_visible
 
 
 def extract_functions(source_code: str, filename: str) -> list:

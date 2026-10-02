@@ -117,7 +117,7 @@ import threading
 import time
 import uuid
 
-_REPO = os.path.dirname(os.path.abspath(__file__))
+_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 _task_id = contextvars.ContextVar("maara_task_id", default=None)
 _attempt = contextvars.ContextVar("maara_attempt", default=0)
