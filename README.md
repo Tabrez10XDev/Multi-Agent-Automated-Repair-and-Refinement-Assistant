@@ -1,384 +1,169 @@
-# MAARA — Multi-Agent Automated Repair and Refinement Assistant
+# Adaptive LLM Inference Scheduling
 
-> A locally deployable multi-agent SDE assistant that autonomously plans, validates, generates, and repairs software artifacts using locally hosted LLMs via Ollama.
+A workflow-aware controller for LLM serving, and the multi-agent coding
+assistant used to generate a realistic workload for it.
 
----
+The serving question: an LLM server holds a KV cache it cannot fit everything
+in. When a request finishes, do you **keep** its prefix in case the workflow
+comes back to it, or **evict** it and recompute later? Keeping costs memory
+that other requests need now; evicting costs prefill time later. That is
+rent-or-buy, so the controller here is built on ski-rental:
 
-## Table of Contents
+1. **KV retention** — ski-rental, deterministic and learning-augmented, with
+   rent derived from what an eviction actually costs its victim rather than
+   from a tuned constant.
+2. **Scheduling** — least-slack-first over the workflow DAG, with an
+   output-length estimator, since a request's deadline depends on what is
+   waiting downstream of it.
 
-- [Overview](#overview)
-- [Architecture](#architecture)
-- [Requirements](#requirements)
-- [Installation](#installation)
-- [Pulling Models](#pulling-models)
-- [Configuration](#configuration)
-- [Usage](#usage)
-- [Running Experiments](#running-experiments)
-- [Analyzing Results](#analyzing-results)
-- [Project Structure](#project-structure)
-- [Known Issues](#known-issues)
-- [Authors](#authors)
+The workload is **MAARA**, a five-role repair pipeline (issue parser →
+evaluator → retriever → coder → test runner/debugger) running HumanEval tasks
+against `qwen2.5-coder:7b` and `llama3.2` on local Ollama. Agent workflows are
+the interesting case because they have structure a general-purpose scheduler
+cannot see: repeated prefixes, known successors, and gaps where a prefix sits
+idle but will be needed again.
 
----
-
-## Overview
-
-MAARA is a five-agent pipeline for automated program repair. Given a natural language issue description and a repository, it:
-
-1. Parses the issue into a structured plan
-2. Evaluates the plan before any code is written (Sentinel gate)
-3. Retrieves relevant code context from a local vector database (RAG)
-4. Generates a fix using a code-specialized LLM
-5. Runs tests and iteratively repairs failures
-
-All inference runs locally via Ollama — no cloud API calls, no data sent externally.
+Every constant in the simulator carries a **MEASURED** or **PLACEHOLDER**
+label, printed by `CostModel.provenance()`. That discipline is the point: the
+first version of this work was built on constants that turned out to be wrong.
 
 ---
 
-## Architecture
+## Layout
 
-```
-Issue Text
-    │
-    ▼
-┌─────────────┐
-│Issue Parser │  → structured plan (intent, affected files, test hints)
-└─────────────┘
-    │
-    ▼
-┌─────────────┐
-│  Navigator  │  → semantic retrieval from ChromaDB vector store
-└─────────────┘
-    │
-    ▼
-┌─────────────┐
-│  Sentinel   │  → strategy checking (requirement traceability, consistency, feasibility)
-│  Evaluator  │  → rejects bad plans and triggers replanning
-└─────────────┘
-    │
-    ▼
-┌─────────────┐     ┌─────────────┐
-│    Coder    │ ──► │ Test Runner │
-└─────────────┘     └─────────────┘
-                          │
-                    pass ─┤─ fail
-                          │
-                    ┌─────────────┐
-                    │  Debugger   │  → diagnoses failure, builds repair context
-                    └─────────────┘
-                          │
-                          ▼
-                    ┌─────────────┐
-                    │   Repair    │  → RAG-grounded patch generation
-                    │   (Coder)   │  → iterates up to max_attempts
-                    └─────────────┘
-```
+The split is by **provenance** — what can be regenerated and what cannot.
 
----
-
-## Requirements
-
-- Python 3.10+
-- [Ollama](https://ollama.com) installed and running
-- 8GB+ RAM (16GB recommended for larger models)
-- MacOS, Linux, or Windows with WSL2
-
-### Python Dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-If you don't have a `requirements.txt` yet, install manually:
-
-```bash
-pip install ollama chromadb pytest
-```
-
----
-
-## Installation
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/Tabrez10XDev/self-healing-agent.git
-cd self-healing-agent
-
-# 2. Create and activate virtual environment
-python -m venv venv
-source venv/bin/activate        # macOS / Linux
-# venv\Scripts\activate         # Windows
-
-# 3. Install dependencies
-pip install ollama chromadb pytest
-
-# 4. Make sure Ollama is running
-ollama serve
-```
-
----
-
-## Pulling Models
-
-MAARA uses two models by default. Pull them before running anything:
-
-```bash
-# Coder and single-agent baseline (4.7GB)
-ollama pull qwen2.5-coder:7b
-
-# Evaluator / Planner / Homo config (2.0GB)
-ollama pull llama3.2
-
-# Embedding model for RAG / ChromaDB (274MB)
-ollama pull nomic-embed-text
-```
-
-### Optional larger models (requires 16GB+ RAM)
-
-```bash
-# Stronger coder — better repair performance
-ollama pull deepseek-coder:33b
-
-# Stronger general reasoning
-ollama pull llama3:70b
-
-# Code-specialized alternative
-ollama pull codellama:34b
-```
-
-### Verify models are available
-
-```bash
-ollama list
-```
-
-Expected output:
-```
-NAME                       SIZE
-qwen2.5-coder:7b           4.7 GB
-llama3.2:latest            2.0 GB
-nomic-embed-text:latest    274 MB
-```
-
----
-
-## Configuration
-
-All configuration is controlled through the `run()` function signature in `orchestrator.py` and the `CONFIGURATIONS` list in `experiments/collect_humaneval.py`.
-
-### Agent model assignments
-
-Edit these in `orchestrator.py` and `agents/evaluator.py`:
-
-| Agent | Default Model | Purpose |
-|---|---|---|
-| Issue Parser | `llama3.2` | Parse natural language issue |
-| Evaluator (Sentinel) | `llama3.2` | Strategy checking |
-| Coder | `qwen2.5-coder:7b` | Code generation |
-| Debugger | `qwen2.5-coder:7b` | Failure diagnosis |
-| Repair | `qwen2.5-coder:7b` | Iterative patching |
-
-To change the evaluator model, edit `agents/evaluator.py`:
-
-```python
-response = ollama.chat(
-    model="llama3.2",   # change this to any pulled model
-    ...
-)
-```
-
-### Key parameters
-
-| Parameter | Default | Description |
-|---|---|---|
-| `max_attempts` | 3 | Max repair iterations per task |
-| `MAX_REPLAN` | 1 | Max Sentinel replanning cycles |
-| `top_k` | 5 | RAG chunks retrieved per query |
-| `config` | `"hetero"` | Pipeline configuration |
-| `prompting_strategy` | `"zero_shot"` | Prompting strategy |
-
-### Pipeline configurations
-
-| Config | Description |
+| path | what it is |
 |---|---|
-| `single_agent` | No orchestration, direct Ollama call |
-| `homo_llama3` | All 5 agents use `llama3.2` |
-| `hetero` | Best-fit model per agent role |
-| `hetero_no_sentinel` | Hetero without the Sentinel gate |
-| `hetero_no_rag` | Hetero without ChromaDB retrieval |
+| `maara/` | The agent pipeline. `orchestrator.run` is the entry point |
+| `maara/agents/` | The seven role agents |
+| `maara/sandbox.py` | The one definition of what the coding agent may see and touch |
+| `maara/tracing.py` | One JSONL row per LLM call, plus a prompt sidecar |
+| `simulator/` | Engine, workload model, scheduling and retention policies, trace replay |
+| `probes/` | **The only code that calls a live model server.** Calibration and cache probes |
+| `analysis/` | Reads traces and outcomes, writes numbers and figures. Calls nothing |
+| `experiments/` | Runnable drivers: trace collection, the retention grid |
+| `data/` | Committed measured inputs. **Not regenerable** |
+| `results/` | Regenerable output. Gitignored except figures |
+| `docs/` | Architecture, decisions, findings, open issues |
+| `archive/` | Retired code, with reasons. Do not import |
 
-### Prompting strategies
+---
 
-| Strategy | Description |
+## Running things
+
+`make help` lists every task. Offline targets are safe to run anytime; the
+three that call a live model require `CONFIRM=1`, because starting one by
+accident costs hours.
+
+```bash
+make test          # full test suite (240 tests, ~80s)
+make analyze       # trace stats + figures for both trace sets
+make pass-at-1     # pass@1 per configuration from the committed outcomes
+make grid          # retention x scheduler grid (quick mode)
+make check-traces  # verify every committed trace stayed in its sandbox
+
+make calibrate   CONFIRM=1   # re-measure rates and prompt sizes
+make probe-cache CONFIRM=1   # probe Ollama's prompt cache
+make collect     CONFIRM=1   # run HumanEval and collect a trace
+```
+
+Direct invocation works too, and every module takes `--help`:
+
+```bash
+./venv/bin/python -m simulator.engine --scheduler lsf --retention ski-rental --kv-mb 512
+./venv/bin/python -m experiments.run_retention_grid --scales 1,8 --seeds 5
+```
+
+---
+
+## Where the findings live
+
+| Question | File |
 |---|---|
-| `zero_shot` | No examples, direct instruction |
-| `few_shot` | 2-3 in-context examples from vector DB |
-| `chain_of_thought` | Step-by-step reasoning before code |
+| What is this made of, and what rules do the parts obey? | `docs/ARCHITECTURE.md` |
+| Why is it built this way? What must not be silently revised? | `docs/DECISIONS.md` |
+| What did the measurements actually show? | `docs/FINDINGS.md` |
+| What is unvalidated, unknown, or known to be wrong? | `docs/OPEN_ISSUES.md` |
+| How does one run flow end to end? | `docs/TOUR.md` |
+
+Headline results, with detail and caveats in `docs/FINDINGS.md`:
+
+- The reusable prefix at HumanEval scale is **small** — median 4 tokens, 13.7%
+  of prompt tokens. A further 24.0% of tokens are repeated but unreachable by
+  a prefix cache, because they recur out of order.
+- Retention starts to matter at **2000–4000 token contexts**, not at the scale
+  MAARA actually runs at. The mechanism is real; the workload has to be big
+  enough for it to pay.
+- Reordering prompts to put shared content first **backfired**: ordering by
+  role coverage destroyed coder→coder reuse (7,626 → 703 tokens). The correct
+  principle is to order by **volatility**, not by how many roles share a block.
+- Ollama *does* do prefix caching, and `prompt_eval_count` hides it. An earlier
+  "zero cache hits" conclusion was an artefact of a count-based detector.
 
 ---
 
-## Usage
+## Setup
 
-### Basic run (single issue)
-
-```bash
-python orchestrator.py
-```
-
-This runs the default issue defined in the `__main__` block against `target.py` and `test_target.py`.
-
-### Custom issue
-
-Call `run()` directly from your own script:
-
-```python
-from orchestrator import run
-
-run(
-    issue_text="The calculate_average function crashes on empty lists.",
-    repo_path="/path/to/your/repo",
-    test_file="test_target.py",
-    max_attempts=3,
-    config="hetero_no_rag",
-    prompting_strategy="few_shot",
-    task_id="my_task_001"
-)
-```
-
-### Monitor progress
-
-Each run appends a JSON line to `data/outcomes/results.jsonl`:
+Requires Python 3.13+ and, for anything that calls a model,
+[Ollama](https://ollama.com) running locally.
 
 ```bash
-# count completed runs
-wc -l data/outcomes/results.jsonl
+python3 -m venv venv
+./venv/bin/pip install -e '.[sim,dev]'       # simulator + tests; no GPU needed
+./venv/bin/pip install -e '.[agent]'         # adds the agent pipeline
 
-# live tail
-tail -f data/outcomes/results.jsonl
-
-# see pass/fail summary
-cat data/outcomes/results.jsonl | python3 -c "
-import sys, json
-for line in sys.stdin:
-    r = json.loads(line.strip())
-    if r:
-        status = 'PASS' if r['passed'] else 'FAIL'
-        print(f\"{status} | {r['configuration']} | {r['prompting_strategy']} | {r['task_id']}\")
-"
+ollama pull qwen2.5-coder:7b                 # coder, debugger  (4.7GB)
+ollama pull llama3.2                         # issue parser, evaluator  (2.0GB)
+ollama pull nomic-embed-text                 # RAG embeddings  (274MB)
 ```
+
+Dependencies are pinned in `pyproject.toml`. The `sim` extra is stdlib plus
+numpy and matplotlib and must stay that way — the simulator has to run on a
+machine with no GPU and no model server, which is how the results above are
+reproduced.
 
 ---
 
-## Running Experiments
+## Pipeline configurations
 
-The experiment runner evaluates all configurations across 15 HumanEval tasks and 2 prompting strategies (120 total runs).
+These are the four arms in the committed results. **The stored label
+`single_agent` is a misnomer**: it is the full pipeline with both RAG and the
+evaluator gate. The only ablation gates in the orchestrator are
+`config != "hetero_no_rag"` and `config != "hetero_no_sentinel"`, so
+`single_agent` trips neither. The stored strings are kept as written because
+they appear in committed data; `simulator.trace_loader.config_label` maps them
+to honest display names.
 
-```bash
-python experiments/collect_humaneval.py
-```
+| stored | displayed | RAG | Sentinel | coder model | pass@1 (zero-shot) |
+|---|---|---|---|---|---|
+| `single_agent` | `full_pipeline` | yes | yes | qwen2.5-coder:7b | 86.7% |
+| `hetero_no_rag` | `no_rag` | no | yes | qwen2.5-coder:7b | 93.3% |
+| `hetero_no_sentinel` | `no_sentinel` | yes | no | llama3.2 | 60.0% |
+| `homo_llama3` | `llama3_only` | yes | yes | llama3.2 | 46.7% |
 
-### Resume after crash
-
-The runner automatically skips already-logged tasks. Just re-run the same command:
-
-```bash
-python experiments/collect_humaneval.py
-```
-
-### Customize experiment scope
-
-Edit these three variables at the top of `experiments/collect_humaneval.py`:
-
-```python
-# cut to fewer tasks
-TASKS = TASKS[:10]
-
-# change strategies
-PROMPTING_STRATEGIES = ["zero_shot", "few_shot"]
-
-# change configurations
-CONFIGURATIONS = [
-    {"config": "single_agent",  "models": {"coder": "qwen2.5-coder:7b"}},
-    {"config": "homo_llama3",   "models": {"coder": "llama3.2"}},
-]
-```
-
-### Estimated runtime
-
-| Model | Time per task | 15 tasks |
-|---|---|---|
-| `qwen2.5-coder:7b` | ~20-30 sec | ~8 min |
-| `llama3.2` | ~30-60 sec | ~15 min |
-
-Full 120-run experiment on M3 MacBook Pro: approximately **2-3 hours**.
+`n=15` tasks per arm. `hetero` is a fifth, undocumented label: it is
+`orchestrator.run`'s default and trips neither gate, so it behaves as
+`full_pipeline`.
 
 ---
 
-## Analyzing Results
+## Known issues
 
-```bash
-python analysis/pass_at_1.py
-```
+See `docs/OPEN_ISSUES.md` for the full list. The two that bite soonest:
 
-Output:
-
-```
-============================================================
-MAARA RESULTS SUMMARY
-============================================================
-hetero_no_rag        | few_shot   | pass@1: 100.0%  (n=15)
-hetero_no_rag        | zero_shot  | pass@1:  93.3%  (n=15)
-single_agent         | few_shot   | pass@1:  86.7%  (n=15)
-single_agent         | zero_shot  | pass@1:  86.7%  (n=15)
-homo_llama3          | few_shot   | pass@1:  73.3%  (n=15)
-hetero_no_sentinel   | few_shot   | pass@1:  66.7%  (n=15)
-hetero_no_sentinel   | zero_shot  | pass@1:  60.0%  (n=15)
-homo_llama3          | zero_shot  | pass@1:  46.7%  (n=15)
-============================================================
-```
-
----
-
-## Project Structure
-
-```
-self-healing-agent/
-├── orchestrator.py              # Main pipeline entry point
-├── agent.py                     # Original single-agent prototype (v1)
-├── target.py                    # Target file for repair (used in tests)
-├── test_target.py               # Test suite for target.py
-│
-├── agents/
-│   ├── issue_parser.py          # Parses natural language issues into structured plans
-│   ├── navigator.py             # Semantic retrieval and file structure analysis
-│   ├── evaluator.py             # Sentinel agent — strategy checking
-│   ├── coder.py                 # Code generation with prompting strategy support
-│   ├── debugger.py              # Failure diagnosis
-│   ├── test_runner.py           # Applies fixes and runs pytest
-│   └── retriever.py             # ChromaDB index build and retrieval
-│
-└── benchmark/
-    ├── run_experiments.py       # Full experiment runner (120 runs)
-    ├── analyze_results.py       # pass@1 reporting from results.jsonl
-    └── results.jsonl            # Experiment log (auto-generated)
-```
-
----
-
-## Known Issues
-
-**RAG contamination** — The retriever currently indexes all Python files in the repository including benchmark case files. This pollutes the coder's context with irrelevant code and hurts performance. Fix: filter `benchmark/` from the ChromaDB index in `agents/retriever.py`.
-
-**Evaluator over-rejection** — `llama3.2` at 3B sometimes rejects valid plans with low scores. The score threshold is not enforced by default. Fix: add `and eval_result["score"] >= 6` to the approval check in `orchestrator.py`.
-
-**Large model memory** — Models above 13B parameters may partially offload to CPU on machines with less than 16GB unified memory, significantly slowing inference. Use `ollama ps` to check GPU utilization.
+- **`simulator/ollama_cache.py` is unvalidated.** It models the confirmed
+  mechanism but reproduces only 56 of 89 measured cache hits on one trace and
+  20 of 78 on the other. Do not use it as a baseline yet.
+- **`llama3.2`'s `kv_bytes_per_token` is DERIVED, not measured.** qwen's was
+  confirmed against the Ollama server log; llama3.2's still needs the same check.
 
 ---
 
 ## Authors
 
-**Tabrez Mohamed** — tm3578@rit.edu  
-**Aparnaa Senthilnathan** — as1567@rit.edu  
-**Ashish Ubale** — au9332@rit.edu  
+**Tabrez Mohamed** — tm3578@rit.edu
+**Aparnaa Senthilnathan** — as1567@rit.edu
+**Ashish Ubale** — au9332@rit.edu
 
 Rochester Institute of Technology

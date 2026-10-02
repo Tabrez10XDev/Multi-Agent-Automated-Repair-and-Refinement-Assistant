@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "adaptive-llm-inference-scheduling"
+version = "0.2.0"
+description = "Workflow-aware KV-cache retention and scheduling for LLM serving, measured on a multi-agent coding assistant"
+requires-python = ">=3.13"
+
+# Nothing here by default. The simulator and the agent pipeline have disjoint
+# dependency sets and the split is deliberate: the simulator must stay runnable
+# on a machine with no GPU and no model server, which is how every result in
+# docs/FINDINGS.md was reproduced. Install one extra, or both.
+dependencies = []
+
+[project.optional-dependencies]
+# The simulator, analysis and figures. Stdlib plus these two, and no more --
+# adding an ML or serving dependency here breaks the guarantee above.
+sim = [
+    "numpy==2.4.4",
+    "matplotlib==3.11.2",
+]
+
+# The MAARA agent pipeline. Needs a running Ollama.
+agent = [
+    "ollama==0.6.1",
+    "chromadb==1.5.8",
+    "python-dotenv==1.2.2",
+]
+
+dev = [
+    "pytest==9.0.3",
+]
+
+[tool.setuptools]
+packages = ["maara", "maara.agents", "simulator", "probes", "analysis", "experiments"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

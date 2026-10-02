@@ -1,12 +1,8 @@
-# MAARA agent harness
-chromadb
-ollama
-python-dotenv
-
-# Simulator (sim/) — stdlib plus these two only. No ML/serving deps: the
-# simulator must stay runnable without a GPU or a model server.
-numpy
-matplotlib
-
-# Tests
-pytest
+# Dependencies are declared in pyproject.toml with pinned versions.
+#
+#   ./venv/bin/pip install -e '.[sim,dev]'      # simulator + tests, no GPU needed
+#   ./venv/bin/pip install -e '.[agent]'        # adds the MAARA pipeline (needs Ollama)
+#   ./venv/bin/pip install -e '.[sim,agent,dev]'
+#
+# Kept as a pointer so existing instructions and muscle memory do not break.
+-e .[sim,agent,dev]
