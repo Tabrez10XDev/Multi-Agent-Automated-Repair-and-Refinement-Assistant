@@ -13,3 +13,6 @@ __pycache__/
 /results/*
 !/results/SUMMARY.md
 !/results/figures/
+# macOS and editor-local junk
+.DS_Store
+.claude/
