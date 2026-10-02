@@ -190,31 +190,74 @@ def capacity_probe(endpoint="generate", n=40):
 
 def affinity_probe(endpoint="generate"):
     """
-    Does a SIMILAR prompt overwrite the slot, or get its own state?
+    Does a similar prompt overwrite the slot, or is the displaced state saved?
 
-    Ollama reuses the active slot when prefix similarity clears 0.10
-    ("checking sim = 0.002 > 0.100"), otherwise picks a slot by LRU. If a
-    similar B reuses A's slot, A's state may be overwritten rather than saved,
-    so A would stop hitting. Each level runs A, then B sharing that fraction of
-    A's prefix, then A again.
+    Ollama 0.33.3 reuses the active slot when prefix similarity clears 0.10
+    ("checking sim = 0.002 > 0.100"), otherwise picks a slot by LRU and saves
+    the displaced state to a host-RAM cache.
+
+    Each level runs A, then a full-length B sharing that fraction of A's
+    prefix, then A again, and reports both recompute fractions:
+
+        A again / A cold  ~ 0       A was saved and restored intact
+        A again / A cold  ~ 1-share A's slot was trimmed to the common prefix
+                                    and its remainder destroyed
+
+    B is padded back to A's length with its own nonce after the shared prefix,
+    so B's time is a second, independent check: if the slot is being reused,
+    B should itself recompute about (1 - share) of a full prompt. An earlier
+    version let B be a short prompt, so B took ~0.45s at every level -- the
+    cost of its small divergent tail -- which looked like a RAM-cache restore
+    and was not.
     """
     print(f"--- affinity probe on /api/{endpoint} ---")
-    print(f"  {'shared':>7}  {'A cold':>8}  {'B':>8}  {'A again':>8}  A survived?")
+    print(f"  {'shared':>7}  {'A cold':>9}  {'B':>9}  {'B frac':>7}  "
+          f"{'A again':>9}  {'A frac':>7}  reading")
+    rows = []
+    filler = (BODY + "\n") * 4
     for frac in (0.05, 0.25, 0.50, 0.90):
-        nonce = f"# aff {random.randint(10**9, 10**10)}\n"
-        a = nonce + PROMPT + LAST_ORIGINAL
-        cut = int(len(a) * frac)
-        b = a[:cut] + f"\n# divergent tail {random.randint(10**9, 10**10)}\n" + BODY[:400]
-        t_a = call(endpoint, a, "A cold", quiet=True)[1]
-        t_b = call(endpoint, b, "B", quiet=True)[1]
-        t_a2 = call(endpoint, a, "A again", quiet=True)[1]
-        survived = t_a2 < t_a / 3.0
-        print(f"  {frac:>6.0%}  {t_a:>7.3f}s  {t_b:>7.3f}s  {t_a2:>7.3f}s  "
-              f"{'yes' if survived else 'NO - overwritten'}", flush=True)
+        a_txt = f"# aff A {random.randint(10**9, 10**10)}\n" + PROMPT + LAST_ORIGINAL
+        cut = int(len(a_txt) * frac)
+        tail_nonce = f"\n# aff B {random.randint(10**9, 10**10)}\n"
+        pad = max(0, len(a_txt) - cut - len(tail_nonce))
+        b_txt = a_txt[:cut] + tail_nonce + filler[:pad]
+
+        t_a = call(endpoint, a_txt, "A cold", quiet=True)[1]
+        t_b = call(endpoint, b_txt, "B", quiet=True)[1]
+        t_a2 = call(endpoint, a_txt, "A again", quiet=True)[1]
+
+        a_frac = t_a2 / t_a if t_a else float("nan")
+        b_frac = t_b / t_a if t_a else float("nan")
+        # Restored intact, or recomputed about the part B did not share?
+        restored = a_frac < 0.10
+        trimmed = abs(a_frac - (1.0 - frac)) < 0.15
+        reading = ("restored from RAM" if restored else
+                   "slot trimmed to shared prefix" if trimmed else "unclear")
+        rows.append((frac, a_frac, b_frac, restored, trimmed))
+        print(f"  {frac:>6.0%}  {t_a:>8.3f}s  {t_b:>8.3f}s  {b_frac:>6.0%}  "
+              f"{t_a2:>8.3f}s  {a_frac:>6.0%}  {reading}", flush=True)
+
     print()
-    print("  A surviving at every level => displaced states go to the RAM cache.")
-    print("  A lost above 10% similarity => the slot is overwritten in place.")
+    below = [r for r in rows if r[0] < 0.10]
+    above = [r for r in rows if r[0] >= 0.10]
+    saved_below = all(r[3] for r in below) if below else False
+    trimmed_above = all(r[4] for r in above) if above else False
+    if saved_below and trimmed_above:
+        print("  => CONFIRMED. Below the 0.10 similarity threshold the displaced")
+        print("     state is saved to the host RAM cache and restored intact.")
+        print("     At or above it the slot is reused: trimmed to the common")
+        print("     prefix, and the rest of the previous prompt is destroyed.")
+        print("     A's recompute tracks its UNSHARED fraction, so a 90% match")
+        print("     is a cheap overwrite, not a survival.")
+    elif saved_below:
+        print("  => below threshold behaves as expected, but the above-threshold")
+        print("     recompute does not track the unshared fraction; something")
+        print("     else governs how much of the slot is kept.")
+    else:
+        print("  => does not match the trim-or-save model; report the raw numbers")
+        print("     rather than assuming the mechanism.")
     print()
+    return rows
 
 
 def main():
