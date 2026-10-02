@@ -6,7 +6,7 @@ code" for HumanEval bugs, rewrote it, and wrote it to disk. The trace collected
 alongside was contaminated and discarded. This is the gate that catches that
 class of failure before hours are spent on a full run.
 
-    python -m sim.check_trace_clean                 # newest traces/smoke/*.prompts.jsonl
+    python -m sim.check_trace_clean                 # newest data/traces/smoke/*.prompts.jsonl
     python -m sim.check_trace_clean <path>          # a specific .jsonl or .jsonl.gz
 
 Exits 0 on PASS, 1 on FAIL.
@@ -66,7 +66,7 @@ def _read_rows(path):
 
 
 def _newest_smoke():
-    hits = [p for p in glob.glob(os.path.join(_REPO, "traces", "smoke", "*.prompts.jsonl*"))]
+    hits = [p for p in glob.glob(os.path.join(_REPO, "data", "traces", "smoke", "*.prompts.jsonl*"))]
     return max(hits, key=os.path.getmtime) if hits else None
 
 
@@ -126,7 +126,7 @@ def main():
 
     path = args.path or _newest_smoke()
     if not path:
-        print("FAIL  no trace found under traces/smoke/. Run the smoke run first.")
+        print("FAIL  no trace found under data/traces/smoke/. Run the smoke run first.")
         return 1
     if not os.path.exists(path):
         print(f"FAIL  no such file: {path}")

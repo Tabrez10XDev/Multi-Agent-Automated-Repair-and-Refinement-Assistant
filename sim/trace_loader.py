@@ -395,9 +395,9 @@ class LoadedTrace:
 # Named trace sets, so the two prompt layouts can be analysed side by side
 # without either overwriting the other's figures.
 TRACE_SETS = {
-    "original": ["traces/full_zs_4cfg.jsonl.gz",
-                 "traces/full_zs_4cfg_smoke5.jsonl.gz"],
-    "shared_first": ["traces/full_zs_4cfg_sharedfirst.jsonl.gz"],
+    "original": ["data/traces/full_zs_4cfg.jsonl.gz",
+                 "data/traces/full_zs_4cfg_smoke5.jsonl.gz"],
+    "shared_first": ["data/traces/full_zs_4cfg_sharedfirst.jsonl.gz"],
 }
 DEFAULT_TRACES = TRACE_SETS["original"]
 

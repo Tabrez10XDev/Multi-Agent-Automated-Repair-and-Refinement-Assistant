@@ -28,7 +28,7 @@ import urllib.request
 
 OLLAMA = "http://localhost:11434"
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "measured.json")
+OUT_PATH = os.path.join(REPO, "data", "calibration", "measured.json")
 
 CODER_MODEL = "qwen2.5-coder:7b"
 SENTINEL_MODEL = "llama3.2"

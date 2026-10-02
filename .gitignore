@@ -4,12 +4,13 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
-# Smoke traces are throwaway. Full-run traces (traces/*.jsonl.gz) ARE committed:
-# they are the measured data the calibration rests on.
-/traces/smoke/
+# Smoke traces are throwaway. Full-run traces (data/traces/*.jsonl.gz) ARE
+# committed: they are the measured data the calibration rests on.
+/data/traces/smoke/
 
 # Simulator outputs are regenerable from trace + git hash + seed, so only the
-# writeup and figures are tracked. Leading slash keeps benchmark/results/ alone.
+# writeup and figures are tracked. The leading slash scopes this to the top
+# level, so archive/legacy_case_harness/results/ is unaffected.
 /results/*
 !/results/SUMMARY.md
 !/results/figures/

@@ -149,7 +149,7 @@ def test_embedding_ops_have_no_sidecar_row(traced, tmp_path):
 def test_results_path_defaults_unchanged(monkeypatch):
     import orchestrator
     monkeypatch.delenv("MAARA_RESULTS_PATH", raising=False)
-    assert orchestrator.results_path() == "benchmark/results.jsonl"
+    assert orchestrator.results_path() == "data/outcomes/results.jsonl"
 
 
 def test_results_path_honours_env(monkeypatch, tmp_path):
@@ -174,11 +174,11 @@ def test_append_result_writes_to_override_and_creates_dirs(monkeypatch, tmp_path
 def test_append_result_leaves_primary_file_untouched(monkeypatch, tmp_path):
     """
     The whole point of the override: a traced re-run must not append duplicates
-    to benchmark/results.jsonl, which would make analyze_results.py double-count.
+    to data/outcomes/results.jsonl, which would make pass_at_1.py double-count.
     """
     import orchestrator
     repo = os.path.dirname(os.path.abspath(orchestrator.__file__))
-    primary = os.path.join(repo, "benchmark", "results.jsonl")
+    primary = os.path.join(repo, "data", "outcomes", "results.jsonl")
     before = os.path.getsize(primary) if os.path.exists(primary) else None
 
     monkeypatch.setenv("MAARA_RESULTS_PATH", str(tmp_path / "side.jsonl"))

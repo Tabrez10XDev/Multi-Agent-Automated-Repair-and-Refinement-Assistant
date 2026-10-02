@@ -10,8 +10,8 @@ ENABLING
 --------
 Off by default, so an untraced run behaves exactly as before.
 
-    MAARA_TRACE=1                  enable; writes traces/<run_id>.jsonl.gz
-    MAARA_TRACE_SMOKE=1            write traces/smoke/<run_id>.jsonl (uncompressed)
+    MAARA_TRACE=1                  enable; writes data/traces/<run_id>.jsonl.gz
+    MAARA_TRACE_SMOKE=1            write data/traces/smoke/<run_id>.jsonl (uncompressed)
     MAARA_RUN_ID=<id>              pin the run id (default: UTC timestamp + short uuid)
 
 One trace file per PROCESS, created lazily on the first traced call and closed
@@ -46,7 +46,7 @@ are directly comparable with everything else in sim/, which is all seconds.
 PROMPT SIDECAR
 --------------
 The full messages list of every call goes to a separate file,
-traces/<run_id>.prompts.jsonl(.gz), one row per call: run_id, call_id, task_id,
+data/traces/<run_id>.prompts.jsonl(.gz), one row per call: run_id, call_id, task_id,
 agent_role, model, messages. Joined to the main trace on call_id. Kept separate
 so the main trace stays small enough to scan quickly, while the prompts -- which
 are orders of magnitude larger -- are read only when needed.
@@ -218,7 +218,7 @@ def _get_run():
         run_id = os.environ.get("MAARA_RUN_ID") or (
             datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
             + "-" + uuid.uuid4().hex[:6])
-        base = os.environ.get("MAARA_TRACE_DIR") or os.path.join(_REPO, "traces")
+        base = os.environ.get("MAARA_TRACE_DIR") or os.path.join(_REPO, "data", "traces")
         _guard_existing(base, run_id)
         if _smoke():
             d = os.path.join(base, "smoke")

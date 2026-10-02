@@ -3,11 +3,14 @@
 # Usage: python benchmark/analyze_results.py
 
 import json
+import os
 from collections import defaultdict
+
+_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 results = defaultdict(list)
 
-with open("benchmark/results.jsonl") as f:
+with open(os.path.join(_REPO, "data", "outcomes", "results.jsonl")) as f:
     for line in f:
         line = line.strip()
         if not line:

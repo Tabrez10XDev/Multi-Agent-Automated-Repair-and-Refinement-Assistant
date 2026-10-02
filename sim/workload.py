@@ -30,7 +30,8 @@ from dataclasses import dataclass, field, replace
 from enum import Enum
 from typing import Optional
 
-_MEASURED_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "measured.json")
+_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_MEASURED_PATH = os.path.join(_REPO, "data", "calibration", "measured.json")
 
 
 def _load_measured() -> dict:

@@ -22,7 +22,7 @@ def results_path() -> str:
     trace does not append duplicate rows to the primary results.jsonl and make
     analyze_results.py double-count. Unset, behaviour is unchanged.
     """
-    return os.environ.get("MAARA_RESULTS_PATH") or "benchmark/results.jsonl"
+    return os.environ.get("MAARA_RESULTS_PATH") or "data/outcomes/results.jsonl"
 
 
 def _append_result(experiment_log: dict) -> None:
@@ -218,7 +218,11 @@ if __name__ == "__main__":
         - count_vowels must count both uppercase and lowercase vowels (A, E, I, O, U and a, e, i, o, u).
         """
 
-    repo_path = os.path.dirname(os.path.abspath(__file__))
+    # The demo fixture lives in its own directory so a demo run cannot write
+    # to tracked repo source. repo_path IS that directory, so the agent sees
+    # exactly target.py and test_target.py.
+    repo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "data", "demo_target")
 
     run(
         issue_text=issue_text,

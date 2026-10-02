@@ -49,7 +49,7 @@ def test_tests_dir_is_excluded_by_directory_not_filename():
 
 def test_non_python_is_never_visible():
     assert is_agent_visible("README.md") is False
-    assert is_agent_visible("sim/measured.json") is False
+    assert is_agent_visible("data/calibration/measured.json") is False
 
 
 def test_sim_is_actually_in_the_exclusion_list():
