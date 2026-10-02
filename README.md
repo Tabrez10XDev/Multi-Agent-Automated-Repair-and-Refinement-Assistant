@@ -90,8 +90,8 @@ Direct invocation works too, and every module takes `--help`:
 Headline results, with detail and caveats in `docs/FINDINGS.md`:
 
 - The reusable prefix at HumanEval scale is **small** — median 4 tokens, 13.7%
-  of prompt tokens. A further 24.0% of tokens are repeated but unreachable by
-  a prefix cache, because they recur out of order.
+  of prompt tokens. A further ~24% of prompt tokens are repeated but
+  unreachable by a prefix cache, because they recur out of order.
 - Retention starts to matter at **2000–4000 token contexts**, not at the scale
   MAARA actually runs at. The mechanism is real; the workload has to be big
   enough for it to pay.

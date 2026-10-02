@@ -181,4 +181,35 @@ batching with load-dependent rent is not proven here.
    `measure_rates`.
 4. **ollama `num_ctx` truncation** (see §4).
 
+Items 5-9 were fixed during Phase 4 and 5b and were never written into this
+list; they were recovered from the session record during the Milestone 2
+cleanup. Several are the kind that fail silently, so they are worth reading
+before touching the engine.
+
+5. **Eviction double-count, causing deadlock.** The eviction loop compared an
+   accumulating `freed` total against `need - self.free_bytes`, but
+   `free_bytes` already grows as entries are evicted, so the same space was
+   counted twice and the loop concluded it had freed enough when it had not.
+   Fixed to test live free space only.
+6. **Pressure snapshot taken *after* admission.** `_try_admit` had already
+   drained the evictable set by the time rent was assessed, so rent was charged
+   on almost nothing — 2 of 7,284 iterations. The snapshot is now taken before
+   admission. Symptom: retention policies scored identically for no visible
+   reason.
+7. **Rent did not conserve under block granularity.** Charging every retained
+   entry the full victim rate inflated total rent by roughly 100x (observed
+   ratios 131-723 against the hindsight denominator). Rent is now normalised by
+   the evictable pool, so what the holders are charged sums to what the
+   eviction actually cost.
+8. **Self-blocking deadlock.** A request could be blocked by the very blocks it
+   wanted to reuse, since those blocks were held and therefore not evictable.
+   Fixed with a last-resort eviction of held blocks plus a worst-case
+   feasibility guard that refuses to start a run whose largest request cannot
+   fit the whole budget.
+9. **`used_bytes` was the hot loop, not rent accrual.** Profiling, rather than
+   the assumption, located it: 1.29 billion generator calls, 115s of a 167s
+   run. Made incremental via `_entry_bytes` / `_evictable_bytes`; the 8x case
+   went 44.3s to 18.7s. The lesson is in the ordering — the suspected cause was
+   rent accrual, which was 8s of the same run.
+
 ---
