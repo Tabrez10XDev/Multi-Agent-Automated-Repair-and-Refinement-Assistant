@@ -213,3 +213,20 @@ before touching the engine.
    rent accrual, which was 8s of the same run.
 
 ---
+
+## 16. Test collection is scoped to `tests/`
+
+`pyproject.toml` sets `testpaths = ["tests"]`. This is not cosmetic.
+
+Before it, a bare `pytest` reported **240** tests. Sixteen of those lived in
+`data/demo_target/test_target.py` — the fixture the orchestrator demo is
+supposed to repair. They are the agent's target, not a check on this project,
+and counting them conflated "the project works" with "the demo fixture happens
+to be in a fixed state".
+
+The hazard is the direction it fails in: a demo run that left `target.py`
+broken, or an agent run that half-patched it, would have shown up as failures
+in the project's own suite with no connection to the cause. The real count is
+**224**.
+
+Any future fixture must live under `data/`, never under `tests/`.

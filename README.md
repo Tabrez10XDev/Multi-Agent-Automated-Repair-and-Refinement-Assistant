@@ -57,7 +57,7 @@ three that call a live model require `CONFIRM=1`, because starting one by
 accident costs hours.
 
 ```bash
-make test          # full test suite (240 tests, ~80s)
+make test          # full test suite (224 tests, ~77s)
 make analyze       # trace stats + figures for both trace sets
 make pass-at-1     # pass@1 per configuration from the committed outcomes
 make grid          # retention x scheduler grid (quick mode)
