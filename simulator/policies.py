@@ -134,7 +134,7 @@ class ExecutionEstimator:
       1. CostModel physics applied to prompt_tokens, known at enqueue time.
       2. Output lengths learned ONLINE from completed requests, as a running
          mean per (stage, attempt_index). Cold-started from StageTokens priors.
-      3. The empirical retry distribution from benchmark/results.jsonl, which is
+      3. The empirical retry distribution from data/outcomes/results.jsonl, which is
          calibration measured before the run, not knowledge of this task.
 
     Keying the running mean by (stage, attempt_index) matters: a retry prompt

@@ -38,7 +38,7 @@ not been started.
 |---|---|
 | `simulator/workload.py` | `CostModel`, `StageTokens`, `CpuStageSeconds`, `WorkloadConfig`, and `generate_trace()` — unrolls MAARA's DAG into a replayable trace |
 | `simulator/engine.py` | Continuous-batching engine: shared KV budget, wait queue, prefix cache with refcounts, eviction, rent accounting. Baseline `LRURetention` + `FIFOScheduler` |
-| `simulator/measure_context.py` | Calibration harness. Measures rather than assumes |
+| `probes/calibrate.py` | Calibration harness. Measures rather than assumes |
 | `simulator/measured.json` | Its output. Auto-loaded by `workload.py`; `CostModel.provenance()` prints MEASURED vs PLACEHOLDER |
 
 Run: `./venv/bin/python -m simulator.engine --help`
@@ -55,7 +55,7 @@ Run: `./venv/bin/python -m simulator.engine --help`
    `CostModel.homogeneous=True` collapses everything onto the qwen rates as an
    ablation. The user asked whether to go homogeneous; the answer given was
    build hetero-capable and flip a flag, since `hetero` and `homo_llama3` are
-   already arms in `benchmark/results.jsonl`.
+   already arms in `data/outcomes/results.jsonl`.
 3. **Active KV is pinned; only completed prefix entries are evictable.** No
    preemption of running requests. Consequence: the engine reserves prompt +
    full output at admission, because with no preemption a request that runs out
@@ -74,7 +74,7 @@ Run: `./venv/bin/python -m simulator.engine --help`
 
 ## 4. Measurements
 
-All from `simulator/measure_context.py` against live ollama on the user's Mac (Metal).
+All from `probes/calibrate.py` against live ollama on the user's Mac (Metal).
 
 ### Model rates — these overturned the user's stated constants
 
@@ -129,7 +129,7 @@ matters: the Sentinel (`evaluate_plan`, llama3.2, ~2400-token prompts) reserves
 
 ### Workload calibration from real runs
 
-`benchmark/results.jsonl` (121 runs) gives the retry distribution used by the
+`data/outcomes/results.jsonl` (121 runs) gives the retry distribution used by the
 trace generator: attempts `{1: 74, 2: 13, 3: 33}`, p50 latency 24.5s, pass rate
 0.77. The replan rejection probability is still a placeholder —
 `evaluator_approved_on_attempt` is null for the `single_agent` and
@@ -640,7 +640,7 @@ so anything not named `hetero_no_rag` gets RAG, and anything not named
 `single_agent` runs the **full multi-agent pipeline** and differs from
 `homo_llama3` only in the coder model. So the grid contains no single-agent
 baseline, and **any claim of the form "multi-agent beats single-agent" is not
-supported by `benchmark/results.jsonl`.** What the data does support is an
+supported by `data/outcomes/results.jsonl`.** What the data does support is an
 ablation of RAG and of the Sentinel, plus a coder-model comparison.
 
 Also note there is no config named `hetero`, even though that is
@@ -649,7 +649,7 @@ produces. Its rows would be functionally identical to `single_agent`.
 
 ### The run_experiments header is wrong
 
-`benchmark/run_experiments.py:2` claims:
+`experiments/collect_humaneval.py:2` claims:
 
 > Runs all 6 configurations x 3 prompting strategies across 30 HumanEval tasks
 
@@ -674,7 +674,7 @@ whether any *historical* result is affected. It is not. Timeline:
 | event | when | source |
 |---|---|---|
 | `benchmark/results/run_*.json` written | 2026-04-18 15:36–16:02 | file mtimes |
-| `benchmark/results.jsonl` last written | 2026-05-05 01:30 | file mtime |
+| `data/outcomes/results.jsonl` last written | 2026-05-05 01:30 | file mtime |
 | ...and committed | 2026-05-04 / 05-05 | `3215189`, `a01af03` |
 | `sim/` first appeared on disk | **2026-09-15 16:12** | `simulator/__init__.py` mtime |
 | `sim/` first committed | 2026-09-29 15:16 | `4ba38ac` |
@@ -700,7 +700,7 @@ The contaminated artefacts are only the 2026-09-29 traced run's outputs.
 
 ## 15. Ollama prompt-cache model — UNVALIDATED, does not match measurement
 
-`simulator/ollama_cache_model.py` models the confirmed mechanism (one slot per model,
+`simulator/ollama_cache.py` models the confirmed mechanism (one slot per model,
 0.10 prefix-similarity threshold, host-RAM cache of displaced states) and
 replays both committed traces against the duration-based hit detector. It does
 not reproduce the measurement, so it is **not** adopted as a baseline.

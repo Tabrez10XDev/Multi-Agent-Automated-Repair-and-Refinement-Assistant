@@ -1,6 +1,6 @@
-# benchmark/run_experiments.py
+# experiments/collect_humaneval.py
 # Runs all 6 configurations x 3 prompting strategies across 30 HumanEval tasks
-# Usage: python benchmark/run_experiments.py
+# Usage: python experiments/collect_humaneval.py
 
 import os
 import sys
@@ -601,7 +601,7 @@ def main():
     print(f"\n{'='*60}")
     print("ALL EXPERIMENTS COMPLETE")
     print(f"Results saved to {results_file}")
-    print(f"Run: python benchmark/analyze_results.py to see pass@1 scores")
+    print(f"Run: python analysis/pass_at_1.py to see pass@1 scores")
     print(f"{'='*60}\n")
 
 

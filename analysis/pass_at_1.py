@@ -1,10 +1,15 @@
-# benchmark/analyze_results.py
+# analysis/pass_at_1.py
 # Run this after experiments to compute pass@1 per configuration
-# Usage: python benchmark/analyze_results.py
+# Usage: python analysis/pass_at_1.py
 
 import json
 import os
+import sys
 from collections import defaultdict
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from simulator.trace_loader import config_label
 
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -25,6 +30,8 @@ print("="*60)
 
 for (config, strategy), passes in sorted(results.items()):
     pass_at_1 = sum(passes) / len(passes) * 100
-    print(f"{config:<25} | {strategy:<15} | pass@1: {pass_at_1:5.1f}%  (n={len(passes)})")
+    # Display name only; the stored label stays as written in the data.
+    print(f"{config_label(config):<25} | {strategy:<15} | "
+          f"pass@1: {pass_at_1:5.1f}%  (n={len(passes)})")
 
 print("="*60)

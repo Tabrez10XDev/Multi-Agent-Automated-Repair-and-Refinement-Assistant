@@ -1105,7 +1105,7 @@ def scheduling_provenance(cfg: EngineConfig, estimator) -> str:
     lines.append(f"  estimator noise      sigma={estimator.noise_sigma}  "
                  f"[PLACEHOLDER - sweep this]")
     lines.append(f"  attempt distribution {estimator.attempt_weights}  "
-                 f"[MEASURED from benchmark/results.jsonl, 120 runs]")
+                 f"[MEASURED from data/outcomes/results.jsonl, 120 runs]")
     lines.append(f"  isolated task time   "
                  f"{estimator.estimate_task_total(CODER_MODEL):.1f}s  [DERIVED from the above]")
     return "\n".join(lines)
@@ -1170,18 +1170,18 @@ def format_report(rep: dict, engine: "Engine") -> str:
     ]
     if rep["blocked_iterations"] == 0:
         L.append("  NOTE: nothing ever blocked on KV. Rent is zero, so retention")
-        L.append("        policy cannot matter. Lower --kv or raise --batch.")
+        L.append("        policy cannot matter. Lower --kv-mb or raise --batch.")
     elif rep["blocked_with_evictable"] == 0:
         L.append("  NOTE: blocking happened, but never with anything evictable, so")
         L.append("        rent is still zero. The budget is being eaten by ACTIVE")
-        L.append("        requests, not by retained prefixes. Raise --kv or lower")
+        L.append("        requests, not by retained prefixes. Raise --kv-mb or lower")
         L.append("        --batch to move into the regime where retention matters.")
     return "\n".join(L)
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--kv", type=float, default=2048.0, help="KV budget in MB")
+    ap.add_argument("--kv-mb", type=float, default=2048.0, help="KV budget in MB")
     ap.add_argument("--batch", type=int, default=8, help="B, max concurrent requests")
     ap.add_argument("--tasks", type=int, default=40)
     ap.add_argument("--rate", type=float, default=0.35, help="task arrivals/sec")
@@ -1236,7 +1236,7 @@ def main():
     estimator = ESTIMATORS[args.estimator](
         cost, tok, cpu, noise_sigma=args.estimator_noise, seed=args.seed)
     print(scheduling_provenance(
-        EngineConfig(kv_budget_mb=args.kv, max_batch=args.batch,
+        EngineConfig(kv_budget_mb=args.kv_mb, max_batch=args.batch,
                      slack_factor=args.slack_factor, rent_model=args.rent_model,
                      block_tokens=args.block_tokens, ewma_tau_s=args.ewma_tau,
                      prefill_chunk_tokens=args.prefill_chunk), estimator))
@@ -1246,7 +1246,7 @@ def main():
 
     eng = Engine(
         tasks, cost,
-        EngineConfig(kv_budget_mb=args.kv, max_batch=args.batch,
+        EngineConfig(kv_budget_mb=args.kv_mb, max_batch=args.batch,
                      slack_factor=args.slack_factor, rent_model=args.rent_model,
                      block_tokens=args.block_tokens, ewma_tau_s=args.ewma_tau,
                      prefill_chunk_tokens=args.prefill_chunk),

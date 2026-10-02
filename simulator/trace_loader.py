@@ -146,6 +146,30 @@ def segment_task_runs(rows):
     return blocks
 
 
+# The stored config labels are misleading, and one of them is simply wrong:
+# "single_agent" is the FULL pipeline (coder + RAG + sentinel), not a single
+# agent. See orchestrator: the only ablation gates are `config !=
+# "hetero_no_rag"` and `config != "hetero_no_sentinel"`, so single_agent trips
+# neither and gets everything.
+#
+# The stored strings are NOT renamed. They are written into all three committed
+# results*.jsonl files and matched by fingerprint_config below, so changing them
+# would break the correspondence with measured data. This map is for display
+# only -- printed tables and prose. It must never be applied to serialized
+# output, or trace_stats keys would stop matching the committed figures.
+CONFIG_LABELS = {
+    "single_agent": "full_pipeline",
+    "hetero_no_rag": "no_rag",
+    "hetero_no_sentinel": "no_sentinel",
+    "homo_llama3": "llama3_only",
+}
+
+
+def config_label(stored: str) -> str:
+    """Human-facing name for a stored config string. Display only."""
+    return CONFIG_LABELS.get(stored, stored)
+
+
 def fingerprint_config(block) -> Optional[str]:
     """Recover the experiment arm from which mechanisms fired. None if unclear."""
     roles = {r["agent_role"] for r in block}

@@ -464,7 +464,7 @@ def test_context_scaling_scales_the_shared_part_too():
     derived from it.
     """
     import os as _os
-    from simulator.run_phase5b import scale_context
+    from experiments.run_retention_grid import scale_context
     from simulator.trace_loader import TRACE_SETS, load_trace
     from simulator.workload import Kind
     repo = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))

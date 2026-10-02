@@ -164,7 +164,7 @@ nomic-embed-text:latest    274 MB
 
 ## Configuration
 
-All configuration is controlled through the `run()` function signature in `orchestrator.py` and the `CONFIGURATIONS` list in `benchmark/run_experiments.py`.
+All configuration is controlled through the `run()` function signature in `orchestrator.py` and the `CONFIGURATIONS` list in `experiments/collect_humaneval.py`.
 
 ### Agent model assignments
 
@@ -247,17 +247,17 @@ run(
 
 ### Monitor progress
 
-Each run appends a JSON line to `benchmark/results.jsonl`:
+Each run appends a JSON line to `data/outcomes/results.jsonl`:
 
 ```bash
 # count completed runs
-wc -l benchmark/results.jsonl
+wc -l data/outcomes/results.jsonl
 
 # live tail
-tail -f benchmark/results.jsonl
+tail -f data/outcomes/results.jsonl
 
 # see pass/fail summary
-cat benchmark/results.jsonl | python3 -c "
+cat data/outcomes/results.jsonl | python3 -c "
 import sys, json
 for line in sys.stdin:
     r = json.loads(line.strip())
@@ -274,7 +274,7 @@ for line in sys.stdin:
 The experiment runner evaluates all configurations across 15 HumanEval tasks and 2 prompting strategies (120 total runs).
 
 ```bash
-python benchmark/run_experiments.py
+python experiments/collect_humaneval.py
 ```
 
 ### Resume after crash
@@ -282,12 +282,12 @@ python benchmark/run_experiments.py
 The runner automatically skips already-logged tasks. Just re-run the same command:
 
 ```bash
-python benchmark/run_experiments.py
+python experiments/collect_humaneval.py
 ```
 
 ### Customize experiment scope
 
-Edit these three variables at the top of `benchmark/run_experiments.py`:
+Edit these three variables at the top of `experiments/collect_humaneval.py`:
 
 ```python
 # cut to fewer tasks
@@ -317,7 +317,7 @@ Full 120-run experiment on M3 MacBook Pro: approximately **2-3 hours**.
 ## Analyzing Results
 
 ```bash
-python benchmark/analyze_results.py
+python analysis/pass_at_1.py
 ```
 
 Output:

@@ -21,7 +21,7 @@ from maara.agents.test_runner import apply_fix
 # --- the exclusion list --------------------------------------------------
 
 @pytest.mark.parametrize("path", [
-    "simulator/engine.py", "simulator/workload.py", "simulator/policies.py", "simulator/measure_context.py",
+    "simulator/engine.py", "simulator/workload.py", "simulator/policies.py", "probes/calibrate.py",
     "tracing.py", "tests/conftest.py", "tests/test_provenance.py",
     "agents/coder.py", "benchmark/runner.py", "traces/x.py", "venv/lib/foo.py",
     "orchestrator.py", "agent.py",
@@ -154,7 +154,7 @@ def _write_prompts(tmp_path, texts):
 
 
 def test_check_passes_on_a_clean_trace(tmp_path):
-    from simulator.check_trace_clean import check
+    from analysis.check_trace_clean import check
     path = _write_prompts(tmp_path, [
         "Current code in target.py:\n```python\ndef f(x): return x\n```",
         "Here are the test assertions:\ntest_target.py:\ndef test_f(): assert True",
@@ -173,7 +173,7 @@ def test_check_tolerates_the_pytest_banner(tmp_path):
     Those matched "venv/" and "benchmark/" and failed a genuinely clean run.
     They are artefacts of running the tests, not leaked source.
     """
-    from simulator.check_trace_clean import check
+    from analysis.check_trace_clean import check
     path = _write_prompts(tmp_path, [
         "Test output showing what still fails:\n"
         "platform darwin -- Python 3.13.3, pytest-9.0.3 -- "
@@ -186,7 +186,7 @@ def test_check_tolerates_the_pytest_banner(tmp_path):
 
 def test_check_still_fails_on_real_leakage(tmp_path):
     """The banner fix must not blunt the actual detection."""
-    from simulator.check_trace_clean import check
+    from analysis.check_trace_clean import check
     assert check(_write_prompts(tmp_path, [
         "Current code in simulator/workload.py:\n```python\nclass CostModel:\n    pass\n```",
     ])) is False

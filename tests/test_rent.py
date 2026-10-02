@@ -128,7 +128,7 @@ def test_break_even_is_independent_of_entry_size():
     The absolute constant depends on the evictable pool, because rent is
     normalised by it so the charges sum to the damage actually done. Only the
     size-independence is asserted here; the worked example in
-    simulator/analyze_trace.py pins the constants for a stated pool.
+    analysis/analyze_trace.py pins the constants for a stated pool.
     """
     eng = build_engine()
     rate = 0.1

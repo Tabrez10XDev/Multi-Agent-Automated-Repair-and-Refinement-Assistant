@@ -1,8 +1,8 @@
 """
 Retention x scheduler comparison on a real trace.
 
-    ./venv/bin/python -m simulator.run_phase5b            # full grid
-    ./venv/bin/python -m simulator.run_phase5b --quick    # one util, one scale, 2 seeds
+    ./venv/bin/python -m experiments.run_retention_grid            # full grid
+    ./venv/bin/python -m experiments.run_retention_grid --quick    # one util, one scale, 2 seeds
 
 Three things this driver does that the engine cannot do alone.
 
@@ -127,7 +127,8 @@ def hindsight_denominator(scale, seed, kv_mb, arrival_rate, cost, tok, cpu):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--quick", action="store_true")
-    ap.add_argument("--kv", type=float, default=1024.0)
+    ap.add_argument("--kv-mb", type=float, default=1024.0,
+                    help="KV budget in MB at 1x context")
     ap.add_argument("--scales", default=None,
                     help="comma-separated context scales, e.g. 1 or 1,8,16")
     ap.add_argument("--seeds", type=int, default=5)
@@ -144,7 +145,7 @@ def main():
 
     for scale in scales:
         # Bigger contexts need a bigger budget simply to admit one request.
-        kv = args.kv * max(1, scale // 2)
+        kv = args.kv_mb * max(1, scale // 2)
         for util in utils:
             print(f"[{scale}x util {util:.0%}] calibrating arrival rate...", flush=True)
             rate = calibrate_rate(util, scale, seeds[0], kv, cost, tok, cpu)

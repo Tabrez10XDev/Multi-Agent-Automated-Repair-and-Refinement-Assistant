@@ -5,8 +5,8 @@ Everything in simulator/workload.py that is a *number about the real world* shou
 from here, not from a guess. Run this, and it writes simulator/measured.json, which
 workload.py picks up automatically.
 
-    python -m simulator.measure_context              # full run
-    python -m simulator.measure_context --quick      # skip rate measurement
+    python -m probes.calibrate              # full run
+    python -m probes.calibrate --quick      # skip rate measurement
 
 What it measures:
   1. Token counts of the REAL coder prompt, split at the stable/variable

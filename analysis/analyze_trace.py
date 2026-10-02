@@ -2,7 +2,7 @@
 Describe a recorded MAARA trace: token distributions, reuse, and the gaps
 between a prefix being produced and being wanted again.
 
-    python -m simulator.analyze_trace [trace.jsonl.gz]
+    python -m analysis.analyze_trace [trace.jsonl.gz]
 
 Writes results/trace_stats.json and figures under results/figures/.
 

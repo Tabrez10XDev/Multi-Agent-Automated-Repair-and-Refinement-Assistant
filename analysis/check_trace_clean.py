@@ -6,8 +6,8 @@ code" for HumanEval bugs, rewrote it, and wrote it to disk. The trace collected
 alongside was contaminated and discarded. This is the gate that catches that
 class of failure before hours are spent on a full run.
 
-    python -m simulator.check_trace_clean                 # newest data/traces/smoke/*.prompts.jsonl
-    python -m simulator.check_trace_clean <path>          # a specific .jsonl or .jsonl.gz
+    python -m analysis.check_trace_clean                 # newest data/traces/smoke/*.prompts.jsonl
+    python -m analysis.check_trace_clean <path>          # a specific .jsonl or .jsonl.gz
 
 Exits 0 on PASS, 1 on FAIL.
 """

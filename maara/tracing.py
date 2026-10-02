@@ -15,7 +15,7 @@ Off by default, so an untraced run behaves exactly as before.
     MAARA_RUN_ID=<id>              pin the run id (default: UTC timestamp + short uuid)
 
 One trace file per PROCESS, created lazily on the first traced call and closed
-at interpreter exit. That matters because benchmark/run_experiments.py calls
+at interpreter exit. That matters because experiments/collect_humaneval.py calls
 orchestrator.run() once per task in a single process -- a per-call or per-task
 file would shatter one experiment into hundreds of fragments.
 

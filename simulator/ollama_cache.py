@@ -7,7 +7,7 @@ Replaying the two committed traces, the best rule tried here predicts 56 of
 no false positives, so what it does predict is real, but it misses more than
 it finds. The mechanism below is therefore incomplete. See docs/OPEN_ISSUES.
 
-    python -m simulator.ollama_cache_model          # replay both committed traces
+    python -m simulator.ollama_cache          # replay both committed traces
 
 MECHANISM, as confirmed from the server log and the affinity probe
 ------------------------------------------------------------------

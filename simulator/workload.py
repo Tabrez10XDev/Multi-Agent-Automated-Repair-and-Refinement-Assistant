@@ -13,7 +13,7 @@ synthetic trace; stage-by-stage provenance is noted inline.
 CALIBRATION
 -----------
 Numbers marked PLACEHOLDER are guesses and must be replaced. Run
-    python -m simulator.measure_context
+    python -m probes.calibrate
 to produce simulator/measured.json; this module loads it automatically and overrides
 the placeholders with real measurements. `CostModel.provenance()` reports which
 values came from measurement and which are still assumed.
@@ -92,7 +92,7 @@ _DEFAULT_RATES = {
     CODER_MODEL: ModelRates(CODER_MODEL, prefill_rate=123.0, decode_rate=29.0,
                             kv_bytes_per_token=57344, measured=False),
     # PLACEHOLDER - never measured. Scaled from the qwen numbers by rough
-    # parameter-count ratio. simulator/measure_context.py fills these in for real.
+    # parameter-count ratio. probes/calibrate.py fills these in for real.
     SENTINEL_MODEL: ModelRates(SENTINEL_MODEL, prefill_rate=260.0, decode_rate=62.0,
                                kv_bytes_per_token=114688, measured=False),
 }
@@ -348,7 +348,7 @@ class WorkloadConfig:
     arrival_rate: float = 0.35          # tasks/sec, Poisson
     seed: int = 7
 
-    # Empirical, from benchmark/results.jsonl (121 runs): attempts {1:74, 2:13, 3:33}
+    # Empirical, from data/outcomes/results.jsonl (121 runs): attempts {1:74, 2:13, 3:33}
     attempt_weights: tuple = (74, 13, 33)
     max_attempts: int = 3
 
@@ -618,7 +618,7 @@ if __name__ == "__main__":
     print()
     tok = StageTokens.from_measured()
     print(f"stable_prefix_tokens = {tok.stable_prefix_tokens} "
-          f"({'MEASURED' if tok.measured_fields else 'PLACEHOLDER - run simulator.measure_context'})")
+          f"({'MEASURED' if tok.measured_fields else 'PLACEHOLDER - run probes.calibrate'})")
     cpu = CpuStageSeconds.from_measured()
     print(f"pytest={cpu.pytest_seconds}s rag={cpu.rag_index_seconds}s "
           f"({'MEASURED' if cpu.measured else 'PLACEHOLDER'})")
