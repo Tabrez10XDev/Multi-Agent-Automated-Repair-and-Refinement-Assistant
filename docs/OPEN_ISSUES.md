@@ -1,0 +1,215 @@
+# Open Issues
+
+What is not settled, not validated, or known to be wrong. Read this before trusting a number or starting new work.
+
+> Split out of the single `sim/HANDOFF.md` during the Milestone 2 cleanup.
+> **Section numbers are the original HANDOFF numbers and are deliberately not
+> renumbered**, so cross-references like "supersedes §3 decision 4" still
+> resolve. They are not sequential within a file. The other parts live in
+> `ARCHITECTURE.md`, `DECISIONS.md`, `FINDINGS.md` and `OPEN_ISSUES.md`.
+
+---
+
+## 6. Validation status
+
+Invariants pass across 3 seeds (3, 11, 42) × 2 context scales (480, 4000):
+
+- no KV leak (`pinned_bytes == 0` at end)
+- no refcount leak (all entries at 0)
+- budget never exceeded
+- every DAG node completes
+- peak KV utilisation 99.5–99.9%
+
+The engine reaches the contended state the old one could not. Trace evidence:
+
+```
+[115.388s]  ADMIT req16 t4/evaluate_plan MISS prefill=2160tok batch=7 kv=1344/1536MB
+[115.493s]  EVICT t0:issue (24MB, held 109.0s, rent 0.00s)
+[115.493s]  BLOCKED 1 req(s) on KV: req17 needs space; kv=1294/1536MB
+            (pinned 867MB, retained 427MB)
+[115.598s]  ADMIT req17 t3/evaluate_plan MISS prefill=2195tok batch=8 kv=1526/1536MB
+```
+
+---
+
+
+## 9. Known limitations — read before trusting any number
+
+1. **Prefill is unchunked and unbatched.** One prefill per iteration, so total
+   prefill throughput is capped at ~268 tok/s regardless of B. Two consequences:
+   a 26,597-token prefill stalls the whole batch for 99 seconds, and the system
+   becomes prefill-bound so capacity is understated by roughly an order of
+   magnitude. Real engines batch prefill tokens across requests and chunk them
+   (vLLM defaults to 512-token chunks). **This is the top-priority fix.**
+2. **Rent is charged only on blocking.** Under LRU the engine rarely blocks — it
+   just evicts. The common real opportunity cost of holding E is "F was evicted
+   and will be recomputed", which the current model does not capture. Rent is
+   consequently too sparse to drive a policy. Reworking this changes what the
+   competitive-ratio bound is a bound *on*, so it is a design decision, not a
+   patch. **RESOLVED — design recorded in §13.** Implementation lands in
+   Milestone 1 Phase 4; the old model stays selectable as `blocking_rent`.
+3. **`batch_decode_coeff = 0.15` is a placeholder** and is load-bearing — it
+   decides how much throughput a blocked request forgoes. Sweep it in `ablate.py`.
+4. Rates are Mac/Metal, not CUDA.
+5. `model_switch_seconds = 0.0` assumes both models stay resident.
+6. `REPRESENTATIVE_ISSUE` in `measure_context.py` is invented, not real
+   `parse_issue` output. Small share of the 480 but not zero.
+7. Benchmark runs above are heavily oversaturated (p50 ~12,000s). Fine for
+   demonstrating contention, wrong for measuring policy performance. Arrival rate
+   needs tuning per config for ~70–90% utilisation.
+
+---
+
+
+## 15. Ollama prompt-cache model — UNVALIDATED, does not match measurement
+
+`simulator/ollama_cache.py` models the confirmed mechanism (one slot per model,
+0.10 prefix-similarity threshold, host-RAM cache of displaced states) and
+replays both committed traces against the duration-based hit detector. It does
+not reproduce the measurement, so it is **not** adopted as a baseline.
+
+| rule | original | shared_first |
+|---|---|---|
+| displaced state destroyed on in-place reuse | 36 / 89 | 16 / 78 (10 FP) |
+| displaced state always saved, slot path wins | 56 / 89 | 20 / 78 (10 FP) |
+
+Both rules predict the affinity probe correctly, because in that probe A and B
+were the same length and sat in symmetric positions — it cannot separate them.
+The traces can, and neither survives.
+
+### Where it fails, and the part that is not explained
+
+`issue_parser` accounts for almost all of the gap: 45 measured hits in each
+trace, 20 predicted on `original` and 0 on `shared_first`. These are real hits,
+not an artefact of the detector — the prompts are the same size in both buckets
+(~165 tokens), but hits take 0.04s and non-hits 0.55s, and the non-hits land on
+the calibrated 268 tok/s exactly. An upper-bound scan confirms why they should
+be cheap: for every one of those 45 calls, an **exact** duplicate prompt
+(best-match prefix fraction 1.000, 100% exact) exists earlier in the trace,
+a median of 152 calls back on `original` and 107 on `shared_first`. The same
+HumanEval task is re-run under each of the four configs, so its issue_parser
+prompt recurs byte-identically.
+
+The model loses those states before they can be restored. On `shared_first`
+every prompt shares a long prefix with every other by construction, so slot
+reuse fires on 186 of 214 calls and the RAM cache is consulted 5 times — yet
+reality still restores all 45. So the real server must reach a saved state that
+the slot-priority rule says is unreachable, and no rule tried here does that
+while remaining consistent with the probe.
+
+Two candidates not yet tested, in order of promise:
+1. More than one state is resident. `-np 1` is one *slot*, but the host cache
+   may be consulted on every prompt, not only when the slot match is poor.
+2. Similarity may be computed over tokens against the *slot's* length rather
+   than the incoming prompt's. This changes which branch fires for the short
+   issue_parser prompts specifically, which is exactly where the gap is.
+
+Both are distinguishable by a probe where A and B have **different lengths** —
+the symmetry that defeated the last one. Design that before modelling further.
+
+
+## 11. Next steps, in order
+
+1. **Chunked + batched prefill.** Blocks everything else quantitative.
+2. **Sample stable-context size from the real distribution** (§5) rather than one
+   constant.
+3. **Rework the rent model** to charge for eviction pressure — needs the user's
+   decision first.
+4. **Re-baseline at 70–90% utilisation.**
+5. **Then Phase 2**: `simulator/policies.py` — retention (LRU, keep-all, ski-rental,
+   ski-rental-with-predictions, offline Belady/OPT) and schedulers (FIFO,
+   static-priority, EDF, least-slack-first).
+6. **Phase 3**: `run.py`, `sweep.py`, `ablate.py`.
+
+Note on scope: mechanism 2 (least-slack-first scheduling) is **not** affected by
+the context-scale problem. Contention is real and heavy at every scale tested; at
+toy scale it is simply *active-KV* contention, which is a scheduling and
+admission problem rather than a retention one. That half can proceed independently.
+
+
+## 14. MAARA writeup issues
+
+Found while wiring trace logging. **No code was changed for any of these** —
+they are recorded because they affect what the existing results can be claimed
+to show.
+
+### `single_agent` is not a single agent
+
+The config name says single-agent, but `orchestrator.py` gates the mechanisms by
+*exclusion*:
+
+```python
+use_rag = (config != "hetero_no_rag")        # orchestrator.py:54
+if config != "hetero_no_sentinel":            # orchestrator.py:70
+```
+
+so anything not named `hetero_no_rag` gets RAG, and anything not named
+`hetero_no_sentinel` gets the Sentinel. The four arms are actually:
+
+| config | RAG | Sentinel | coder model |
+|---|---|---|---|
+| `single_agent` | yes | yes | qwen2.5-coder:7b |
+| `homo_llama3` | yes | yes | llama3.2 |
+| `hetero_no_rag` | **no** | yes | qwen2.5-coder:7b |
+| `hetero_no_sentinel` | yes | **no** | llama3.2 |
+
+`single_agent` runs the **full multi-agent pipeline** and differs from
+`homo_llama3` only in the coder model. So the grid contains no single-agent
+baseline, and **any claim of the form "multi-agent beats single-agent" is not
+supported by `data/outcomes/results.jsonl`.** What the data does support is an
+ablation of RAG and of the Sentinel, plus a coder-model comparison.
+
+Also note there is no config named `hetero`, even though that is
+`orchestrator.run`'s default and the value a bare `python orchestrator.py`
+produces. Its rows would be functionally identical to `single_agent`.
+
+### The run_experiments header is wrong
+
+`experiments/collect_humaneval.py:2` claims:
+
+> Runs all 6 configurations x 3 prompting strategies across 30 HumanEval tasks
+
+Actual: **4 configurations x 2 prompting strategies x 15 tasks = 120 runs**,
+which matches the 120 rows in `results.jsonl` exactly. If the writeup quotes
+30 tasks or 6 configs from this comment, it is quoting the comment rather than
+the experiment.
+
+### Consequence
+
+The grid is complete, so `run_experiments.py` resumes into a no-op. Collecting a
+fresh trace needs either `MAARA_IGNORE_RESUME=1` or, better,
+`MAARA_RESULTS_PATH` pointed at a new file — which gives an empty resume set and
+keeps the original results untouched.
+
+### The existing 120 runs are NOT contaminated
+
+On 2026-09-29 a traced run retrieved `simulator/workload.py` as "relevant code" for a
+HumanEval bug and overwrote it (see §15). The obvious follow-up question is
+whether any *historical* result is affected. It is not. Timeline:
+
+| event | when | source |
+|---|---|---|
+| `benchmark/results/run_*.json` written | 2026-04-18 15:36–16:02 | file mtimes |
+| `data/outcomes/results.jsonl` last written | 2026-05-05 01:30 | file mtime |
+| ...and committed | 2026-05-04 / 05-05 | `3215189`, `a01af03` |
+| `sim/` first appeared on disk | **2026-09-15 16:12** | `simulator/__init__.py` mtime |
+| `sim/` first committed | 2026-09-29 15:16 | `4ba38ac` |
+| `tracing.py` created | 2026-09-29 | this session |
+
+The simulator post-dates the last results row by **about four months**, and
+`results.jsonl` has not been appended to since 2026-05-05. No run that produced
+the 120 rows could have seen simulator code, because none of it existed.
+
+Confirmed structurally as well. Applying orchestrator's `available_files` filter
+to the tree at `472f18e` (the last commit before `sim/`) yields:
+
+```
+['target.py']
+```
+
+Applying the same filter to the tree today yields eleven files, including
+`simulator/engine.py`, `tracing.py` and `tests/conftest.py`. That difference is
+exactly the regression, and it did not exist when the 120 rows were produced.
+
+**The existing `results.jsonl` and `benchmark/results/*.json` remain usable.**
+The contaminated artefacts are only the 2026-09-29 traced run's outputs.

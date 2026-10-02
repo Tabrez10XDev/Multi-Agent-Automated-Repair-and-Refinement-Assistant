@@ -37,7 +37,7 @@ RESULTS = os.path.join(_REPO, "results")
 FIGURES = os.path.join(RESULTS, "figures")
 
 # Memory-pressure levels for the break-even band. Derived rent is
-# victim_recompute x eviction_rate (HANDOFF section 13), and a single-stream
+# victim_recompute x eviction_rate (docs/DECISIONS.md section 13), and a single-stream
 # trace has no pressure at all, so break-even cannot be computed from the trace
 # -- it has to be shown as a band across assumed pressure.
 PRESSURE = {"low": 0.01, "medium": 0.1, "high": 1.0}   # evictions/second
@@ -256,9 +256,13 @@ def analyse(main_path, prompts_path=None):
     # t* = E_recompute / (victim_recompute x eviction_rate). Assuming the
     # marginal victim is the same size as E -- true on average when entries are
     # drawn from one distribution -- the size terms cancel and t* = 1/rate.
-    # That cancellation is itself the open question in HANDOFF section 13.
+    # That cancellation is itself the open question in docs/DECISIONS.md section 13.
     med_reuse = out["reuse"]["shared_tokens"].get("p50", 0) or 0
     out["break_even"] = {
+        # This string is serialized into trace_stats.json and is left naming
+        # HANDOFF deliberately: it is the provenance label the committed
+        # figures were produced under. The text now lives in
+        # docs/DECISIONS.md section 13.
         "definition": "hold until accrued rent >= own recompute cost (HANDOFF section 13)",
         "rent_rate": "marginal_victim_recompute_s x evictions_per_second",
         "assumption": ("victim and holder are the same size, so the size terms "

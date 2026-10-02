@@ -25,7 +25,7 @@ def build_engine(kv_mb=4096.0, batch=8, n_tasks=10, rate=0.05,
     """
     Defaults to the SWEEP implementation.
 
-    The per-entry rules in HANDOFF section 13 -- rent proportional to bytes,
+    The per-entry rules in docs/DECISIONS.md section 13 -- rent proportional to bytes,
     marginal victim excluding E -- are the specification, and the sweep is its
     reference implementation. The lazy clock is an optimisation that must agree
     with it, which the equivalence tests check on a real trace. Asserting the
@@ -61,7 +61,7 @@ def entry(key, tokens, engine, last_used=0.0, recompute_s=None):
 
 def test_no_rent_without_memory_pressure():
     """
-    Rule 1 of HANDOFF section 13. With a budget nothing can fill, no admission
+    Rule 1 of docs/DECISIONS.md section 13. With a budget nothing can fill, no admission
     ever needs an eviction, so holding an entry displaces nothing.
     """
     eng = build_engine(kv_mb=1_000_000.0, n_tasks=8)
