@@ -49,7 +49,7 @@ import statistics
 from dataclasses import dataclass, field
 from typing import Optional
 
-from sim.workload import (DEFAULT_BLOCK_TOKENS, ROLE_TO_STAGE, CostModel, Kind,
+from simulator.workload import (DEFAULT_BLOCK_TOKENS, ROLE_TO_STAGE, CostModel, Kind,
                           Node, Task, block_chain_from_text)
 
 CODER_MODELS = {"qwen2.5-coder:7b", "llama3.2"}

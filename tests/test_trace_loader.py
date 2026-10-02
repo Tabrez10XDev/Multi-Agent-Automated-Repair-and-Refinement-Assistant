@@ -11,13 +11,13 @@ import os
 
 import pytest
 
-from sim.engine import Engine, EngineConfig
-from sim.policies import ExecutionEstimator, FCFSScheduler, LRURetention
-from sim.trace_loader import (compute_prefixes, default_prompts_path,
+from simulator.engine import Engine, EngineConfig
+from simulator.policies import ExecutionEstimator, FCFSScheduler, LRURetention
+from simulator.trace_loader import (compute_prefixes, default_prompts_path,
                               detect_cache_hits, fingerprint_config, load_rows,
                               load_trace, render_prompt, segment_task_runs,
                               validate_segmentation)
-from sim.workload import (CostModel, CpuStageSeconds, Kind, Node, StageTokens,
+from simulator.workload import (CostModel, CpuStageSeconds, Kind, Node, StageTokens,
                           WorkloadConfig, generate_trace)
 
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -379,9 +379,9 @@ def test_prefix_key_carries_the_model():
 def test_engine_refuses_a_cross_model_entry(tmp_path):
     """Defence in depth: even if a key collided, the engine must not reuse an
     entry another model produced."""
-    from sim.engine import Engine, EngineConfig, KVEntry
-    from sim.policies import ExecutionEstimator, FCFSScheduler, LRURetention
-    from sim.workload import (CostModel, CpuStageSeconds, StageTokens,
+    from simulator.engine import Engine, EngineConfig, KVEntry
+    from simulator.policies import ExecutionEstimator, FCFSScheduler, LRURetention
+    from simulator.workload import (CostModel, CpuStageSeconds, StageTokens,
                               WorkloadConfig, generate_trace)
 
     cost, tok, cpu = CostModel(), StageTokens.from_measured(), CpuStageSeconds.from_measured()
@@ -396,7 +396,7 @@ def test_engine_refuses_a_cross_model_entry(tmp_path):
                       recompute_s=1.0)
     eng.entries[node.prefix_key] = planted
 
-    from sim.engine import Request
+    from simulator.engine import Request
     r = Request(req_id=9999, node=node, enqueued_at=0.0)
     assert eng._try_admit(r) is True
     assert r.prefix_hit is False, "reused an entry belonging to another model"

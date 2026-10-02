@@ -6,13 +6,13 @@ No LLM is called and no trace is read; everything runs on synthetic traces.
 
 import pytest
 
-from sim.engine import Engine, EngineConfig
-from sim.policies import (ESTIMATORS, RETENTIONS, SCHEDULERS, EDFScheduler,
+from simulator.engine import Engine, EngineConfig
+from simulator.policies import (ESTIMATORS, RETENTIONS, SCHEDULERS, EDFScheduler,
                           ExecutionEstimator, FCFSScheduler,
                           LeastSlackFirstScheduler, OracleEstimator,
                           OracleLeakError, ReqView, SJFScheduler,
                           StaticPriorityScheduler)
-from sim.workload import (CODER_MODEL, CostModel, CpuStageSeconds, Kind,
+from simulator.workload import (CODER_MODEL, CostModel, CpuStageSeconds, Kind,
                           StageTokens, WorkloadConfig, generate_trace)
 
 

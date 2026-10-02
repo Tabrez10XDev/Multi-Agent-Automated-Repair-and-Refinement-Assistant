@@ -34,9 +34,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 
-from sim.policies import (ESTIMATORS, RETENTIONS, SCHEDULERS, ExecutionEstimator,
+from simulator.policies import (ESTIMATORS, RETENTIONS, SCHEDULERS, ExecutionEstimator,
                           FCFSScheduler, LRURetention, ReqView)
-from sim.workload import (CODER_MODEL, CostModel, CpuStageSeconds, Kind,
+from simulator.workload import (CODER_MODEL, CostModel, CpuStageSeconds, Kind,
                           StageTokens, WorkloadConfig, describe_trace,
                           generate_trace)
 
@@ -187,7 +187,7 @@ class KVEntry:
 @dataclass
 class Request:
     req_id: int
-    node: object                    # sim.workload.Node
+    node: object                    # simulator.workload.Node
     enqueued_at: float
     state: State = State.WAITING
     started_at: Optional[float] = None
@@ -211,7 +211,7 @@ class Request:
         return self.node.model
 
 
-# Schedulers and retention policies live in sim/policies.py. There used to be a
+# Schedulers and retention policies live in simulator/policies.py. There used to be a
 # second FIFOScheduler here; having two meant the CLI silently used one while
 # tests exercised the other.
 

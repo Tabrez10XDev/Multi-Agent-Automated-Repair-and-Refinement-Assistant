@@ -13,9 +13,9 @@ import math
 
 import pytest
 
-from sim.engine import Engine, EngineConfig, KVEntry
-from sim.policies import ExecutionEstimator, FCFSScheduler, LRURetention
-from sim.workload import (CODER_MODEL, CostModel, CpuStageSeconds, StageTokens,
+from simulator.engine import Engine, EngineConfig, KVEntry
+from simulator.policies import ExecutionEstimator, FCFSScheduler, LRURetention
+from simulator.workload import (CODER_MODEL, CostModel, CpuStageSeconds, StageTokens,
                           WorkloadConfig, generate_trace)
 
 
@@ -128,7 +128,7 @@ def test_break_even_is_independent_of_entry_size():
     The absolute constant depends on the evictable pool, because rent is
     normalised by it so the charges sum to the damage actually done. Only the
     size-independence is asserted here; the worked example in
-    sim/analyze_trace.py pins the constants for a stated pool.
+    simulator/analyze_trace.py pins the constants for a stated pool.
     """
     eng = build_engine()
     rate = 0.1
@@ -352,7 +352,7 @@ def test_the_equivalence_trace_really_has_two_models():
 
 
 def test_lazy_is_the_production_default():
-    from sim.workload import WorkloadConfig, generate_trace
+    from simulator.workload import WorkloadConfig, generate_trace
     cost, tok, cpu = CostModel(), StageTokens.from_measured(), CpuStageSeconds.from_measured()
     tasks = generate_trace(WorkloadConfig(n_tasks=2, seed=1), cost, tok, cpu)
     eng = Engine(tasks, cost, EngineConfig(), retention=LRURetention(),

@@ -2,7 +2,7 @@
 Describe a recorded MAARA trace: token distributions, reuse, and the gaps
 between a prefix being produced and being wanted again.
 
-    python -m sim.analyze_trace [trace.jsonl.gz]
+    python -m simulator.analyze_trace [trace.jsonl.gz]
 
 Writes results/trace_stats.json and figures under results/figures/.
 
@@ -25,12 +25,12 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
-from sim.trace_loader import (TRACE_SETS, compute_prefixes,  # noqa: E402
+from simulator.trace_loader import (TRACE_SETS, compute_prefixes,  # noqa: E402
                               default_prompts_path, detect_cache_hits,
                               fingerprint_config, load_rows, render_prompt,
                               segment_task_runs, trace_set,
                               validate_segmentation)
-from sim.workload import CostModel  # noqa: E402
+from simulator.workload import CostModel  # noqa: E402
 
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RESULTS = os.path.join(_REPO, "results")

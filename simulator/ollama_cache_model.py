@@ -7,7 +7,7 @@ Replaying the two committed traces, the best rule tried here predicts 56 of
 no false positives, so what it does predict is real, but it misses more than
 it finds. The mechanism below is therefore incomplete. See docs/OPEN_ISSUES.
 
-    python -m sim.ollama_cache_model          # replay both committed traces
+    python -m simulator.ollama_cache_model          # replay both committed traces
 
 MECHANISM, as confirmed from the server log and the affinity probe
 ------------------------------------------------------------------
@@ -47,10 +47,10 @@ import argparse
 import os
 from dataclasses import dataclass, field
 
-from sim.trace_loader import (_lcp_len, default_prompts_path,
+from simulator.trace_loader import (_lcp_len, default_prompts_path,
                               fingerprint_config, load_rows, render_prompt,
                               segment_task_runs, trace_set)
-from sim.workload import CostModel
+from simulator.workload import CostModel
 
 # Prompts run to tens of thousands of characters and every access compares
 # against every saved state, so reuse the trace loader's binary-search LCP

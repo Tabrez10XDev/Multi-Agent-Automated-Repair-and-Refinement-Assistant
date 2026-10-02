@@ -16,7 +16,7 @@ import os
 import pytest
 
 from maara import prompt_layout
-from sim.trace_loader import DEFAULT_TRACES, default_prompts_path, load_rows
+from simulator.trace_loader import DEFAULT_TRACES, default_prompts_path, load_rows
 
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TRACE = os.path.join(_REPO, DEFAULT_TRACES[0])

@@ -13,8 +13,8 @@ synthetic trace; stage-by-stage provenance is noted inline.
 CALIBRATION
 -----------
 Numbers marked PLACEHOLDER are guesses and must be replaced. Run
-    python -m sim.measure_context
-to produce sim/measured.json; this module loads it automatically and overrides
+    python -m simulator.measure_context
+to produce simulator/measured.json; this module loads it automatically and overrides
 the placeholders with real measurements. `CostModel.provenance()` reports which
 values came from measurement and which are still assumed.
 """
@@ -92,7 +92,7 @@ _DEFAULT_RATES = {
     CODER_MODEL: ModelRates(CODER_MODEL, prefill_rate=123.0, decode_rate=29.0,
                             kv_bytes_per_token=57344, measured=False),
     # PLACEHOLDER - never measured. Scaled from the qwen numbers by rough
-    # parameter-count ratio. sim/measure_context.py fills these in for real.
+    # parameter-count ratio. simulator/measure_context.py fills these in for real.
     SENTINEL_MODEL: ModelRates(SENTINEL_MODEL, prefill_rate=260.0, decode_rate=62.0,
                                kv_bytes_per_token=114688, measured=False),
 }
@@ -179,7 +179,7 @@ class CostModel:
                          f"[rates {tag}; kv {kv_tag}]")
         lines.append(f"  batch_decode_coeff   {self.batch_decode_coeff}  [PLACEHOLDER - sweep this]")
         lines.append(f"  homogeneous          {self.homogeneous}")
-        # Applies whenever a trace-derived workload is used (sim/trace_loader.py).
+        # Applies whenever a trace-derived workload is used (simulator/trace_loader.py).
         # Ollama templates prompts server-side, so a prefix recovered from logged
         # message strings is an estimate, not a measurement. See tracing.py,
         # "PROMPT SIDECAR", for the three sources of error.
@@ -618,7 +618,7 @@ if __name__ == "__main__":
     print()
     tok = StageTokens.from_measured()
     print(f"stable_prefix_tokens = {tok.stable_prefix_tokens} "
-          f"({'MEASURED' if tok.measured_fields else 'PLACEHOLDER - run sim.measure_context'})")
+          f"({'MEASURED' if tok.measured_fields else 'PLACEHOLDER - run simulator.measure_context'})")
     cpu = CpuStageSeconds.from_measured()
     print(f"pytest={cpu.pytest_seconds}s rag={cpu.rag_index_seconds}s "
           f"({'MEASURED' if cpu.measured else 'PLACEHOLDER'})")

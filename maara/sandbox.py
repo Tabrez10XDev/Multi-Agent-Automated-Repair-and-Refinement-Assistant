@@ -26,23 +26,39 @@ non-sandboxed path (`python orchestrator.py` against the repo itself).
 import os
 
 # Directory prefixes the agent must never read, index, or write.
+#
+# Both the current names and the pre-Milestone-2 names are listed. The old
+# entries are not dead weight: the committed traces were collected when the
+# repo used those names, so check_trace_clean still needs them to detect
+# historical contamination, and a stale checkout keeps the same protection.
 EXCLUDED_DIRS = (
-    "agents/",        # the agent's own implementation
-    "benchmark/",     # harness, cases, results, sandboxes
-    "sim/",           # the simulator
+    "maara/",         # the agent's own implementation
+    "simulator/",     # the simulator
+    "probes/",        # harnesses that call the live model server
+    "analysis/",      # trace analysis and figures
+    "experiments/",   # runnable drivers
+    "data/",          # traces, calibration, outcome rows
+    "docs/",
+    "archive/",       # retired code
     "tests/",         # test suite
-    "traces/",        # collected trace data
     "results/",       # simulator outputs
     "venv/",
     ".git/",
     "__pycache__/",
+    # pre-Milestone-2 names, kept deliberately
+    "agents/",
+    "benchmark/",
+    "sim/",
+    "traces/",
 )
 
 # Individual files at any level the agent must never touch.
 EXCLUDED_FILES = (
     "orchestrator.py",
-    "agent.py",
+    "agent.py",       # the archived prototype; it was live when traces were cut
     "tracing.py",
+    "sandbox.py",
+    "prompt_layout.py",
     "conftest.py",
 )
 

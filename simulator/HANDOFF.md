@@ -36,12 +36,12 @@ not been started.
 
 | file | contents |
 |---|---|
-| `sim/workload.py` | `CostModel`, `StageTokens`, `CpuStageSeconds`, `WorkloadConfig`, and `generate_trace()` — unrolls MAARA's DAG into a replayable trace |
-| `sim/engine.py` | Continuous-batching engine: shared KV budget, wait queue, prefix cache with refcounts, eviction, rent accounting. Baseline `LRURetention` + `FIFOScheduler` |
-| `sim/measure_context.py` | Calibration harness. Measures rather than assumes |
-| `sim/measured.json` | Its output. Auto-loaded by `workload.py`; `CostModel.provenance()` prints MEASURED vs PLACEHOLDER |
+| `simulator/workload.py` | `CostModel`, `StageTokens`, `CpuStageSeconds`, `WorkloadConfig`, and `generate_trace()` — unrolls MAARA's DAG into a replayable trace |
+| `simulator/engine.py` | Continuous-batching engine: shared KV budget, wait queue, prefix cache with refcounts, eviction, rent accounting. Baseline `LRURetention` + `FIFOScheduler` |
+| `simulator/measure_context.py` | Calibration harness. Measures rather than assumes |
+| `simulator/measured.json` | Its output. Auto-loaded by `workload.py`; `CostModel.provenance()` prints MEASURED vs PLACEHOLDER |
 
-Run: `./venv/bin/python -m sim.engine --help`
+Run: `./venv/bin/python -m simulator.engine --help`
 
 ---
 
@@ -74,7 +74,7 @@ Run: `./venv/bin/python -m sim.engine --help`
 
 ## 4. Measurements
 
-All from `sim/measure_context.py` against live ollama on the user's Mac (Metal).
+All from `simulator/measure_context.py` against live ollama on the user's Mac (Metal).
 
 ### Model rates — these overturned the user's stated constants
 
@@ -309,7 +309,7 @@ directly invalidates the comparison.
 3. **Rework the rent model** to charge for eviction pressure — needs the user's
    decision first.
 4. **Re-baseline at 70–90% utilisation.**
-5. **Then Phase 2**: `sim/policies.py` — retention (LRU, keep-all, ski-rental,
+5. **Then Phase 2**: `simulator/policies.py` — retention (LRU, keep-all, ski-rental,
    ski-rental-with-predictions, offline Belady/OPT) and schedulers (FIFO,
    static-priority, EDF, least-slack-first).
 6. **Phase 3**: `run.py`, `sweep.py`, `ablate.py`.
@@ -667,7 +667,7 @@ keeps the original results untouched.
 
 ### The existing 120 runs are NOT contaminated
 
-On 2026-09-29 a traced run retrieved `sim/workload.py` as "relevant code" for a
+On 2026-09-29 a traced run retrieved `simulator/workload.py` as "relevant code" for a
 HumanEval bug and overwrote it (see §15). The obvious follow-up question is
 whether any *historical* result is affected. It is not. Timeline:
 
@@ -676,7 +676,7 @@ whether any *historical* result is affected. It is not. Timeline:
 | `benchmark/results/run_*.json` written | 2026-04-18 15:36–16:02 | file mtimes |
 | `benchmark/results.jsonl` last written | 2026-05-05 01:30 | file mtime |
 | ...and committed | 2026-05-04 / 05-05 | `3215189`, `a01af03` |
-| `sim/` first appeared on disk | **2026-09-15 16:12** | `sim/__init__.py` mtime |
+| `sim/` first appeared on disk | **2026-09-15 16:12** | `simulator/__init__.py` mtime |
 | `sim/` first committed | 2026-09-29 15:16 | `4ba38ac` |
 | `tracing.py` created | 2026-09-29 | this session |
 
@@ -692,7 +692,7 @@ to the tree at `472f18e` (the last commit before `sim/`) yields:
 ```
 
 Applying the same filter to the tree today yields eleven files, including
-`sim/engine.py`, `tracing.py` and `tests/conftest.py`. That difference is
+`simulator/engine.py`, `tracing.py` and `tests/conftest.py`. That difference is
 exactly the regression, and it did not exist when the 120 rows were produced.
 
 **The existing `results.jsonl` and `benchmark/results/*.json` remain usable.**
@@ -700,7 +700,7 @@ The contaminated artefacts are only the 2026-09-29 traced run's outputs.
 
 ## 15. Ollama prompt-cache model — UNVALIDATED, does not match measurement
 
-`sim/ollama_cache_model.py` models the confirmed mechanism (one slot per model,
+`simulator/ollama_cache_model.py` models the confirmed mechanism (one slot per model,
 0.10 prefix-similarity threshold, host-RAM cache of displaced states) and
 replays both committed traces against the duration-based hit detector. It does
 not reproduce the measurement, so it is **not** adopted as a baseline.

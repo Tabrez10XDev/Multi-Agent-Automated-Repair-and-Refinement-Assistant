@@ -1,8 +1,8 @@
 """
 Retention x scheduler comparison on a real trace.
 
-    ./venv/bin/python -m sim.run_phase5b            # full grid
-    ./venv/bin/python -m sim.run_phase5b --quick    # one util, one scale, 2 seeds
+    ./venv/bin/python -m simulator.run_phase5b            # full grid
+    ./venv/bin/python -m simulator.run_phase5b --quick    # one util, one scale, 2 seeds
 
 Three things this driver does that the engine cannot do alone.
 
@@ -38,12 +38,12 @@ import hashlib
 import os
 import statistics as st
 
-from sim.engine import Engine, EngineConfig
-from sim.policies import (RETENTIONS, SCHEDULERS, ExecutionEstimator,
+from simulator.engine import Engine, EngineConfig
+from simulator.policies import (RETENTIONS, SCHEDULERS, ExecutionEstimator,
                           FCFSScheduler, HintBuilder, KeepAllRetention,
                           SkiRentalPredictionsRetention)
-from sim.trace_loader import TRACE_SETS, load_trace
-from sim.workload import (CostModel, CpuStageSeconds, Kind, StageTokens,
+from simulator.trace_loader import TRACE_SETS, load_trace
+from simulator.workload import (CostModel, CpuStageSeconds, Kind, StageTokens,
                           DEFAULT_BLOCK_TOKENS)
 
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

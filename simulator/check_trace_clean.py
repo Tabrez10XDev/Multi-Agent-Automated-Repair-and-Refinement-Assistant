@@ -6,8 +6,8 @@ code" for HumanEval bugs, rewrote it, and wrote it to disk. The trace collected
 alongside was contaminated and discarded. This is the gate that catches that
 class of failure before hours are spent on a full run.
 
-    python -m sim.check_trace_clean                 # newest data/traces/smoke/*.prompts.jsonl
-    python -m sim.check_trace_clean <path>          # a specific .jsonl or .jsonl.gz
+    python -m simulator.check_trace_clean                 # newest data/traces/smoke/*.prompts.jsonl
+    python -m simulator.check_trace_clean <path>          # a specific .jsonl or .jsonl.gz
 
 Exits 0 on PASS, 1 on FAIL.
 """
@@ -27,8 +27,15 @@ ALLOWED_PY = {"target.py", "test_target.py"}
 
 # Substrings that can only come from outside the sandbox. Chosen to be
 # unambiguous: "tracing.py" rather than "tracing", "sim/" rather than "sim".
+#
+# Both current and pre-Milestone-2 directory names are listed. The old ones
+# must stay: the committed traces were collected under them, so dropping them
+# would make this gate silently stop detecting the contamination it exists for.
 FORBIDDEN = [
-    "sim/", "tracing.py", "agents/", "benchmark/", "tests/", "traces/", "venv/",
+    "maara/", "simulator/", "probes/", "analysis/", "experiments/", "data/",
+    "archive/", "tests/", "venv/",
+    "sim/", "agents/", "benchmark/", "traces/",          # pre-Milestone-2
+    "tracing.py",
     "CostModel", "prefill_rate", "kv_bytes_per_token", "contextvars",
     "MAARA_TRACE", "batch_decode_coeff", "_expected_further_attempts",
 ]

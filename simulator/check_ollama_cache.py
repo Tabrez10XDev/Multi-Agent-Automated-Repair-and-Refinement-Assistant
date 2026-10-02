@@ -3,7 +3,7 @@ Does Ollama reuse a cached prefix between separate chat calls?
 
 CALLS THE MODEL. Not run automatically; invoke it yourself.
 
-    ./venv/bin/python -m sim.check_ollama_cache
+    ./venv/bin/python -m simulator.check_ollama_cache
 
 RESULT (measured 2026-09-30)
 ---------------------------
@@ -47,7 +47,7 @@ Run 1 is repeated at the end to check the result is not just warm-up: if the
 fourth call is as fast as the second, the speedup was never about the prefix.
 
 Both endpoints are exercised because the harness uses /api/chat while
-sim/measure_context.py calibrated with /api/generate, and they may not share a
+simulator/measure_context.py calibrated with /api/generate, and they may not share a
 cache path.
 """
 

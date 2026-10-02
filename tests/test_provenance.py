@@ -10,7 +10,7 @@ measured. These tests fail loudly if a constant loses its label.
 import json
 import os
 
-from sim.workload import (CODER_MODEL, SENTINEL_MODEL, CostModel, StageTokens,
+from simulator.workload import (CODER_MODEL, SENTINEL_MODEL, CostModel, StageTokens,
                           _MEASURED_PATH)
 
 

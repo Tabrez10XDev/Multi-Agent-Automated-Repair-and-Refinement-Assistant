@@ -1,12 +1,12 @@
 """
 Calibration harness for the simulator.
 
-Everything in sim/workload.py that is a *number about the real world* should come
-from here, not from a guess. Run this, and it writes sim/measured.json, which
+Everything in simulator/workload.py that is a *number about the real world* should come
+from here, not from a guess. Run this, and it writes simulator/measured.json, which
 workload.py picks up automatically.
 
-    python -m sim.measure_context              # full run
-    python -m sim.measure_context --quick      # skip rate measurement
+    python -m simulator.measure_context              # full run
+    python -m simulator.measure_context --quick      # skip rate measurement
 
 What it measures:
   1. Token counts of the REAL coder prompt, split at the stable/variable

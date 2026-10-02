@@ -41,7 +41,7 @@ import random
 from dataclasses import dataclass
 from typing import Optional
 
-from sim.workload import CODER_MODEL, CostModel
+from simulator.workload import CODER_MODEL, CostModel
 
 # Fields on a Node that encode the future.
 ORACLE_FIELDS = frozenset({
@@ -103,7 +103,7 @@ class ReqView:
             raise OracleLeakError(
                 f"scheduler read {name!r} off a ReqView. Schedulers must work "
                 f"from estimates (est_service_s / est_remaining_s), never from "
-                f"true values. See ORACLE DISCIPLINE in sim/policies.py.")
+                f"true values. See ORACLE DISCIPLINE in simulator/policies.py.")
         raise AttributeError(name)
 
 

@@ -471,7 +471,7 @@ REPO_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # apply_and_test can only ever see the two files the task is about.
 #
 # Before this, repo_path was REPO_PATH, which is how a HumanEval run came to
-# retrieve and overwrite sim/workload.py. See agents/paths.py.
+# retrieve and overwrite simulator/workload.py. See agents/paths.py.
 SANDBOX_DIR = os.path.join(REPO_PATH, "benchmark", "exp_sandbox")
 
 

@@ -7,12 +7,12 @@ constant-rent case where the ski-rental bound can be checked directly.
 
 import pytest
 
-from sim.engine import Engine, EngineConfig, KVEntry
-from sim.policies import (RETENTIONS, EvictNowRetention, ExecutionEstimator,
+from simulator.engine import Engine, EngineConfig, KVEntry
+from simulator.policies import (RETENTIONS, EvictNowRetention, ExecutionEstimator,
                           FCFSScheduler, HintBuilder, KeepAllRetention,
                           OfflineReferenceRetention, SkiRentalPredictionsRetention,
                           SkiRentalRetention)
-from sim.workload import (CODER_MODEL, CostModel, CpuStageSeconds, StageTokens,
+from simulator.workload import (CODER_MODEL, CostModel, CpuStageSeconds, StageTokens,
                           WorkloadConfig, generate_trace)
 
 ONLINE = ["lru", "keep-all", "evict-now", "ski-rental", "ski-rental-pred"]
@@ -335,7 +335,7 @@ def test_block_chain_shares_a_prefix_and_diverges_for_good():
     two chains differ they can never re-converge, however similar the text is
     further along.
     """
-    from sim.workload import build_block_chain
+    from simulator.workload import build_block_chain
     a = build_block_chain("m", [("shared", 3), ("a-tail", 2)])
     b = build_block_chain("m", [("shared", 3), ("b-tail", 2)])
     assert a[:3] == b[:3]
@@ -343,7 +343,7 @@ def test_block_chain_shares_a_prefix_and_diverges_for_good():
 
 
 def test_block_chain_is_model_scoped():
-    from sim.workload import build_block_chain
+    from simulator.workload import build_block_chain
     a = build_block_chain("qwen2.5-coder:7b", [("shared", 3)])
     b = build_block_chain("llama3.2", [("shared", 3)])
     assert a[0] != b[0]
@@ -358,7 +358,7 @@ def test_only_whole_shared_blocks_are_shared():
     tok = StageTokens.from_measured()
     tok.stable_prefix_tokens = 40            # 2 whole 16-token blocks, 8 left over
     cpu = CpuStageSeconds.from_measured()
-    from sim.workload import WorkloadConfig, generate_trace, Kind
+    from simulator.workload import WorkloadConfig, generate_trace, Kind
     tasks = generate_trace(WorkloadConfig(n_tasks=1, seed=1), cost, tok, cpu)
     fixes = [n for n in tasks[0].nodes
              if n.kind is Kind.LLM and n.stage == "generate_fix"]
@@ -392,8 +392,8 @@ def test_block_keying_gives_retention_more_to_decide():
 # --- Phase 5b: chunked prefill -------------------------------------------
 
 def test_chunked_prefill_splits_a_long_prompt_across_iterations():
-    from sim.engine import Engine, EngineConfig
-    from sim.workload import WorkloadConfig, generate_trace
+    from simulator.engine import Engine, EngineConfig
+    from simulator.workload import WorkloadConfig, generate_trace
     cost = CostModel()
     tok = StageTokens.from_measured()
     tok.stable_prefix_tokens = 8000
@@ -417,7 +417,7 @@ def test_chunked_prefill_splits_a_long_prompt_across_iterations():
 
 
 def test_unchunked_remains_selectable():
-    from sim.engine import EngineConfig
+    from simulator.engine import EngineConfig
     assert EngineConfig().prefill_chunk_tokens == 512      # chunked is default
     assert EngineConfig(prefill_chunk_tokens=0).prefill_chunk_tokens == 0
 
@@ -464,9 +464,9 @@ def test_context_scaling_scales_the_shared_part_too():
     derived from it.
     """
     import os as _os
-    from sim.run_phase5b import scale_context
-    from sim.trace_loader import TRACE_SETS, load_trace
-    from sim.workload import Kind
+    from simulator.run_phase5b import scale_context
+    from simulator.trace_loader import TRACE_SETS, load_trace
+    from simulator.workload import Kind
     repo = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
     paths = [_os.path.join(repo, p) for p in TRACE_SETS["original"]]
     base = load_trace(paths).tasks
