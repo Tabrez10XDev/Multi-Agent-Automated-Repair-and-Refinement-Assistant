@@ -20,7 +20,7 @@ from simulator.trace_loader import (compute_prefixes, default_prompts_path,
 from simulator.workload import (CostModel, CpuStageSeconds, Kind, Node, StageTokens,
                           WorkloadConfig, generate_trace)
 
-_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 REAL_TRACE = os.path.join(_REPO, "data", "traces", "full_zs_4cfg.jsonl.gz")
 has_real = pytest.mark.skipif(not os.path.exists(REAL_TRACE),
                               reason="committed trace not present")

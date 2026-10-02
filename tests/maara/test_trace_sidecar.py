@@ -177,13 +177,18 @@ def test_append_result_leaves_primary_file_untouched(monkeypatch, tmp_path):
     to data/outcomes/results.jsonl, which would make pass_at_1.py double-count.
     """
     from maara import orchestrator
-    repo = os.path.dirname(os.path.abspath(orchestrator.__file__))
+    # orchestrator now lives in maara/, so the repo root is two levels up.
+    # Getting this wrong makes `primary` a path that cannot exist, and the
+    # size comparison below degenerates to None == None.
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(orchestrator.__file__)))
     primary = os.path.join(repo, "data", "outcomes", "results.jsonl")
-    before = os.path.getsize(primary) if os.path.exists(primary) else None
+    assert os.path.exists(primary), (
+        f"the primary results file must exist for this test to mean anything: {primary}")
+    before = os.path.getsize(primary)
 
     monkeypatch.setenv("MAARA_RESULTS_PATH", str(tmp_path / "side.jsonl"))
     orchestrator._append_result({"task_id": "x", "passed": True})
 
-    after = os.path.getsize(primary) if os.path.exists(primary) else None
+    after = os.path.getsize(primary)
     assert before == after, "traced run must not touch the primary results file"
     assert (tmp_path / "side.jsonl").exists()

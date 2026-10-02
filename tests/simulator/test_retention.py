@@ -467,7 +467,7 @@ def test_context_scaling_scales_the_shared_part_too():
     from experiments.run_retention_grid import scale_context
     from simulator.trace_loader import TRACE_SETS, load_trace
     from simulator.workload import Kind
-    repo = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+    repo = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
     paths = [_os.path.join(repo, p) for p in TRACE_SETS["original"]]
     base = load_trace(paths).tasks
     llm = [n for t in base for n in t.nodes if n.kind is Kind.LLM]

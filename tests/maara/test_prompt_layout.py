@@ -18,7 +18,7 @@ import pytest
 from maara import prompt_layout
 from simulator.trace_loader import DEFAULT_TRACES, default_prompts_path, load_rows
 
-_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TRACE = os.path.join(_REPO, DEFAULT_TRACES[0])
 has_trace = pytest.mark.skipif(not os.path.exists(TRACE),
                                reason="committed trace not present")
