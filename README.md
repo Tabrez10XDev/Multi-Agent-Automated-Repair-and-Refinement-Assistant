@@ -86,6 +86,7 @@ Direct invocation works too, and every module takes `--help`:
 | What did the measurements actually show? | `docs/FINDINGS.md` |
 | What is unvalidated, unknown, or known to be wrong? | `docs/OPEN_ISSUES.md` |
 | How does one run flow end to end? | `docs/TOUR.md` |
+| What is being worked on now, and what is next? | `docs/ROADMAP.md` |
 
 Headline results, with detail and caveats in `docs/FINDINGS.md`:
 

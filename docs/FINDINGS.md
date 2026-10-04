@@ -468,6 +468,27 @@ first-occurrence `issue_parser` call tends to follow an `evaluator` call
 (sharing a preamble, hence 0.237) while a repeat tends to follow `coder` or
 `debugger`. Ordering, not destruction.
 
+### What this does to Milestone 1's headline cache figure
+
+Milestone 1 reported that roughly **one call in three hit Ollama's cache** —
+89 of 272 (32.7%) on `original`, 78 of 214 (36.4%) on `shared_first`, worth
+~60.8s and ~49.5s of prefill. That number is **mostly an artefact of the
+experiment harness, not evidence of workflow prefix reuse.**
+
+Both traces replay the same 15 HumanEval tasks under 4 configs in one process,
+so prompts recur byte-identically across configs. Of the hits, 46 of 89 and 47
+of 78 are exact-prompt repeats of that kind. An operator running these
+workflows once would not see them.
+
+What remains after removing them is genuine but much smaller: partial prefix
+reuse, running at 2.4-4.9x the calibrated rate rather than 14-15x. The honest
+headline is therefore not "a third of calls hit the cache" but "a third of
+calls hit the cache, and most of that is the benchmark repeating itself."
+
+This is the reason for the new trace design in OPEN_ISSUES §21: disjoint
+problems and an Ollama restart between configs, so the measured reuse is the
+workflow's own.
+
 ### Partial hits are real but much weaker
 
 The calls that are first occurrences yet still score as hits (43 in `original`,

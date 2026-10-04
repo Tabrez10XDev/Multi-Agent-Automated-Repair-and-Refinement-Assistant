@@ -61,7 +61,12 @@ The engine reaches the contended state the old one could not. Trace evidence:
 ---
 
 
-## 15. Ollama prompt-cache model — UNVALIDATED, does not match measurement
+## 15. Ollama prompt-cache model — UNVALIDATED (diagnosis superseded)
+
+> The scores and diagnosis below predate 2026-10-04. The mechanism they blame
+> was retracted; see FINDINGS §19 for what actually predicts a cache hit, and
+> §20 below for why these two traces cannot settle it. Kept for the record.
+
 
 `simulator/ollama_cache.py` models the confirmed mechanism (one slot per model,
 0.10 prefix-similarity threshold, host-RAM cache of displaced states) and
@@ -108,7 +113,14 @@ Both are distinguishable by a probe where A and B have **different lengths** —
 the symmetry that defeated the last one. Design that before modelling further.
 
 
-## 11. Next steps, in order
+## 11. CLOSED — "next steps, in order"
+
+> Resolved during Milestone 1 and superseded by `docs/ROADMAP.md`. Items 1-5
+> are done: chunked and batched prefill, the derived-rent rework (DECISIONS
+> §13), re-baselining at 60-80% utilisation, and the full policy set in
+> `simulator/policies.py`. Item 6's `run.py`/`sweep.py`/`ablate.py` became
+> `experiments/run_retention_grid.py`. Kept for the record.
+
 
 1. **Chunked + batched prefill.** Blocks everything else quantitative.
 2. **Sample stable-context size from the real distribution** (§5) rather than one
@@ -213,3 +225,58 @@ exactly the regression, and it did not exist when the 120 rows were produced.
 
 **The existing `results.jsonl` and `benchmark/results/*.json` remain usable.**
 The contaminated artefacts are only the 2026-09-29 traced run's outputs.
+
+## 20. The 4-config repetition problem — the current traces cannot benchmark a cache
+
+**Open. Blocks workstream 1's validation and workstream 2's workload.**
+
+Both committed traces replay the *same 15 HumanEval tasks* under 4 configs in
+one process. An `issue_parser` prompt therefore recurs **byte-identically**
+about four times, and every one of those repeats is a cache hit (FINDINGS §19).
+
+Consequence: the traces measure *experiment-harness repetition*, not the
+workflow prefix reuse the project is about. Any cache or retention policy
+scored on them is rewarded for something an operator would never see. This is
+why the Milestone 1 hit fraction is not a usable baseline, and why the fit-set
+scores in §15 should not be read as evidence about the mechanism.
+
+Fix is the new trace (ROADMAP, Part 3): disjoint problems, 2 configs, Ollama
+restarted between them.
+
+## 21. New trace design — not yet collected
+
+50+ distinct HumanEval problems not among the current 15; 2 configs (full
+pipeline with the qwen coder; llama coder for model mixing); original layout;
+zero_shot; single process start to finish; Ollama restarted between configs.
+
+Open questions before collecting:
+- Does `experiments/collect_humaneval.py` support problems beyond its embedded
+  15? Its `TASKS` list is literal and truncated with `TASKS = TASKS[:15]`. If
+  it does not, it must be extended first.
+- The run must not be resumed mid-way. §14c and §18 are both consequences of
+  a resumed or double-started run.
+
+## 22. The `shared_first` trace has an unexplained slow segment
+
+See FINDINGS §18 for the measurements. Segment 0 (86 calls) ran at a median
+1.20x the calibrated prefill rate with a p10 of 0.21x, and 30% of its calls
+were slower than a cold prefill; segment 1 (128 calls) ran at 1.73x. The two
+are disjoint in time, so contention between them is ruled out.
+
+Cause not established — memory pressure and thermal throttling are both
+plausible and neither was logged. Consequence: the hit detector is unreliable
+inside segment 0, which holds 19 of 21 apparent false positives, and that
+trace's "78 measured hits" is an undercount. Capture machine state (`ollama
+ps`, memory pressure, thermals) during the next long collection.
+
+## 23. `llama3.2`'s `kv_bytes_per_token` is DERIVED, not measured
+
+qwen2.5-coder:7b's 56 KiB/token was confirmed against the Ollama server log.
+llama3.2's 112 KiB/token was scaled from it by architecture arithmetic and has
+never been checked the same way. It drives every KV figure for the
+llama-coder configs, and GQA makes the asymmetry counter-intuitive (the
+smaller model is the memory hog), so it is exactly the constant most likely to
+be wrong by a factor.
+
+Fix: one server-log line from a llama3.2 call with a known prompt length.
+Cheap, and worth doing during the new collection while the model is loaded.

@@ -119,6 +119,12 @@ and the worst-case feasibility guard refuses to start.
 
 ---
 
+## What is being worked on now
+
+`docs/ROADMAP.md` has the Milestone 2 workstreams and their status. Read it
+before starting anything — two of the four are blocked on a trace that has not
+been collected yet.
+
 ## Where each Milestone 1 finding is recorded
 
 | finding | where |
