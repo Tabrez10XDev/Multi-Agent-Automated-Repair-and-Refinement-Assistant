@@ -321,7 +321,15 @@ retention policy was planned on this hypothesis and deliberately NOT built,
 because the data contradicts its premise. A small-N-slot model may be worth
 testing, but N is not established.
 
-## 17. The 0.10 similarity threshold, measured from the other side
+## 17. RETRACTED — "the 0.10 similarity threshold, measured from the other side"
+
+> **This section is wrong and is kept only as a record of the error.**
+> Its causal claim — that overlap at or above 0.10 destroys the displaced
+> state — was refuted on 2026-10-04 by the affinity rerun with a full-length
+> B, and its correlational evidence was explained away by a simpler variable.
+> The correct account is §19. Read that instead; what follows is preserved
+> because the mistake is instructive and because figures were drawn from it.
+
 
 The affinity probe established the threshold by *construction* — it built
 prompts at chosen overlaps and watched what survived. The committed traces
@@ -415,3 +423,101 @@ Cause of the slowdown is not established. Memory pressure or thermal
 throttling on a long run are both plausible (segment 0 averaged 19s per call
 against segment 1's 4.8s) and neither was logged. `validate_cache_model.py`
 now detects and reports such segments rather than averaging over them.
+
+## 19. What actually explains the cache hits: exact prompt recurrence
+
+Supersedes §17, which is retracted.
+
+### The correlation that misled us
+
+§17 reported that `issue_parser` calls scored as cache hits had a median prefix
+overlap with the slot of 0.023, and misses 0.237, and read the 0.10 threshold
+as the cause. Both numbers are real. The causal story was not.
+
+The affinity rerun with a full-length B killed it directly:
+
+| shared | 5% | 25% | 50% | 90% |
+|---|---|---|---|---|
+| long A recompute | 0% | 0% | 0% | 11% |
+| short A recompute | 3% | 4% | 4% | 14% |
+
+A survives intact at 25% and 50% overlap — far above 0.10. So overlap of 0.237
+destroys nothing, and §17's mechanism cannot be what separated those calls.
+
+### The variable that actually separates them
+
+Whether the **exact prompt had been seen before**. Splitting every call by
+whether its prompt text is a first occurrence or a repeat, per model:
+
+| trace | role | occurrence | n | result | median rate vs calibration | median prefill |
+|---|---|---|---|---|---|---|
+| `original` | issue_parser | first | 37 | **all miss** | 1.26x | 0.647s |
+| `original` | issue_parser | repeat | 45 | **all hit** | 14.41x | 0.043s |
+| `shared_first` | issue_parser | first | 17 | **all miss** | 1.22x | 0.555s |
+| `shared_first` | issue_parser | repeat | 45 | **all hit** | 15.23x | 0.044s |
+
+Perfect separation, no exceptions. And it holds for every role, not just
+`issue_parser`: **every exact-prompt repeat in either trace is a measured hit**
+— 46 of 46 in `original`, 47 of 47 in `shared_first`.
+
+The 45 "unexplained" `issue_parser` hits were never mysterious. Each HumanEval
+task is replayed under four configs, so its `issue_parser` prompt recurs
+byte-identically; the first time is cold and the later times are restored from
+the host prompt cache. The overlap figures correlated only because a
+first-occurrence `issue_parser` call tends to follow an `evaluator` call
+(sharing a preamble, hence 0.237) while a repeat tends to follow `coder` or
+`debugger`. Ordering, not destruction.
+
+### Partial hits are real but much weaker
+
+The calls that are first occurrences yet still score as hits (43 in `original`,
+31 in `shared_first`) run at a median 2.4-4.9x calibration, against 14-15x for
+exact repeats. That is genuine partial prefix reuse — a novel prompt sharing a
+long prefix with something cached — and it is an order of magnitude smaller
+than an exact restore. Any model of this backend needs both terms, and should
+not conflate them.
+
+### What llama-server's own binary says
+
+Strings from `llama-server` and `libllama-server-impl.dylib` as shipped with
+Ollama 0.33.3 (`libllama.0.3.0.dylib`, `libggml.0.22.0.dylib`; no build tag):
+
+```
+idle slots will be saved to prompt cache upon starting a new task
+saving idle slot to prompt cache
+updating prompt cache
+prompt cache update took %.2f ms
+prompt cache is enabled, size limit: %d MiB
+ - making room for prompt cache entry, removing oldest entry (size = %.3f MiB)
+ - cache size limit reached, removing oldest entry (size = %.3f MiB)
+ - cache token limit (%zu, est: %zu) reached, removing oldest entry (size = %.3f MiB)
+slot ...: id %2d | task %d |  - checking sim = %.3f (%zu/%zu) > %.3f
+slot ...: id %2d | task %d | selected slot by LCP similarity, f_sim_best = %.3f (> %.3f thold), f_keep = %.3f
+save idle slots to the prompt cache on new task, and clear them when using
+  unified KV (default: enabled, requires cache-ram)
+```
+
+Four things follow, and they align with the corrected measurements:
+
+1. **The save is unconditional.** "idle slots will be saved to prompt cache
+   upon starting a new task" has no similarity condition attached. This is the
+   direct support for saving-on-displacement regardless of the 0.10 threshold.
+2. **Two separate quantities exist.** `f_sim_best` chooses the slot against a
+   threshold (`thold`); `f_keep` is logged separately as how much of that
+   slot's cache is retained. §17 treated one number as doing both jobs.
+3. **Eviction is oldest-first, bounded by both bytes and tokens** — three
+   distinct "removing oldest entry" messages, one for a size limit in MiB and
+   one for a token limit. The byte bound matches the capacity probe (~39 x
+   207 MiB ~= 8 GiB); the token bound was not previously modelled at all.
+4. **There is no prompt-cache state dedup.** Searching both binaries for
+   dedup, replacement or identical-state handling returns only
+   `__PRESET_DEDUP_CACHE_MODELS` / `dedup-cache-models` / "hiding cache model
+   name=%s (deduplicated by a preset)", which concern **model names in a
+   preset list**, not cached states. The dedup hypothesis has no support in the
+   shipped binary. That does not refute it — absence of a string is not
+   absence of logic — but nothing was found, and it should not be assumed.
+
+The `(%zu/%zu)` in the `checking sim` line prints the fraction's numerator and
+denominator, so a single server log at `--verbose` would settle whether
+similarity is measured against the incoming prompt or the cached one. That is
+cheaper than any further probe and is worth capturing on the next run.

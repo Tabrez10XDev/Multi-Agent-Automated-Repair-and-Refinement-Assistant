@@ -152,9 +152,12 @@ to honest display names.
 
 See `docs/OPEN_ISSUES.md` for the full list. The two that bite soonest:
 
-- **`simulator/ollama_cache.py` is unvalidated.** It models the confirmed
-  mechanism but reproduces 68 of 89 measured cache hits on the `original`
-  trace and only 7 of 78 on `shared_first`. Do not use it as a baseline yet.
+- **`simulator/ollama_cache.py` is unvalidated and its rule is superseded.**
+  The 2026-10-04 affinity rerun refuted the threshold mechanism it encodes.
+  What actually predicts a cache hit is exact prompt recurrence — every one of
+  the 93 exact-prompt repeats across both traces is a measured hit. See
+  `docs/FINDINGS.md` §19. Do not use it as a baseline, and do not re-freeze it
+  until `--affinity-sweep` pins the restore-to-trim cutoff.
 - **`llama3.2`'s `kv_bytes_per_token` is DERIVED, not measured.** qwen's was
   confirmed against the Ollama server log; llama3.2's still needs the same check.
 

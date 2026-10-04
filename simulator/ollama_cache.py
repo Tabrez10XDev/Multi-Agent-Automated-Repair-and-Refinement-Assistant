@@ -81,8 +81,15 @@ SIM_THRESHOLD = 0.10
 DEFAULT_RAM_BYTES = 8 * 1024 ** 3
 
 # --------------------------------------------------------------------------
-# FROZEN RULE -- do not change these against the two committed traces.
+# FROZEN RULE -- SUPERSEDED 2026-10-04, see DECISIONS 18 and FINDINGS 19.
 # --------------------------------------------------------------------------
+# SUPERSEDED. The rule below rests on "overlap >= 0.10 destroys the displaced
+# state", which the 2026-10-04 affinity rerun refuted: A survives intact at 25%
+# and 50% overlap, and the real separator of hits from misses is simply whether
+# the exact prompt had been seen before (FINDINGS 19). Do not re-freeze, and do
+# not spend the held-out trace, until --affinity-sweep pins the actual cutoff.
+# The block is kept verbatim so the superseded freeze stays auditable.
+#
 # About thirteen rule variants were scored on `original` and `shared_first`
 # while searching for the mechanism. That is enough selection pressure that
 # agreement on those two traces is no longer evidence of anything. The rule and

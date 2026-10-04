@@ -259,7 +259,21 @@ The general lesson is worth keeping: when a model underpredicts, check which of
 its rules are measured mechanism and which are conveniences the author
 invented. This one was never observed anywhere, in a log line or a probe.
 
-## 18. The cache model's rule is frozen; the next trace is held out
+## 18. SUPERSEDED — "the cache model's rule is frozen"
+
+> **The frozen rule described below is superseded as of 2026-10-04.** It was
+> built on the claim that overlap >= 0.10 destroys the displaced state, which
+> the affinity rerun refuted (see FINDINGS §19). The freeze commit `9911011`
+> is deliberately left in place and history is not rewritten — the point of a
+> freeze is that it stays auditable, including when it turns out to have
+> frozen the wrong rule.
+>
+> **No re-freeze until `--affinity-sweep` pins the restore-to-trim cutoff.**
+> Freezing again before that would just repeat the mistake at a new value.
+> `analysis/validate_cache_model.py` still works and its no-tuning discipline
+> still applies; what it validates is simply known to be the wrong rule, so
+> running it now would waste the held-out trace. Do not collect that trace yet.
+
 
 About thirteen rule variants were scored on `original` and `shared_first` while
 the Ollama cache mechanism was being worked out. That is enough selection
