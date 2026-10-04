@@ -204,20 +204,41 @@ def capacity_probe(endpoint="generate", n=40):
     return survivors
 
 
-def affinity_probe(endpoint="generate", short=False):
+def affinity_probe(endpoint="generate", short=False, fracs=(0.05, 0.25, 0.50, 0.90)):
     """
     Does a similar prompt overwrite the slot, or is the displaced state saved?
-
-    Ollama 0.33.3 reuses the active slot when prefix similarity clears 0.10
-    ("checking sim = 0.002 > 0.100"), otherwise picks a slot by LRU and saves
-    the displaced state to a host-RAM cache.
 
     Each level runs A, then a full-length B sharing that fraction of A's
     prefix, then A again, and reports both recompute fractions:
 
         A again / A cold  ~ 0       A was saved and restored intact
-        A again / A cold  ~ 1-share A's slot was trimmed to the common prefix
-                                    and its remainder destroyed
+        A again / A cold  ~ 1-share A's slot was reused in place and A paid
+                                    for the part B did not share
+
+    RESULT, 2026-10-04, with the full-length B (this is the trustworthy run):
+
+                 5%     25%    50%    90%  shared
+        long A    0%      0%     0%    11%  recompute
+        short A   3%      4%     4%    14%  recompute
+
+    Two conclusions, both of which overturned earlier beliefs:
+
+    1. Size does not matter. A ~165-token A and a ~3,790-token A behave
+       identically, so the "small states survive, large ones do not"
+       hypothesis is dead.
+    2. Crossing the 0.10 slot-similarity threshold does NOT destroy the
+       displaced state. A came back intact at 25% and 50% shared, both well
+       above 0.10. The boundary is somewhere between 50% and 90%.
+
+    WITHDRAWN: an earlier version of this probe used a SHORT B, which shared
+    a[:cut] with A and so only ever computed its own small divergent tail. That
+    run reported A recomputing 76%/52%/11% at 25/50/90% and was read as "0.10
+    destroys the slot". It was confounded, and that conclusion is retracted.
+    See docs/FINDINGS.md section 19.
+
+    llama-server's own strings are consistent with the corrected picture:
+    "idle slots will be saved to prompt cache upon starting a new task",
+    unconditionally, with eviction by "removing oldest entry".
 
     B is padded back to A's length with its own nonce after the shared prefix,
     so B's time is a second, independent check: if the slot is being reused,
@@ -233,7 +254,7 @@ def affinity_probe(endpoint="generate", short=False):
           f"{'A again':>9}  {'A frac':>7}  reading")
     rows = []
     filler = ((SHORT_BODY if short else BODY) + "\n") * 8
-    for frac in (0.05, 0.25, 0.50, 0.90):
+    for frac in fracs:
         a_txt = f"# aff A {random.randint(10**9, 10**10)}\n" + base + LAST_ORIGINAL
         cut = int(len(a_txt) * frac)
         tail_nonce = f"\n# aff B {random.randint(10**9, 10**10)}\n"
@@ -256,24 +277,42 @@ def affinity_probe(endpoint="generate", short=False):
               f"{t_a2:>8.3f}s  {a_frac:>6.0%}  {reading}", flush=True)
 
     print()
-    below = [r for r in rows if r[0] < 0.10]
-    above = [r for r in rows if r[0] >= 0.10]
-    saved_below = all(r[3] for r in below) if below else False
-    trimmed_above = all(r[4] for r in above) if above else False
-    if saved_below and trimmed_above:
-        print("  => CONFIRMED. Below the 0.10 similarity threshold the displaced")
-        print("     state is saved to the host RAM cache and restored intact.")
-        print("     At or above it the slot is reused: trimmed to the common")
-        print("     prefix, and the rest of the previous prompt is destroyed.")
-        print("     A's recompute tracks its UNSHARED fraction, so a 90% match")
-        print("     is a cheap overwrite, not a survival.")
-    elif saved_below:
-        print("  => below threshold behaves as expected, but the above-threshold")
-        print("     recompute does not track the unshared fraction; something")
-        print("     else governs how much of the slot is kept.")
+    # Do NOT assume 0.10 is where behaviour changes. The 2026-10-04 rerun with
+    # a full-length B showed A restored intact at 5%, 25% AND 50% shared, and
+    # recomputing only its unshared fraction at 90%. So the restore-to-trim
+    # boundary lies somewhere above 0.50, not at 0.10, and the earlier verdict
+    # text asserted a conclusion its own rows contradicted. Report the
+    # transition the data shows and name what is still unpinned.
+    restored = [r for r in rows if r[1] < 0.10]
+    trimmed = [r for r in rows if r[1] >= 0.10]
+    print(f"  restored intact (A again < 10% of cold): "
+          f"{', '.join(f'{r[0]:.0%}' for r in restored) or 'none'}")
+    print(f"  paid a recompute:                        "
+          f"{', '.join(f'{r[0]:.0%}' for r in trimmed) or 'none'}")
+    print()
+    if restored and trimmed:
+        lo = max(r[0] for r in restored)
+        hi = min(r[0] for r in trimmed)
+        tracks = all(abs(r[1] - (1.0 - r[0])) < 0.15 for r in trimmed)
+        print(f"  => the restore-to-trim boundary lies between {lo:.0%} and {hi:.0%}.")
+        print(f"     Below it the displaced state comes back intact from the host")
+        print(f"     prompt cache. Above it the slot is reused in place and A pays")
+        print(f"     {'its unshared fraction, which the numbers track.' if tracks else 'a recompute that does NOT track its unshared fraction.'}")
+        if lo >= 0.10:
+            print()
+            print(f"     NOTE: A survived at {lo:.0%} shared, well above the 0.10 slot")
+            print(f"     similarity threshold. So crossing 0.10 does NOT destroy the")
+            print(f"     displaced state. llama-server logs 'idle slots will be saved")
+            print(f"     to prompt cache upon starting a new task' unconditionally,")
+            print(f"     which is consistent with that.")
+    elif restored:
+        print("  => A was restored intact at every level tried. The boundary, if")
+        print("     there is one, is above the highest fraction tested.")
+    elif trimmed:
+        print("  => A paid a recompute at every level tried. The boundary, if")
+        print("     there is one, is below the lowest fraction tested.")
     else:
-        print("  => does not match the trim-or-save model; report the raw numbers")
-        print("     rather than assuming the mechanism.")
+        print("  => no rows; nothing to conclude.")
     print()
     return rows
 
@@ -287,6 +326,9 @@ def main():
                     help="probe host prompt-cache capacity with N distinct prompts")
     ap.add_argument("--affinity", action="store_true",
                     help="probe whether a similar prompt overwrites the slot")
+    ap.add_argument("--affinity-sweep", action="store_true",
+                    help="sweep 60/70/80/85/95%% shared to pin the restore-to-trim "
+                         "boundary; long A only, since size does not matter")
     ap.add_argument("--affinity-short", action="store_true",
                     help="same probe with a ~165-token A, matching issue_parser; "
                          "tests whether survival of an overwrite depends on size")
@@ -298,6 +340,9 @@ def main():
         affinity_probe("generate", short=False)
     if args.affinity_short:
         affinity_probe("generate", short=True)
+    if args.affinity_sweep:
+        affinity_probe("generate", short=False,
+                       fracs=(0.60, 0.70, 0.80, 0.85, 0.95))
     if args.capacity:
         capacity_probe("generate", args.capacity)
     if args.only:
