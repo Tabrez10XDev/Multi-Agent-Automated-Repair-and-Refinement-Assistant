@@ -320,3 +320,52 @@ prompts per model staying cached.
 retention policy was planned on this hypothesis and deliberately NOT built,
 because the data contradicts its premise. A small-N-slot model may be worth
 testing, but N is not established.
+
+## 17. The 0.10 similarity threshold, measured from the other side
+
+The affinity probe established the threshold by *construction* — it built
+prompts at chosen overlaps and watched what survived. The committed traces
+confirm it from the other direction, on calls nobody designed, and the split is
+clean enough to settle the rule.
+
+Taking every `issue_parser` call in the `original` trace and splitting by
+whether the duration detector scored it a cache hit:
+
+| | n | median prefix overlap with the slot |
+|---|---|---|
+| measured HIT | 45 | **0.023** |
+| measured miss | 37 | **0.237** |
+
+Same prompts, same role, same ~165 tokens. The hits sit an order of magnitude
+*below* the 0.10 threshold and the misses sit above it, which is exactly the
+mechanism:
+
+- **below 0.10** — the slot is not eligible for in-place reuse, so the
+  displaced state is saved and the host RAM cache is consulted. The incoming
+  prompt is an exact duplicate of one saved earlier (each HumanEval task is
+  replayed under four configs), so it is restored whole: ~165 tokens in 0.04s.
+- **at or above 0.10** — the slot is trimmed to the common prefix and extended
+  in place. Only that ~24% is kept and the rest is recomputed: 0.55s, which is
+  the calibrated uncached rate almost exactly.
+
+### Lower similarity to the slot is what preserves the cache
+
+This inverts the intuition that guides most cache design. Resembling the next
+prompt does not protect your state — it is precisely what gets your state
+overwritten, because similarity is the trigger for in-place reuse. A 90% match
+is a cheap overwrite, not a survival.
+
+Two consequences:
+
+1. It explains §14b from the other end. Reordering prompts to put shared
+   content first raised similarity between *consecutive* calls, which is the
+   condition that destroys the slot. The layout did not merely fail to help;
+   under this mechanism it was actively counterproductive.
+2. Any retention policy aimed at this backend has to reason about similarity to
+   the *next* arrival, not just reuse distance. That is a different signal from
+   the one ski-rental retention currently uses.
+
+Measured on `original`, n=82 `issue_parser` calls. `shared_first` cannot
+reproduce this split: its layout pushes nearly every call above the threshold
+by construction, which is why only 17 of its 62 `issue_parser` calls are
+misses and the slot path fires on 186 of 214 calls overall.
