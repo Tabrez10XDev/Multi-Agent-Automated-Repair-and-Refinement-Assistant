@@ -2,10 +2,18 @@
 A model of Ollama 0.33.3's prompt cache, and its validation against the traces.
 
 STATUS: UNVALIDATED. Do not use this as a baseline yet.
-Replaying the two committed traces, the best rule tried here predicts 56 of
-89 measured cache hits on `original` and 20 of 78 on `shared_first`. It has
-no false positives, so what it does predict is real, but it misses more than
-it finds. The mechanism below is therefore incomplete. See docs/OPEN_ISSUES.
+Replaying the two committed traces, this rule predicts 68 of 89 measured cache
+hits on `original` (no false positives) but only 7 of 78 on `shared_first`.
+The asymmetry is the open question: in `shared_first` every prompt shares a
+long prefix with every other by construction, so the in-place slot path fires
+on almost every call and a saved exact match is never consulted. A best-match
+lookup closes most of that gap but is not adopted, because its consistency
+with the affinity probe rests on an untested size hypothesis.
+
+See docs/OPEN_ISSUES.md section 15 for the candidates tried and the one probe
+that would settle it. Do not tune the parameters here against these two
+traces -- about thirteen variants have already been scored on them, and a
+held-out trace is the only honest test left (docs/DECISIONS.md section 18).
 
     python -m simulator.ollama_cache          # replay both committed traces
 
@@ -155,9 +163,13 @@ class OllamaPromptCache:
         shared, idx = self._ram_lookup(model, text)
         self._slots[model] = _Slot(text, tokens)
         if idx is not None and shared / chars >= self.sim_threshold:
-            # Restored: move-to-back is handled by re-saving on next displace.
-            saved_text, saved_tok = self._ram[model].pop(idx)
-            self._ram_bytes_used -= self._state_bytes(model, saved_tok)
+            # A restore COPIES the saved state into the slot; it does not
+            # consume it. Loading a state into a slot gives the host no reason
+            # to delete its own copy, and the earlier consuming version was an
+            # invented constraint, not a modelled mechanism. It mattered a lot:
+            # each HumanEval task is replayed under four configs, so an
+            # issue_parser prompt recurs byte-identically about four times, and
+            # consuming on first restore capped it at one hit. See DECISIONS 17.
             self.stats["ram_restore"] += 1
             return int(tokens * shared / chars)
 

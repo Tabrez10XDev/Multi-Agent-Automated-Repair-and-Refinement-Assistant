@@ -153,8 +153,8 @@ to honest display names.
 See `docs/OPEN_ISSUES.md` for the full list. The two that bite soonest:
 
 - **`simulator/ollama_cache.py` is unvalidated.** It models the confirmed
-  mechanism but reproduces only 56 of 89 measured cache hits on one trace and
-  20 of 78 on the other. Do not use it as a baseline yet.
+  mechanism but reproduces 68 of 89 measured cache hits on the `original`
+  trace and only 7 of 78 on `shared_first`. Do not use it as a baseline yet.
 - **`llama3.2`'s `kv_bytes_per_token` is DERIVED, not measured.** qwen's was
   confirmed against the Ollama server log; llama3.2's still needs the same check.
 

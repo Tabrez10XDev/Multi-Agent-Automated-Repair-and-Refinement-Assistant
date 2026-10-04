@@ -230,3 +230,31 @@ in the project's own suite with no connection to the cause. The real count is
 **224**.
 
 Any future fixture must live under `data/`, never under `tests/`.
+
+## 17. A prompt-cache restore copies the saved state, it does not consume it
+
+`OllamaPromptCache.access` used to `pop()` the entry it restored from the host
+RAM cache. That was a bug, and an invented constraint rather than a modelled
+mechanism: loading a saved state into a slot gives the host no reason to delete
+its own copy of it.
+
+It mattered more than it looks. Each HumanEval task is replayed under all four
+configs, so an `issue_parser` prompt recurs **byte-identically about four
+times**. Consuming the entry on the first restore capped a 4x recurrence at a
+single hit, and `issue_parser` is where almost the whole prediction gap lived.
+
+Effect of the fix alone, with no other rule changed:
+
+| trace | before | after |
+|---|---|---|
+| `original` | 36 of 89 hits | **68 of 89** (92.3% agreement, 0 false positives) |
+| `shared_first` | 6 of 78 | 7 of 78 |
+
+`shared_first` barely moves because there the in-place slot path fires on
+almost every call, so a saved state is never looked up at all. Closing that
+needs a best-match lookup, which is **not** adopted here -- see OPEN_ISSUES
+section 15.
+
+The general lesson is worth keeping: when a model underpredicts, check which of
+its rules are measured mechanism and which are conveniences the author
+invented. This one was never observed anywhere, in a log line or a probe.
