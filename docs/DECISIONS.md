@@ -258,3 +258,39 @@ section 15.
 The general lesson is worth keeping: when a model underpredicts, check which of
 its rules are measured mechanism and which are conveniences the author
 invented. This one was never observed anywhere, in a log line or a probe.
+
+## 18. The cache model's rule is frozen; the next trace is held out
+
+About thirteen rule variants were scored on `original` and `shared_first` while
+the Ollama cache mechanism was being worked out. That is enough selection
+pressure that agreement on those two traces is no longer evidence about the
+mechanism — it is partly evidence about how many things were tried.
+
+So the rule and its parameters are frozen in `simulator/ollama_cache.py` under
+a `FROZEN RULE` block, as of 2026-10-04, with the fit-set scores recorded
+beside them (`original` 68/89, `shared_first` 7/78). The freeze is committed
+**before** the held-out trace is collected, so the ordering is checkable in
+git rather than asserted.
+
+`analysis/validate_cache_model.py` runs the frozen rule against one trace and
+has no tuning knobs. It refuses outright to run on either fit trace unless
+overridden, and prints the fit-set scores alongside its result so the two
+cannot be confused.
+
+### The rule after seeing the held-out number
+
+Write it down. Changing `SIM_THRESHOLD`, `DEFAULT_RAM_BYTES` or the rule in
+response to that output turns the held-out trace into a third fitting set, and
+there is no fourth chance at a reasonable price — a full collection run is
+hours of GPU time.
+
+Two variants are recorded as deliberately **not** adopted, with their better
+fit-set scores, so nobody later mistakes them for untried ideas:
+
+| variant | `original` | `shared_first` | why not adopted |
+|---|---|---|---|
+| best-match host-cache lookup | 84/89 | 76/78 | probe-consistent only under an untested size hypothesis |
+| size gate on save-on-reuse | — | — | does no work on the traces at all; exists only to reconcile with the probe |
+
+`probes/ollama_cache_probe.py --affinity-short` is the measurement that decides
+both.

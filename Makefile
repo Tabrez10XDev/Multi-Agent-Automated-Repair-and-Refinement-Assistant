@@ -2,7 +2,7 @@ PY := ./venv/bin/python
 
 # Targets that call a live model server are separated out and gated. Running
 # one by accident costs hours, so each requires CONFIRM=1.
-.PHONY: help test analyze pass-at-1 grid check-traces calibrate probe-cache collect figures
+.PHONY: help test analyze pass-at-1 grid check-traces validate-cache calibrate probe-cache collect figures
 
 help:
 	@echo "Offline (no model server, safe to run anytime):"
@@ -11,6 +11,7 @@ help:
 	@echo "  make pass-at-1     pass@1 per configuration from committed outcomes"
 	@echo "  make grid          retention x scheduler grid (quick: 1 util, 1 scale)"
 	@echo "  make check-traces  verify every committed trace stayed in its sandbox"
+	@echo "  make validate-cache TRACE=<path>   frozen cache rule vs a held-out trace"
 	@echo ""
 	@echo "Calls the live model (needs Ollama; requires CONFIRM=1):"
 	@echo "  make calibrate     re-measure rates and prompt sizes -> data/calibration"
@@ -31,6 +32,14 @@ pass-at-1:
 
 grid:
 	$(PY) -u -m experiments.run_retention_grid --quick
+
+validate-cache:
+	@if [ -z "$(TRACE)" ]; then \
+		echo "Usage: make validate-cache TRACE=data/traces/<holdout>.jsonl.gz"; \
+		echo "Runs the FROZEN cache rule against a held-out trace. No tuning."; \
+		exit 1; \
+	fi
+	$(PY) -m analysis.validate_cache_model $(TRACE)
 
 check-traces:
 	@for t in data/traces/*.prompts.jsonl.gz; do \

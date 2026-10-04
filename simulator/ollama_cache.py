@@ -69,10 +69,52 @@ common_prefix_len = _lcp_len
 # "checking sim = 0.002 > 0.100". Not a guess.
 SIM_THRESHOLD = 0.10
 
-# Host prompt-cache budget. No --cache-ram flag is present on the command line,
-# so this is llama.cpp's built-in default and is NOT established. PLACEHOLDER:
-# swept during validation to see which value the traces imply.
+# Host prompt-cache budget. MEASURED 2026-10-02 by probes.ollama_cache_probe
+# --capacity 40: 40 distinct ~3,790-token prompts were filled, then re-probed
+# newest-first; 39 hit at ~0.04s and the oldest missed at 13.36s. That is
+# ~39 x 207 MiB ~= 8 GiB, consistent with llama.cpp's default (no --cache-ram
+# flag on the command line). Edge is +/-1 state. Capacity is modelled in bytes,
+# not states, so small states are not charged as if they were large ones.
+#
+# Not binding at trace scale: replaying either committed trace evicts nothing,
+# because trace states are 165-800 tokens (~9-45 MiB), not 3,790.
 DEFAULT_RAM_BYTES = 8 * 1024 ** 3
+
+# --------------------------------------------------------------------------
+# FROZEN RULE -- do not change these against the two committed traces.
+# --------------------------------------------------------------------------
+# About thirteen rule variants were scored on `original` and `shared_first`
+# while searching for the mechanism. That is enough selection pressure that
+# agreement on those two traces is no longer evidence of anything. The rule and
+# parameters below are therefore frozen as of this commit, to be tested once on
+# a held-out trace that played no part in choosing them.
+#
+# Frozen rule, as implemented in OllamaPromptCache.access:
+#   1. One active slot per model, holding the last prompt served.
+#   2. prefix_overlap = common_prefix_chars / len(incoming_prompt).
+#   3. overlap >= SIM_THRESHOLD -> reuse the slot in place: keep the common
+#      prefix, recompute the rest, and do NOT consult the host cache.
+#   4. overlap <  SIM_THRESHOLD -> save the displaced state to the host cache,
+#      then look the incoming prompt up there; restore on a match of at least
+#      SIM_THRESHOLD. A restore COPIES, it does not consume (DECISIONS 17).
+#   5. Host cache is an LRU bounded in BYTES by DEFAULT_RAM_BYTES.
+#
+# Frozen parameters: SIM_THRESHOLD = 0.10, DEFAULT_RAM_BYTES = 8 GiB,
+#                    save_on_reuse = False, HIT_FRAC = 1/3.
+#
+# Deliberately NOT adopted, despite fitting the two traces better:
+#   - best-match lookup (consult the host cache even when the slot qualifies).
+#     Raises `original` to 84/89 and `shared_first` to 76/78, but is consistent
+#     with the affinity probe only under an untested size hypothesis.
+#   - a size gate on save-on-reuse. Does no work on the traces at all
+#     (save_max=1024 and save_max=inf score identically); it exists only to
+#     reconcile with the probe. Needs --affinity-short to settle it.
+#
+# Scores at freeze time, for the record:
+#   original      68 of 89 measured hits, 0 false positives, 92.3% agreement
+#   shared_first   7 of 78 measured hits, 10 false positives, 62.1% agreement
+FROZEN_AT = "2026-10-04"
+FROZEN_SCORES = {"original": (68, 89), "shared_first": (7, 78)}
 
 
 @dataclass

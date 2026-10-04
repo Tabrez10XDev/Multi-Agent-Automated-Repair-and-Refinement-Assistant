@@ -369,3 +369,49 @@ Measured on `original`, n=82 `issue_parser` calls. `shared_first` cannot
 reproduce this split: its layout pushes nearly every call above the threshold
 by construction, which is why only 17 of its 62 `issue_parser` calls are
 misses and the slot path fires on 186 of 214 calls overall.
+
+## 18. The `shared_first` trace has a degraded segment, and it is not concurrency
+
+§14c recorded that the `shared_first` trace was written by two processes
+sharing a `run_id`. The obvious follow-up — that the two overlapped in time and
+contended for the GPU — is **wrong**, and worth recording so it is not assumed
+again.
+
+The two segments are **disjoint**, separated by a 21.9s gap:
+
+| segment | calls | t_start | t_end | span |
+|---|---|---|---|---|
+| 0 | 86 | 1790747053.8 | 1790748687.4 | 1633.6s |
+| 1 | 128 | 1790748709.3 | 1790749322.0 | 612.7s |
+
+No concurrency. But the two ran in visibly different performance regimes,
+measured as prefill rate relative to the calibrated uncached rate:
+
+| segment | n | median ratio | p10 | slower than cold | above the 1.5x hit threshold | median call |
+|---|---|---|---|---|---|---|
+| 0 | 86 | 1.20x | **0.21x** | **30%** | 13% | 5.9s |
+| 1 | 128 | 1.73x | 1.16x | 2% | 52% | 3.7s |
+
+Segment 0 delivered as little as a fifth of the calibrated rate, and 30% of its
+calls were slower than a *cold* prefill. Within one contiguous band of 26 calls
+the debugger took 20–22s for ~800 tokens, 0.13x of calibration. By contrast
+`original` has only 4 such calls out of 272, all at 0.91–0.97x, i.e. no real
+degradation at all.
+
+### Why this matters for the cache work
+
+The hit detector thresholds at 1.5x the *calibrated* uncached rate, which
+assumes that rate held during the run. In segment 0 it did not, so a genuine
+cache hit there can be slower than 1.5x calibration and get scored a miss. The
+ground truth is unreliable in that segment.
+
+This accounts for the cache model's apparent false positives on
+`shared_first`: under the best-fitting variant, **19 of 21 fell in segment 0**,
+and under the frozen rule 9 of 10 do. They are not model errors so much as
+places where the instrument lost resolution — and the trace's "78 measured
+hits" is itself an undercount for the same reason.
+
+Cause of the slowdown is not established. Memory pressure or thermal
+throttling on a long run are both plausible (segment 0 averaged 19s per call
+against segment 1's 4.8s) and neither was logged. `validate_cache_model.py`
+now detects and reports such segments rather than averaging over them.
