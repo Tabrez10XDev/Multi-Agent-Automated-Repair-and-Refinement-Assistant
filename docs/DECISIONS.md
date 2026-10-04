@@ -357,3 +357,70 @@ these two traces measure the benchmark repeating itself. Do not tune
 It was a free parameter asking whether an in-place reuse destroys the displaced
 state. The source answers it: the save is a consequence of `f_keep < 0.5`, not
 an independent choice. A knob that encodes a settled question is a liability.
+
+## 20. Repair tasks are stub bodies over canonical HumanEval, not mutations
+
+The held-out task set is built by `experiments/build_tasks.py` from canonical
+HumanEval:
+
+- source `https://github.com/openai/human-eval/raw/master/data/HumanEval.jsonl.gz`
+- sha256 `b796127e635a67f93fb35c04f4cb03cf06f38c8072ee7cee8833d7bee06979ef`
+- 164 problems; keys `task_id`, `prompt`, `canonical_solution`, `entry_point`, `test`
+
+Each task is `{task_id, issue, buggy_code, test_code}`, the schema already in
+use. `buggy_code` is the problem's own `prompt` — imports, signature, full
+docstring — plus a trivial wrong body: return the first argument, or a default
+of the annotated return type. `issue` comes from the docstring's first sentence
+through one fixed template. `test_code` is the problem's `check()` asserts
+rewritten to `from target import f` / `def test_N()`.
+
+### Why stub bodies rather than mutating the canonical solution
+
+1. **A mutation's difficulty is unknown and unstable.** Flipping an operator
+   can produce a bug that is trivial, impossible, or silently equivalent. A
+   stub is uniformly "the body is missing", so difficulty comes from the
+   *problem*, which HumanEval already characterises, rather than from how the
+   mutation happened to land.
+2. **Mutations can be semantically null.** Some produce code that still passes
+   the tests, which the validator would catch but only after wasting the slot.
+   A stub returning the wrong type cannot accidentally be correct.
+3. **The failure mode matches the workflow.** MAARA is a repair pipeline: the
+   issue parser reads a bug report, the coder writes a fix, tests run. A
+   missing body gives the coder the real task — implement the docstring — and
+   makes the retry loop meaningful. A one-character mutation is often found in
+   a single attempt, which exercises neither the debugger nor the retry path
+   that workstream 2 is about.
+4. **It keeps the docstring in the prompt.** That matters here for a reason
+   beyond realism: the docstring is most of the prompt's bulk, so prompt sizes
+   and prefix structure stay comparable to the Milestone 1 tasks.
+
+The cost is honesty about what the benchmark measures: these are
+implement-from-spec tasks, not localise-a-subtle-defect tasks. Pass rates are
+not comparable to defect-injection benchmarks and should not be reported as if
+they were.
+
+### Validation is a gate, not a check
+
+Every task must have its tests **FAIL** on `buggy_code` and **PASS** on the
+canonical solution. 55 were selected, **54 kept**, 1 dropped:
+
+- `HumanEval/32` (`find_zero`) — canonical solution fails its own tests. Its
+  check uses randomised coefficients and a tolerance the reference does not
+  always meet.
+
+### Selection
+
+`HumanEval/1-15` are excluded: they are the fit set behind both committed
+traces, so including them would not be held out. `HumanEval/16-30` are pinned
+(already written for the harness, never run), then the remainder is sampled
+round-robin across terciles of canonical-solution length, so the set is not
+all one-liners. Final: **54 tasks, ids 16-158**, 371 tests, median
+`buggy_code` 12 non-blank lines (range 6-32).
+
+### Tasks moved out of code
+
+`data/tasks/humaneval_original30.json` (the Milestone 1 tasks, extracted
+verbatim) and `data/tasks/humaneval_new.json`. `MAARA_TASK_SET` selects:
+`original` (default, `HumanEval/1-15` — reproduces Milestone 1 exactly and is
+asserted byte-identical), `original30`, or `new`. The raw dataset is not
+committed; the URL and hash above make it reproducible.

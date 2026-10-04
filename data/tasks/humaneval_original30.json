@@ -1,0 +1,186 @@
+{
+  "source": "hand-written during Milestone 1, embedded in collect_humaneval.py",
+  "note": "Extracted verbatim during Milestone 2. HumanEval/1-15 are the fit set used by the two committed traces; 16-30 were written but never run (TASKS = TASKS[:15]).",
+  "tasks": [
+    {
+      "task_id": "HumanEval/1",
+      "issue": "The separate_paren_groups function does not correctly separate balanced parenthesis groups.",
+      "buggy_code": "def separate_paren_groups(paren_string: str):\n    result = []\n    current = []\n    depth = 0\n    for ch in paren_string.replace(' ', ''):\n        if ch == '(':\n            depth += 1\n            current.append(ch)\n        elif ch == ')':\n            current.append(ch)\n            depth -= 1\n            if depth == 0:\n                result.append(''.join(current))\n                current = []\n    return result[1:]\n",
+      "test_code": "from target import separate_paren_groups\ndef test_basic(): assert separate_paren_groups('(()()) ((())) () ((())()())') == ['(()())', '((()))', '()', '((())()())']\ndef test_simple(): assert separate_paren_groups('() (()) ((())) (((())))') == ['()', '(())', '((()))', '(((())))']\ndef test_single(): assert separate_paren_groups('(()(())(()))') == ['(()(())(()))']\n"
+    },
+    {
+      "task_id": "HumanEval/2",
+      "issue": "The truncate_number function should return only the decimal part of a float but returns the wrong value.",
+      "buggy_code": "def truncate_number(number: float) -> float:\n    return number % 1.0 + 1.0\n",
+      "test_code": "from target import truncate_number\ndef test_basic(): assert truncate_number(3.5) == 0.5\ndef test_small(): assert abs(truncate_number(1.33) - 0.33) < 1e-6\ndef test_large(): assert abs(truncate_number(123.456) - 0.456) < 1e-6\n"
+    },
+    {
+      "task_id": "HumanEval/3",
+      "issue": "The below_zero function should return True when balance goes below zero but has inverted return values.",
+      "buggy_code": "def below_zero(operations):\n    balance = 0\n    for op in operations:\n        balance += op\n        if balance < 0:\n            return False\n    return True\n",
+      "test_code": "from target import below_zero\ndef test_goes_negative(): assert below_zero([1, 2, -4, 5]) == True\ndef test_stays_positive(): assert below_zero([1, 2, 3]) == False\ndef test_empty(): assert below_zero([]) == False\ndef test_exact_zero(): assert below_zero([1, -1]) == False\n"
+    },
+    {
+      "task_id": "HumanEval/4",
+      "issue": "The mean_absolute_deviation function returns the mean instead of the mean absolute deviation.",
+      "buggy_code": "def mean_absolute_deviation(numbers):\n    mean = sum(numbers) / len(numbers)\n    return sum(numbers) / len(numbers)\n",
+      "test_code": "from target import mean_absolute_deviation\ndef test_basic(): assert abs(mean_absolute_deviation([1.0, 2.0, 3.0, 4.0]) - 1.0) < 1e-6\ndef test_same(): assert mean_absolute_deviation([5.0, 5.0, 5.0]) == 0.0\ndef test_two(): assert abs(mean_absolute_deviation([1.0, 3.0]) - 1.0) < 1e-6\n"
+    },
+    {
+      "task_id": "HumanEval/5",
+      "issue": "The intersperse function inserts a delimiter but slices off the first element.",
+      "buggy_code": "def intersperse(numbers, delimeter):\n    result = []\n    for i, n in enumerate(numbers):\n        if i != 0:\n            result.append(delimeter)\n        result.append(n)\n    return result[1:]\n",
+      "test_code": "from target import intersperse\ndef test_basic(): assert intersperse([1, 2, 3], 4) == [1, 4, 2, 4, 3]\ndef test_empty(): assert intersperse([], 4) == []\ndef test_single(): assert intersperse([1], 4) == [1]\ndef test_two(): assert intersperse([1, 2], 0) == [1, 0, 2]\n"
+    },
+    {
+      "task_id": "HumanEval/6",
+      "issue": "The parse_nested_parens function should return max depth per group but always returns 0.",
+      "buggy_code": "def parse_nested_parens(paren_string):\n    groups = paren_string.split()\n    result = []\n    for group in groups:\n        result.append(0)\n    return result\n",
+      "test_code": "from target import parse_nested_parens\ndef test_basic(): assert parse_nested_parens('(()()) ((())) () ((())()())') == [2, 3, 1, 3]\ndef test_single(): assert parse_nested_parens('((()))') == [3]\n"
+    },
+    {
+      "task_id": "HumanEval/7",
+      "issue": "The filter_by_substring function returns all strings instead of filtering by substring.",
+      "buggy_code": "def filter_by_substring(strings, substring):\n    return strings\n",
+      "test_code": "from target import filter_by_substring\ndef test_basic(): assert filter_by_substring(['abc', 'bacd', 'cde', 'array'], 'a') == ['abc', 'bacd', 'array']\ndef test_empty(): assert filter_by_substring([], 'a') == []\ndef test_none_match(): assert filter_by_substring(['xyz', 'zzz'], 'a') == []\ndef test_all_match(): assert filter_by_substring(['aa', 'ab', 'ac'], 'a') == ['aa', 'ab', 'ac']\n"
+    },
+    {
+      "task_id": "HumanEval/8",
+      "issue": "The sum_product function returns sum and product in the wrong order.",
+      "buggy_code": "def sum_product(numbers):\n    product = 1\n    for n in numbers:\n        product *= n\n    return (product, sum(numbers))\n",
+      "test_code": "from target import sum_product\ndef test_basic(): assert sum_product([1, 2, 3, 4]) == (10, 24)\ndef test_empty(): assert sum_product([]) == (0, 1)\ndef test_single(): assert sum_product([5]) == (5, 5)\n"
+    },
+    {
+      "task_id": "HumanEval/9",
+      "issue": "The rolling_max function returns a flat list of the global max instead of the rolling maximum.",
+      "buggy_code": "def rolling_max(numbers):\n    if not numbers:\n        return []\n    m = max(numbers)\n    return [m] * len(numbers)\n",
+      "test_code": "from target import rolling_max\ndef test_basic(): assert rolling_max([1, 2, 3, 2, 3, 4, 2]) == [1, 2, 3, 3, 3, 4, 4]\ndef test_empty(): assert rolling_max([]) == []\ndef test_decreasing(): assert rolling_max([5, 4, 3, 2, 1]) == [5, 5, 5, 5, 5]\ndef test_single(): assert rolling_max([3]) == [3]\n"
+    },
+    {
+      "task_id": "HumanEval/10",
+      "issue": "The make_palindrome function returns the input doubled instead of the shortest palindrome.",
+      "buggy_code": "def is_palindrome(s):\n    return s == s[::-1]\n\ndef make_palindrome(s):\n    return s + s\n",
+      "test_code": "from target import make_palindrome\ndef test_empty(): assert make_palindrome('') == ''\ndef test_basic(): assert make_palindrome('cat') == 'catac'\ndef test_already(): assert make_palindrome('cata') == 'catac'\ndef test_single(): assert make_palindrome('a') == 'a'\n"
+    },
+    {
+      "task_id": "HumanEval/11",
+      "issue": "The string_xor function concatenates binary strings instead of XORing them.",
+      "buggy_code": "def string_xor(a, b):\n    return a + b\n",
+      "test_code": "from target import string_xor\ndef test_basic(): assert string_xor('010', '110') == '100'\ndef test_zeros(): assert string_xor('000', '000') == '000'\ndef test_ones(): assert string_xor('111', '111') == '000'\ndef test_mixed(): assert string_xor('1100', '1010') == '0110'\n"
+    },
+    {
+      "task_id": "HumanEval/12",
+      "issue": "The longest function returns the shortest string instead of the longest.",
+      "buggy_code": "def longest(strings):\n    if not strings:\n        return None\n    return min(strings, key=len)\n",
+      "test_code": "from target import longest\ndef test_basic(): assert longest(['a', 'bb', 'ccc']) == 'ccc'\ndef test_empty(): assert longest([]) is None\ndef test_single(): assert longest(['abc']) == 'abc'\ndef test_tie(): assert longest(['ab', 'cd', 'eee']) == 'eee'\n"
+    },
+    {
+      "task_id": "HumanEval/13",
+      "issue": "The greatest_common_divisor function uses subtraction instead of modulo.",
+      "buggy_code": "def greatest_common_divisor(a, b):\n    while b:\n        a = a - b\n        if a < 0:\n            a, b = b, a\n    return a\n",
+      "test_code": "from target import greatest_common_divisor\ndef test_basic(): assert greatest_common_divisor(3, 5) == 1\ndef test_divisible(): assert greatest_common_divisor(25, 15) == 5\ndef test_same(): assert greatest_common_divisor(7, 7) == 7\ndef test_one(): assert greatest_common_divisor(1, 1000) == 1\n"
+    },
+    {
+      "task_id": "HumanEval/14",
+      "issue": "The all_prefixes function only returns the full string instead of all prefixes.",
+      "buggy_code": "def all_prefixes(string):\n    return [string]\n",
+      "test_code": "from target import all_prefixes\ndef test_basic(): assert all_prefixes('abc') == ['a', 'ab', 'abc']\ndef test_empty(): assert all_prefixes('') == []\ndef test_single(): assert all_prefixes('a') == ['a']\ndef test_four(): assert all_prefixes('abcd') == ['a', 'ab', 'abc', 'abcd']\n"
+    },
+    {
+      "task_id": "HumanEval/15",
+      "issue": "The string_sequence function is off by one and does not include n in the output.",
+      "buggy_code": "def string_sequence(n):\n    return ' '.join(str(i) for i in range(n))\n",
+      "test_code": "from target import string_sequence\ndef test_zero(): assert string_sequence(0) == '0'\ndef test_three(): assert string_sequence(3) == '0 1 2 3'\ndef test_one(): assert string_sequence(1) == '0 1'\n"
+    },
+    {
+      "task_id": "HumanEval/16",
+      "issue": "The count_distinct_characters function is case-sensitive but should be case-insensitive.",
+      "buggy_code": "def count_distinct_characters(string):\n    return len(set(string))\n",
+      "test_code": "from target import count_distinct_characters\ndef test_basic(): assert count_distinct_characters('xyzXYZ') == 3\ndef test_empty(): assert count_distinct_characters('') == 0\ndef test_all_same(): assert count_distinct_characters('AaAa') == 1\ndef test_mixed(): assert count_distinct_characters('Hello World') == 7\n"
+    },
+    {
+      "task_id": "HumanEval/17",
+      "issue": "The parse_music function should convert note strings to beat counts but returns an empty list.",
+      "buggy_code": "def parse_music(music_string):\n    return []\n",
+      "test_code": "from target import parse_music\ndef test_basic(): assert parse_music('o o| .| o| o| .| .| .| .| o o') == [4, 2, 1, 2, 2, 1, 1, 1, 1, 4, 4]\ndef test_empty(): assert parse_music('') == []\ndef test_single_o(): assert parse_music('o') == [4]\ndef test_single_pipe(): assert parse_music('o|') == [2]\ndef test_single_dot(): assert parse_music('.|') == [1]\n"
+    },
+    {
+      "task_id": "HumanEval/18",
+      "issue": "The how_many_times function skips overlapping occurrences of the substring.",
+      "buggy_code": "def how_many_times(string, substring):\n    count = 0\n    i = 0\n    while i <= len(string) - len(substring):\n        if string[i:i+len(substring)] == substring:\n            count += 1\n            i += len(substring)\n        else:\n            i += 1\n    return count\n",
+      "test_code": "from target import how_many_times\ndef test_basic(): assert how_many_times('aaa', 'a') == 3\ndef test_overlap(): assert how_many_times('aaaa', 'aa') == 3\ndef test_empty(): assert how_many_times('', 'a') == 0\ndef test_no_match(): assert how_many_times('abc', 'x') == 0\n"
+    },
+    {
+      "task_id": "HumanEval/19",
+      "issue": "The sort_numbers function returns the input unchanged instead of sorting number words.",
+      "buggy_code": "def sort_numbers(numbers):\n    return numbers\n",
+      "test_code": "from target import sort_numbers\ndef test_basic(): assert sort_numbers('three one five') == 'one three five'\ndef test_empty(): assert sort_numbers('') == ''\ndef test_single(): assert sort_numbers('zero') == 'zero'\ndef test_full(): assert sort_numbers('nine eight seven six five four three two one zero') == 'zero one two three four five six seven eight nine'\n"
+    },
+    {
+      "task_id": "HumanEval/20",
+      "issue": "The find_closest_elements function returns the two farthest elements instead of the two closest.",
+      "buggy_code": "def find_closest_elements(numbers):\n    numbers = sorted(numbers)\n    return (numbers[0], numbers[-1])\n",
+      "test_code": "from target import find_closest_elements\ndef test_basic(): assert find_closest_elements([1.0, 2.0, 3.0, 4.0, 5.0, 2.2]) == (2.0, 2.2)\ndef test_equal(): assert find_closest_elements([1.0, 2.0, 3.0, 4.0, 5.0, 2.0]) == (2.0, 2.0)\n"
+    },
+    {
+      "task_id": "HumanEval/21",
+      "issue": "The rescale_to_unit function divides by sum instead of the range of values.",
+      "buggy_code": "def rescale_to_unit(numbers):\n    s = sum(numbers)\n    return [n / s for n in numbers]\n",
+      "test_code": "from target import rescale_to_unit\ndef test_basic(): assert rescale_to_unit([1.0, 2.0, 3.0, 4.0, 5.0]) == [0.0, 0.25, 0.5, 0.75, 1.0]\ndef test_two(): assert rescale_to_unit([1.0, 5.0]) == [0.0, 1.0]\ndef test_same(): assert rescale_to_unit([2.0, 2.0]) == [0.0, 0.0]\n"
+    },
+    {
+      "task_id": "HumanEval/22",
+      "issue": "The filter_integers function does not filter and returns all values including non-integers.",
+      "buggy_code": "def filter_integers(values):\n    return values\n",
+      "test_code": "from target import filter_integers\ndef test_basic(): assert filter_integers(['a', 3.14, 5, None, [], 2]) == [5, 2]\ndef test_empty(): assert filter_integers([]) == []\ndef test_all_int(): assert filter_integers([1, 2, 3]) == [1, 2, 3]\ndef test_none_int(): assert filter_integers(['a', 'b', []]) == []\n"
+    },
+    {
+      "task_id": "HumanEval/23",
+      "issue": "The strlen function returns the list of characters instead of the length.",
+      "buggy_code": "def strlen(string):\n    return list(string)\n",
+      "test_code": "from target import strlen\ndef test_basic(): assert strlen('hello') == 5\ndef test_empty(): assert strlen('') == 0\ndef test_spaces(): assert strlen('hello world') == 11\ndef test_single(): assert strlen('a') == 1\n"
+    },
+    {
+      "task_id": "HumanEval/24",
+      "issue": "The largest_divisor function finds the smallest divisor instead of the largest one below n.",
+      "buggy_code": "def largest_divisor(n):\n    for i in range(2, n):\n        if n % i == 0:\n            return i\n    return 1\n",
+      "test_code": "from target import largest_divisor\ndef test_basic(): assert largest_divisor(15) == 5\ndef test_prime(): assert largest_divisor(7) == 1\ndef test_even(): assert largest_divisor(100) == 50\ndef test_small(): assert largest_divisor(4) == 2\n"
+    },
+    {
+      "task_id": "HumanEval/25",
+      "issue": "The factorize function returns only the first prime factor instead of all prime factors.",
+      "buggy_code": "def factorize(n):\n    for i in range(2, n + 1):\n        if n % i == 0:\n            return [i]\n    return []\n",
+      "test_code": "from target import factorize\ndef test_basic(): assert factorize(8) == [2, 2, 2]\ndef test_prime(): assert factorize(7) == [7]\ndef test_mixed(): assert factorize(12) == [2, 2, 3]\ndef test_one(): assert factorize(1) == []\n"
+    },
+    {
+      "task_id": "HumanEval/26",
+      "issue": "The remove_duplicates function keeps duplicates instead of removing them.",
+      "buggy_code": "def remove_duplicates(numbers):\n    return numbers\n",
+      "test_code": "from target import remove_duplicates\ndef test_basic(): assert remove_duplicates([1, 2, 3, 2, 4, 3, 5]) == [1, 4, 5]\ndef test_empty(): assert remove_duplicates([]) == []\ndef test_no_dups(): assert remove_duplicates([1, 2, 3]) == [1, 2, 3]\ndef test_all_dups(): assert remove_duplicates([1, 1, 1]) == []\n"
+    },
+    {
+      "task_id": "HumanEval/27",
+      "issue": "The flip_case function lowercases everything instead of flipping case.",
+      "buggy_code": "def flip_case(string):\n    return string.lower()\n",
+      "test_code": "from target import flip_case\ndef test_basic(): assert flip_case('Hello') == 'hELLO'\ndef test_empty(): assert flip_case('') == ''\ndef test_all_upper(): assert flip_case('ABC') == 'abc'\ndef test_all_lower(): assert flip_case('abc') == 'ABC'\ndef test_mixed(): assert flip_case('hElLo') == 'HeLlO'\n"
+    },
+    {
+      "task_id": "HumanEval/28",
+      "issue": "The concatenate function joins strings with a space instead of no separator.",
+      "buggy_code": "def concatenate(strings):\n    return ' '.join(strings)\n",
+      "test_code": "from target import concatenate\ndef test_basic(): assert concatenate(['a', 'b', 'c']) == 'abc'\ndef test_empty_list(): assert concatenate([]) == ''\ndef test_single(): assert concatenate(['hello']) == 'hello'\ndef test_words(): assert concatenate(['hello', 'world']) == 'helloworld'\n"
+    },
+    {
+      "task_id": "HumanEval/29",
+      "issue": "The filter_by_prefix function returns all strings instead of only those starting with the prefix.",
+      "buggy_code": "def filter_by_prefix(strings, prefix):\n    return strings\n",
+      "test_code": "from target import filter_by_prefix\ndef test_basic(): assert filter_by_prefix(['abc', 'bcd', 'cde', 'array'], 'a') == ['abc', 'array']\ndef test_empty(): assert filter_by_prefix([], 'a') == []\ndef test_none_match(): assert filter_by_prefix(['xyz', 'zzz'], 'a') == []\ndef test_all_match(): assert filter_by_prefix(['ab', 'ac', 'ad'], 'a') == ['ab', 'ac', 'ad']\n"
+    },
+    {
+      "task_id": "HumanEval/30",
+      "issue": "The get_positive function returns all numbers including negatives instead of only positives.",
+      "buggy_code": "def get_positive(l):\n    return l\n",
+      "test_code": "from target import get_positive\ndef test_basic(): assert get_positive([-1, 2, -4, 3, 5]) == [2, 3, 5]\ndef test_empty(): assert get_positive([]) == []\ndef test_all_neg(): assert get_positive([-1, -2, -3]) == []\ndef test_all_pos(): assert get_positive([1, 2, 3]) == [1, 2, 3]\n"
+    }
+  ]
+}
