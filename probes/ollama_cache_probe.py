@@ -73,6 +73,22 @@ BODY = "\n\n".join(
     for i in range(60)
 )
 PROMPT = f"Here is a module under review:\n\n```python\n{BODY}\n```\n"
+
+# ~165 tokens, matching the issue_parser prompts in the traces (median 164).
+# Needed because the long and short cases disagree: the committed traces show
+# ~165-token states surviving a >=10% overwrite, while the long-A affinity
+# probe showed a ~3,790-token state being destroyed by one. Size is the most
+# obvious variable neither experiment controlled, so this makes it the variable.
+SHORT_BODY = "\n".join(
+    f"def helper_{i}(x):\n    return x * {i + 1} + {i}"
+    for i in range(13)
+)
+SHORT_PROMPT = (
+    "You are an issue parser. Given the module below and a bug report, "
+    "return a short structured plan naming the affected function.\n\n"
+    f"```python\n{SHORT_BODY}\n```\n\n"
+    "Bug report: helper_3 returns the wrong value for negative inputs.\n"
+)
 LAST_ORIGINAL = "Summarise the module in one sentence."
 LAST_CHANGED = "Summarise the module in two sentences."
 
@@ -188,7 +204,7 @@ def capacity_probe(endpoint="generate", n=40):
     return survivors
 
 
-def affinity_probe(endpoint="generate"):
+def affinity_probe(endpoint="generate", short=False):
     """
     Does a similar prompt overwrite the slot, or is the displaced state saved?
 
@@ -210,13 +226,15 @@ def affinity_probe(endpoint="generate"):
     cost of its small divergent tail -- which looked like a RAM-cache restore
     and was not.
     """
-    print(f"--- affinity probe on /api/{endpoint} ---")
+    base = SHORT_PROMPT if short else PROMPT
+    size = "SHORT (~165 tok, issue_parser scale)" if short else "LONG (~2k tok)"
+    print(f"--- affinity probe on /api/{endpoint}  [A = {size}] ---")
     print(f"  {'shared':>7}  {'A cold':>9}  {'B':>9}  {'B frac':>7}  "
           f"{'A again':>9}  {'A frac':>7}  reading")
     rows = []
-    filler = (BODY + "\n") * 4
+    filler = ((SHORT_BODY if short else BODY) + "\n") * 8
     for frac in (0.05, 0.25, 0.50, 0.90):
-        a_txt = f"# aff A {random.randint(10**9, 10**10)}\n" + PROMPT + LAST_ORIGINAL
+        a_txt = f"# aff A {random.randint(10**9, 10**10)}\n" + base + LAST_ORIGINAL
         cut = int(len(a_txt) * frac)
         tail_nonce = f"\n# aff B {random.randint(10**9, 10**10)}\n"
         pad = max(0, len(a_txt) - cut - len(tail_nonce))
@@ -269,15 +287,27 @@ def main():
                     help="probe host prompt-cache capacity with N distinct prompts")
     ap.add_argument("--affinity", action="store_true",
                     help="probe whether a similar prompt overwrites the slot")
+    ap.add_argument("--affinity-short", action="store_true",
+                    help="same probe with a ~165-token A, matching issue_parser; "
+                         "tests whether survival of an overwrite depends on size")
     ap.add_argument("--only", action="store_true",
                     help="skip the 4-call verdict and run only the chosen probes")
     args = ap.parse_args()
     print(f"model={MODEL}  keep_alive={KEEP_ALIVE}  prompt ~{len(PROMPT)//4} tokens\n")
     if args.affinity:
-        affinity_probe("generate")
+        affinity_probe("generate", short=False)
+    if args.affinity_short:
+        affinity_probe("generate", short=True)
     if args.capacity:
         capacity_probe("generate", args.capacity)
     if args.only:
+        if args.affinity and args.affinity_short:
+            print("  COMPARE the two tables above. If the short A is restored")
+            print("  (A frac < 10%) at 25/50/90% where the long A recomputed its")
+            print("  unshared fraction, survival depends on state SIZE and the")
+            print("  size-gated rule is confirmed. If the short A also recomputes")
+            print("  its unshared fraction, the size hypothesis is dead and the")
+            print("  bypassed exact matches in the traces need another cause.")
         return 0
     for endpoint in ("chat", "generate"):
         print(f"--- /api/{endpoint} ---")
