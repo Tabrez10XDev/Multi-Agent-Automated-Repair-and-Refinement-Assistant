@@ -69,6 +69,31 @@ common_prefix_len = _lcp_len
 # "checking sim = 0.002 > 0.100". Not a guess.
 SIM_THRESHOLD = 0.10
 
+# f_keep gate. MEASURED from server.log over 758 slot-selection events:
+# f_keep >= 0.5 searched the prompt cache 0.8% of the time (n=128); f_keep <
+# 0.5 searched 64.8% (n=630). So when at least half the slot is retained the
+# server reuses it in place, saving nothing and searching nothing; below that
+# it saves the displaced state and looks for a better starting point.
+KEEP_GATE = 0.50
+
+# Per-prompt token limit, logged as "(limits: 8192.000 MiB, N tokens, ...)".
+# N tracked num_ctx across runs (4096, 8192, 16384 observed), so it caps a
+# single cached prompt and is NOT a cache total. The third field ("est") is a
+# derived estimate of total token capacity, not a limit.
+DEFAULT_TOKEN_LIMIT = 8192
+
+# f_sim and f_keep use DIFFERENT denominators. From one log triple:
+#   slot release: n_tokens = 379
+#   checking sim = 0.130 (3/23)            -> f_sim  = lcp / INCOMING tokens
+#   f_sim_best = 0.130, f_keep = 0.008     -> f_keep = lcp / SLOT tokens
+# f_sim picks a slot against SIM_THRESHOLD (irrelevant at -np 1, one slot);
+# f_keep drives the gate above.
+#
+# CAVEAT: the server computes both on TOKENS; this model approximates with
+# CHARACTERS scaled by each call's own chars-per-token ratio. They agree in
+# aggregate but not per call, so a call with f_keep near KEEP_GATE can fall on
+# the wrong side. replay() reports how many sit within +/-0.05 of the gate.
+
 # Host prompt-cache budget. MEASURED 2026-10-02 by probes.ollama_cache_probe
 # --capacity 40: 40 distinct ~3,790-token prompts were filled, then re-probed
 # newest-first; 39 hit at ~0.04s and the oldest missed at 13.36s. That is
@@ -81,47 +106,50 @@ SIM_THRESHOLD = 0.10
 DEFAULT_RAM_BYTES = 8 * 1024 ** 3
 
 # --------------------------------------------------------------------------
-# FROZEN RULE -- SUPERSEDED 2026-10-04, see DECISIONS 18 and FINDINGS 19.
+# FROZEN RULE v2 -- frozen 2026-10-04, after the mechanism was read out of
+# llama.cpp's own source rather than inferred from timings.
 # --------------------------------------------------------------------------
-# SUPERSEDED. The rule below rests on "overlap >= 0.10 destroys the displaced
-# state", which the 2026-10-04 affinity rerun refuted: A survives intact at 25%
-# and 50% overlap, and the real separator of hits from misses is simply whether
-# the exact prompt had been seen before (FINDINGS 19). Do not re-freeze, and do
-# not spend the held-out trace, until --affinity-sweep pins the actual cutoff.
-# The block is kept verbatim so the superseded freeze stays auditable.
+# Confirmed in llama.cpp tools/server/server-context.cpp:
 #
-# About thirteen rule variants were scored on `original` and `shared_first`
-# while searching for the mechanism. That is enough selection pressure that
-# agreement on those two traces is no longer evidence of anything. The rule and
-# parameters below are therefore frozen as of this commit, to be tested once on
-# a held-out trace that played no part in choosing them.
+#     const float f_sim_cur = float(lcp_len) / task.tokens.size();
+#     const float f_keep    = (f_sim_best*task.tokens.size())
+#                             / ret->prompt.tokens.size();
+#     if (f_keep < 0.5f) { update_cache = true; }
 #
-# Frozen rule, as implemented in OllamaPromptCache.access:
-#   1. One active slot per model, holding the last prompt served.
-#   2. prefix_overlap = common_prefix_chars / len(incoming_prompt).
-#   3. overlap >= SIM_THRESHOLD -> reuse the slot in place: keep the common
-#      prefix, recompute the rest, and do NOT consult the host cache.
-#   4. overlap <  SIM_THRESHOLD -> save the displaced state to the host cache,
-#      then look the incoming prompt up there; restore on a match of at least
-#      SIM_THRESHOLD. A restore COPIES, it does not consume (DECISIONS 17).
-#   5. Host cache is an LRU bounded in BYTES by DEFAULT_RAM_BYTES.
+# so f_sim is over the INCOMING prompt, f_keep over the CACHED/SLOT prompt, and
+# the 0.5 constant is literal in the source. The independently measured gate
+# from server.log (f_keep >= 0.5 searched 0.8% of 128 events, < 0.5 searched
+# 64.8% of 630) agrees with it exactly.
 #
-# Frozen parameters: SIM_THRESHOLD = 0.10, DEFAULT_RAM_BYTES = 8 GiB,
-#                    save_on_reuse = False, HIT_FRAC = 1/3.
+# The rule as implemented in access():
+#   1. One slot per model. f_keep = common prefix / slot length.
+#   2. f_keep >= 0.50 -> reuse the slot in place; keep the common prefix,
+#      recompute the rest, save nothing, search nothing.
+#   3. f_keep <  0.50 -> save the displaced state to the host cache, then take
+#      the best prefix match among the cached states if it beats the slot.
+#      A restore copies, it does not consume (DECISIONS 17).
+#   4. Host cache: LRU bounded in bytes (8192 MiB, logged) with a per-prompt
+#      token cap tracking num_ctx. No state-level dedup exists in the binary.
 #
-# Deliberately NOT adopted, despite fitting the two traces better:
-#   - best-match lookup (consult the host cache even when the slot qualifies).
-#     Raises `original` to 84/89 and `shared_first` to 76/78, but is consistent
-#     with the affinity probe only under an untested size hypothesis.
-#   - a size gate on save-on-reuse. Does no work on the traces at all
-#     (save_max=1024 and save_max=inf score identically); it exists only to
-#     reconcile with the probe. Needs --affinity-short to settle it.
+# Frozen parameters: KEEP_GATE = 0.50, SIM_THRESHOLD = 0.10 (inert at -np 1),
+#                    DEFAULT_RAM_BYTES = 8 GiB, DEFAULT_TOKEN_LIMIT = 8192,
+#                    HIT_FRAC = 1/3.
 #
-# Scores at freeze time, for the record:
-#   original      68 of 89 measured hits, 0 false positives, 92.3% agreement
-#   shared_first   7 of 78 measured hits, 10 false positives, 62.1% agreement
+# Fit-set scores at freeze, hits split by where the reuse came from:
+#   original      84/89 hits, 1 FP, 97.8% agreement
+#                 exact-prompt repeats 46/46; partial prefix reuse 38/43
+#   shared_first  76/78 hits, 21 FP, 89.3% agreement
+#                 exact-prompt repeats 47/47; partial prefix reuse 29/31
+# The exact-repeat column is harness artefact, not workflow reuse
+# (OPEN_ISSUES 20); 19 of shared_first's 21 FPs are in its degraded segment
+# (FINDINGS 18). Both are reasons these traces cannot be the final word --
+# the held-out trace is.
+#
+# v1 (commit 9911011) is superseded, not rewritten: it encoded the retracted
+# "0.10 destroys the slot" rule. Kept auditable on purpose.
 FROZEN_AT = "2026-10-04"
-FROZEN_SCORES = {"original": (68, 89), "shared_first": (7, 78)}
+FROZEN_SCORES = {"original": (84, 89), "shared_first": (76, 78)}
+FROZEN_VERSION = 2
 
 
 @dataclass
@@ -138,23 +166,24 @@ class OllamaPromptCache:
     access() returns the number of prompt tokens that did NOT need recomputing.
     """
     sim_threshold: float = SIM_THRESHOLD
+    keep_gate: float = KEEP_GATE
     ram_bytes: int = DEFAULT_RAM_BYTES
+    token_limit: int = DEFAULT_TOKEN_LIMIT
     cost: CostModel = field(default_factory=CostModel)
 
-    # Does an in-place slot reuse destroy the displaced state, or is the state
-    # always saved to RAM with the slot path merely taking priority over a
-    # lookup? The affinity probe cannot tell these apart -- in it, A and B were
-    # the same length and sat in symmetric positions, so both rules predict the
-    # same recompute fractions. Only the trace separates them. Left as a flag so
-    # the two can be scored side by side instead of one being assumed.
-    save_on_reuse: bool = False
+    # save_on_reuse is gone. It asked whether an in-place reuse destroys the
+    # displaced state; the server log answers it directly -- the save happens
+    # whenever f_keep < KEEP_GATE and is skipped above it, so the behaviour is
+    # a consequence of the gate rather than a free parameter.
 
     def __post_init__(self):
         self._slots = {}        # model -> _Slot
         self._ram = {}          # model -> list[(text, tokens)], most recent last
         self._ram_bytes_used = 0
-        self.stats = {"slot_reuse": 0, "ram_restore": 0, "cold": 0,
-                      "ram_evictions": 0, "states_saved": 0}
+        self._f_keeps = []
+        self.stats = {"slot_reuse": 0, "slot_partial": 0, "ram_restore": 0,
+                      "cold": 0, "ram_evictions": 0, "states_saved": 0,
+                      "rejected_over_token_limit": 0}
 
     # -- RAM cache ---------------------------------------------------------
 
@@ -163,6 +192,12 @@ class OllamaPromptCache:
 
     def _ram_save(self, model: str, text: str, tokens: int) -> None:
         if tokens <= 0:
+            return
+        if tokens > self.token_limit:
+            # Logged as "cache token limit (%zu, est: %zu) reached". The limit
+            # tracked num_ctx, so a prompt larger than the slot's context is
+            # not cacheable.
+            self.stats["rejected_over_token_limit"] += 1
             return
         size = self._state_bytes(model, tokens)
         if size > self.ram_bytes:
@@ -193,34 +228,49 @@ class OllamaPromptCache:
     # -- the access path ---------------------------------------------------
 
     def access(self, model: str, text: str, tokens: int) -> int:
+        """
+        Returns the number of prompt tokens that did NOT need recomputing.
+
+        The rule is the one the server log shows, not an inference from timings:
+
+          f_keep >= KEEP_GATE   reuse the slot in place. Keep the common
+                                prefix, recompute the rest. Save nothing (most
+                                of the slot is being kept, so nothing
+                                meaningful is displaced) and search nothing.
+          f_keep <  KEEP_GATE   most of the slot is about to be discarded, so
+                                save it to the host cache, then look for a
+                                better starting point than the slot
+                                ("looking for better prompt, base f_keep = X").
+        """
         slot = self._slots.get(model)
         chars = max(1, len(text))
+        cpt = chars / max(1, tokens)          # this call's chars per token
 
+        lcp = common_prefix_len(text, slot.text) if (slot and slot.text) else 0
+        slot_chars = max(1, len(slot.text)) if (slot and slot.text) else 1
+        f_keep = (lcp / slot_chars) if (slot and slot.text) else 0.0
+        self._f_keeps.append(f_keep)
+
+        if slot is not None and slot.text and f_keep >= self.keep_gate:
+            self._slots[model] = _Slot(text, tokens)
+            self.stats["slot_reuse"] += 1
+            return int(lcp / cpt)
+
+        # Below the gate: save the displaced state, then search for better.
         if slot is not None and slot.text:
-            shared = common_prefix_len(text, slot.text)
-            if shared / chars >= self.sim_threshold:
-                # Slot reused in place, and the RAM cache is not consulted --
-                # the slot path wins whether or not a better match is saved.
-                if self.save_on_reuse:
-                    self._ram_save(model, slot.text, slot.tokens)
-                self._slots[model] = _Slot(text, tokens)
-                self.stats["slot_reuse"] += 1
-                return int(tokens * shared / chars)
-            # Below threshold: the displaced state is saved rather than lost.
             self._ram_save(model, slot.text, slot.tokens)
 
-        shared, idx = self._ram_lookup(model, text)
+        best_lcp, idx = self._ram_lookup(model, text)
         self._slots[model] = _Slot(text, tokens)
-        if idx is not None and shared / chars >= self.sim_threshold:
-            # A restore COPIES the saved state into the slot; it does not
-            # consume it. Loading a state into a slot gives the host no reason
-            # to delete its own copy, and the earlier consuming version was an
-            # invented constraint, not a modelled mechanism. It mattered a lot:
-            # each HumanEval task is replayed under four configs, so an
-            # issue_parser prompt recurs byte-identically about four times, and
-            # consuming on first restore capped it at one hit. See DECISIONS 17.
+        if idx is not None and best_lcp > lcp:
+            # A restore COPIES the saved state; it does not consume it. See
+            # DECISIONS 17 -- the consuming version capped a prompt recurring
+            # four times at a single hit.
             self.stats["ram_restore"] += 1
-            return int(tokens * shared / chars)
+            return int(best_lcp / cpt)
+        if lcp > 0:
+            self.stats["slot_partial"] += 1
+            return int(lcp / cpt)
 
         self.stats["cold"] += 1
         return 0
@@ -246,13 +296,16 @@ def measured_hits(rows, cost, speedup=1.5):
 
 
 def replay(trace_set_name="original", ram_bytes=DEFAULT_RAM_BYTES,
-           hit_frac=1 / 3, save_on_reuse=False):
+           hit_frac=1 / 3, keep_gate=KEEP_GATE):
     """
-    Replay a trace's calls in wall-clock order through the cache model.
+    Replay a trace and score hits, splitting them by WHERE the reuse came from.
 
-    A predicted hit is a call whose reused fraction would make it clear the
-    same 1.5x speedup the measured detector uses: reusing f of the prompt gives
-    a 1/(1-f) speedup, so f > 1/3.
+    The split matters more than the total. `exact` hits are calls whose whole
+    prompt was seen before -- on these traces that is overwhelmingly the
+    harness replaying 15 tasks under 4 configs, which an operator would never
+    see (OPEN_ISSUES 20). `partial` hits are genuine prefix reuse. Reporting
+    one number conflates the two and is how Milestone 1's "one call in three"
+    figure came about (FINDINGS 19).
     """
     cost = CostModel()
     rows, prompts = [], {}
@@ -262,82 +315,86 @@ def replay(trace_set_name="original", ram_bytes=DEFAULT_RAM_BYTES,
             prompts[x["call_id"]] = x["messages"]
 
     truth = measured_hits(rows, cost)
-    # Config is a property of a task run, not of a call, so recover it by
-    # segmenting and fingerprinting, then index it back by call.
-    config_of = {}
+    config_of, task_of = {}, {}
     for block in segment_task_runs(rows):
         cfg = fingerprint_config(block) or "unidentified"
         for r in block:
             config_of[r["call_id"]] = cfg
+            task_of[r["call_id"]] = (r.get("task_id"), cfg)
 
-    # The cache is global and stateful, so the replay order has to be the real
-    # arrival order across every task run, not per-run.
     chats = sorted((r for r in rows if r.get("kind") == "chat"),
                    key=lambda r: r.get("t_start") or 0.0)
 
-    cache = OllamaPromptCache(ram_bytes=ram_bytes, cost=cost,
-                              save_on_reuse=save_on_reuse)
-    tp = fp = tn = fn = 0
-    per_role, per_model, per_config = {}, {}, {}
+    cache = OllamaPromptCache(ram_bytes=ram_bytes, cost=cost, keep_gate=keep_gate)
+    seen = set()                      # (model, prompt text) seen before
+    tp = fp = fn = tn = 0
+    kinds = {"exact": [0, 0], "partial": [0, 0], "none": [0, 0]}   # [measured, matched]
+    per_role, per_config = {}, {}
+    near_gate = 0
     for r in chats:
         cid = r["call_id"]
         if cid not in truth:
             continue
         text = render_prompt(prompts.get(cid, []))
         pt = r.get("prompt_tokens") or 0
+        key = (r["model"], text)
+        is_exact = key in seen
+        seen.add(key)
+
+        before = len(cache._f_keeps)
         reused = cache.access(r["model"], text, pt)
+        if len(cache._f_keeps) > before:
+            if abs(cache._f_keeps[-1] - keep_gate) <= 0.05:
+                near_gate += 1
+
         pred = pt > 0 and (reused / pt) > hit_frac
         act = truth[cid]
+        kind = "exact" if is_exact else ("partial" if reused > 0 else "none")
+        kinds[kind][0] += int(act)
+        kinds[kind][1] += int(act and pred)
+
         bucket = ("tp" if (pred and act) else "fp" if pred else
                   "fn" if act else "tn")
-        if bucket == "tp":
-            tp += 1
-        elif bucket == "fp":
-            fp += 1
-        elif bucket == "fn":
-            fn += 1
-        else:
-            tn += 1
-        for d, k in ((per_role, r["agent_role"]), (per_model, r["model"]),
+        tp += bucket == "tp"; fp += bucket == "fp"
+        fn += bucket == "fn"; tn += bucket == "tn"
+        for d, k in ((per_role, r["agent_role"]),
                      (per_config, config_of.get(cid, "unidentified"))):
             d.setdefault(k, {"tp": 0, "fp": 0, "fn": 0, "tn": 0})[bucket] += 1
 
     total = tp + fp + tn + fn
     return {
-        "set": trace_set_name, "ram_gib": ram_bytes / 1024 ** 3, "calls": total,
+        "set": trace_set_name, "calls": total,
         "measured_hits": tp + fn, "predicted_hits": tp + fp,
         "tp": tp, "fp": fp, "fn": fn, "tn": tn,
         "agreement": (tp + tn) / total if total else 0.0,
-        "per_role": per_role, "per_model": per_model, "per_config": per_config,
+        "kinds": kinds, "near_gate": near_gate,
+        "per_role": per_role, "per_config": per_config,
         "stats": dict(cache.stats),
     }
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--sweep", action="store_true",
-                    help="sweep the RAM budget to see which the traces imply")
+    ap.add_argument("--gate", type=float, default=KEEP_GATE,
+                    help="f_keep gate (default: the measured 0.50)")
     args = ap.parse_args()
-
-    budgets = ([0.5, 1, 2, 4, 8, 16] if args.sweep else [8])
     for ts in ("original", "shared_first"):
+        r = replay(ts, keep_gate=args.gate)
         print(f"=== {ts} ===")
-        print(f"  {'RAM':>7}  {'calls':>6}{'measured':>10}{'predicted':>11}"
-              f"{'tp':>5}{'fp':>5}{'fn':>5}{'agree':>8}")
-        for gib in budgets:
-            r = replay(ts, ram_bytes=int(gib * 1024 ** 3))
-            print(f"  {gib:>5.1f}G  {r['calls']:>6}{r['measured_hits']:>10}"
-                  f"{r['predicted_hits']:>11}{r['tp']:>5}{r['fp']:>5}{r['fn']:>5}"
-                  f"{r['agreement']:>7.1%}")
-        r = replay(ts, ram_bytes=int(budgets[-1] * 1024 ** 3))
-        print(f"  cache stats: {r['stats']}")
-        for dim in ("per_role", "per_config", "per_model"):
-            label = dim.split("_")[1]
-            print(f"  {label:<22}{'measured':>10}{'predicted':>11}"
-                  f"{'tp':>5}{'fp':>5}{'fn':>5}")
-            for k, d in sorted(r[dim].items()):
-                print(f"  {str(k):<22}{d['tp']+d['fn']:>10}{d['tp']+d['fp']:>11}"
-                      f"{d['tp']:>5}{d['fp']:>5}{d['fn']:>5}")
+        print(f"  calls {r['calls']}   measured hits {r['measured_hits']}   "
+              f"predicted {r['predicted_hits']}   agreement {r['agreement']:.1%}")
+        print(f"  tp={r['tp']} fp={r['fp']} fn={r['fn']} tn={r['tn']}")
+        k = r["kinds"]
+        print(f"  {'reuse source':<22}{'measured hits':>14}{'matched':>9}")
+        for name, label in (("exact", "exact prompt repeat"),
+                            ("partial", "partial prefix reuse"),
+                            ("none", "no reuse available")):
+            m, mt = k[name]
+            print(f"  {label:<22}{m:>14}{mt:>9}")
+        print(f"  calls with f_keep within +/-0.05 of the gate: {r['near_gate']}"
+              f"  ({r['near_gate'] / max(1, r['calls']):.1%} -- char/token "
+              f"approximation makes these uncertain)")
+        print(f"  stats: {r['stats']}")
         print()
     return 0
 

@@ -10,25 +10,16 @@ sections of FINDINGS / OPEN_ISSUES / DECISIONS.
 | 3 | Better output-length estimator | not started |
 | 4 | vLLM on an RTX 4060 | not started; early feasibility check lands during 2 |
 
-## 1. Ollama prompt-cache baseline — finishing now
+## 1. Ollama prompt-cache baseline — DONE
 
-Model the cache the real system already has, so any retention policy is
-measured against what exists rather than against a strawman.
+Rule read out of llama.cpp source and re-frozen as v2 (DECISIONS §19,
+FINDINGS §20): `f_keep < 0.5f` gates both the save and the cache search;
+`f_sim` is over the incoming prompt, `f_keep` over the slot. Scores 84/89
+(`original`), 76/78 (`shared_first`), with exact repeats and partial prefix
+reuse reported separately.
 
-Done: mechanism confirmed from the server binary and probes; capacity measured
-(~8 GiB, byte-bounded LRU); the restore-does-not-consume bug fixed
-(DECISIONS §17); the 0.10-destroys-the-slot claim retracted (FINDINGS §17 →
-§19); exact prompt recurrence identified as what actually predicts a hit.
-
-Remaining:
-1. `--affinity-sweep` to pin the restore-to-trim cutoff (between 50% and 90%).
-2. Settle the similarity denominator from existing `checking sim = %.3f (%zu/%zu)`
-   server log lines.
-3. Add the token-count eviction limit, absent from the model.
-4. Re-score on both fit traces with **exact-repeat hits and within-task partial
-   reuse scored separately** — conflating them is what produced the inflated
-   Milestone 1 figure (FINDINGS §19).
-5. Re-freeze before any new trace exists.
+Held open deliberately: validation on the new trace, because over half the
+fit-set hits are harness repetition (OPEN_ISSUES §20).
 
 ## 2. Retention comparison — next
 

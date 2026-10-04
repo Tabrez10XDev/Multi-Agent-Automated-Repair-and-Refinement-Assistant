@@ -259,7 +259,12 @@ The general lesson is worth keeping: when a model underpredicts, check which of
 its rules are measured mechanism and which are conveniences the author
 invented. This one was never observed anywhere, in a log line or a probe.
 
-## 18. SUPERSEDED — "the cache model's rule is frozen"
+## 18. SUPERSEDED by §19 — "the cache model's rule is frozen" (v1)
+
+> Freeze v1 encoded the retracted "0.10 destroys the slot" rule. Commit
+> `9911011` is left in place and history is not rewritten. Re-frozen as v2 in
+> §19 below, on a rule read out of llama.cpp's source rather than inferred.
+
 
 > **The frozen rule described below is superseded as of 2026-10-04.** It was
 > built on the claim that overlap >= 0.10 destroys the displaced state, which
@@ -308,3 +313,47 @@ fit-set scores, so nobody later mistakes them for untried ideas:
 
 `probes/ollama_cache_probe.py --affinity-short` is the measurement that decides
 both.
+
+## 19. Cache rule re-frozen as v2, on cited source
+
+The rule in `simulator/ollama_cache.py` is frozen again, this time on the
+upstream constant rather than on a fit to two traces:
+
+```c
+if (f_keep < 0.5f) { update_cache = true; }     // llama.cpp server-context.cpp
+```
+
+`KEEP_GATE = 0.50`, `SIM_THRESHOLD = 0.10` (inert at `-np 1`),
+`DEFAULT_RAM_BYTES = 8 GiB`, `DEFAULT_TOKEN_LIMIT = 8192`, `HIT_FRAC = 1/3`.
+Scores at freeze: `original` 84/89 (97.8%), `shared_first` 76/78 (89.3%), with
+exact-prompt repeats and partial prefix reuse reported separately
+(FINDINGS §20).
+
+### Why this freeze is on firmer ground than v1
+
+v1 was chosen by scoring ~13 variants on two traces. v2's gate is a literal
+constant in the shipped implementation, independently reproduced from
+`server.log` (0.8% vs 64.8% search rate either side of 0.5), and consistent
+with the affinity sweep. Three sources, none of them a fit.
+
+### What is still not settled, and the held-out trace still matters
+
+Agreement of 97.8% on `original` is **not** evidence the model generalises:
+
+- Over half those hits (46 of 89) are exact-prompt repeats produced by the
+  harness replaying 15 tasks under 4 configs (OPEN_ISSUES §20). Any
+  prompt-keyed cache gets them.
+- `shared_first`'s 21 false positives are mostly an artefact of its degraded
+  segment (FINDINGS §18), so its 89.3% is not a clean failure either.
+- The char-for-token approximation leaves 1.1% / 5.6% of calls near the gate
+  where the model may pick the wrong branch.
+
+So the held-out trace is still the test, and for the same reason as before:
+these two traces measure the benchmark repeating itself. Do not tune
+`KEEP_GATE` against them.
+
+### `save_on_reuse` removed
+
+It was a free parameter asking whether an in-place reuse destroys the displaced
+state. The source answers it: the save is a consequence of `f_keep < 0.5`, not
+an independent choice. A knob that encodes a settled question is a liability.

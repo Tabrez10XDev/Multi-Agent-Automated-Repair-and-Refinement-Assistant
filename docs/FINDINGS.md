@@ -542,3 +542,96 @@ The `(%zu/%zu)` in the `checking sim` line prints the fraction's numerator and
 denominator, so a single server log at `--verbose` would settle whether
 similarity is measured against the incoming prompt or the cached one. That is
 cheaper than any further probe and is worth capturing on the next run.
+
+## 20. The cache rule, read out of llama.cpp's source
+
+Supersedes the mechanism in §19; §19's empirical findings stand.
+
+### The rule, cited
+
+`llama.cpp` `tools/server/server-context.cpp`:
+
+```c
+const float f_sim_cur = float(lcp_len) / task.tokens.size();
+const float f_keep    = (f_sim_best*task.tokens.size())
+                        / ret->prompt.tokens.size();
+if (f_keep < 0.5f) { update_cache = true; }
+```
+
+Three things settled, each of which we had wrong at some point:
+
+1. **`f_sim` is over the incoming prompt; `f_keep` is over the cached/slot
+   prompt.** Two different denominators, confirmed independently by a log
+   triple: slot `n_tokens = 379`, `checking sim = 0.130 (3/23)` (3/23,
+   incoming), `f_keep = 0.008` (3/379, slot).
+2. **The gate is 0.5 on `f_keep`, literal in the source.** Not 0.10, which is
+   `--slot-prompt-similarity` for choosing *between* slots and is inert at
+   `-np 1`. Reading 0.10 as the retention threshold is the root of §17.
+3. **`f_keep < 0.5` triggers `update_cache`** — both the save and the
+   "looking for better prompt" search. Above 0.5 the slot is reused in place
+   and the remainder is discarded, never saved.
+
+Independent agreement from `server.log`, 758 slot-selection events:
+`f_keep >= 0.5` searched the cache in 0.8% of 128 events; `f_keep < 0.5` in
+64.8% of 630.
+
+### Cache limits
+
+`cache state: 197 prompts, 6507.8 MiB (limits: 8192.000 MiB, 4096 tokens, 149762 est)`
+
+- **8192 MiB** byte budget — matches the capacity probe (~39 x 207 MiB).
+- **N tokens** is a *per-prompt* cap tracking `num_ctx` (4096, 8192 and 16384
+  all observed), not a cache total.
+- **`est`** is a derived total-token estimate, printed as raw bytes
+  (`8589934592` = 8 GiB) while the cache is empty. Not a limit.
+- Eviction is oldest-first: `making room for prompt cache entry` fired 22
+  times; no size- or token-limit eviction messages appear in these logs.
+- The cache reached **197 resident prompts**, so it is nowhere near scarce at
+  this workload's state sizes.
+
+### Scores, with reuse split by source
+
+| trace | hits | FP | agreement | exact-prompt repeats | partial prefix reuse |
+|---|---|---|---|---|---|
+| `original` | 84/89 | 1 | 97.8% | **46/46** | 38/43 |
+| `shared_first` | 76/78 | 21 | 89.3% | **47/47** | 29/31 |
+
+The split is the point. The exact-repeat column is harness artefact
+(OPEN_ISSUES §20) and the model captures all of it; the partial column is the
+only part reflecting workflow reuse. 19 of `shared_first`'s 21 false positives
+sit in its degraded segment (§18).
+
+**Char/token approximation.** The server computes both ratios on tokens; this
+model approximates with characters scaled by each call's chars-per-token ratio.
+Calls with `f_keep` within ±0.05 of the gate are therefore uncertain: **3 of
+272 (1.1%) on `original`, 12 of 214 (5.6%) on `shared_first`**. Small, but
+`shared_first`'s layout pushes more calls toward the gate, so it is the trace
+where the approximation matters most.
+
+## 21. Today's server discards state the workflow is about to reuse — in the retry loop
+
+For every within-task, same-model handoff — the calls the workflow actually
+chains (`coder -> debugger -> coder`, retries, replans):
+
+| trace | handoffs | `f_keep >= 0.5`, remainder discarded unsaved | median `f_keep` |
+|---|---|---|---|
+| `original` | 152 | **25 (16.4%)** | 0.053 |
+| `shared_first` | 94 | **9 (9.6%)** | 0.204 |
+
+Most handoffs sit far below the gate, so their state is saved and recoverable.
+The crossings concentrate in essentially one handoff type:
+
+- `original`: **24 of the 25 crossings are `coder -> coder`** — the retry loop.
+- `shared_first`: `evaluator -> coder` (7) and `evaluator -> evaluator` (1).
+
+That is the result worth carrying into the thesis. The one handoff where the
+workflow is most certain to want its predecessor's state — a coder retrying
+after a failed test, with a prompt differing only by an appended diagnosis — is
+exactly the handoff whose `f_keep` clears 0.5. So the server reuses the slot in
+place and silently drops the part it did not keep, with no cached copy to fall
+back on. A policy that knew the workflow would reuse that state could keep it;
+the server cannot know and does not.
+
+The rate is modest but it is structural rather than incidental: it follows from
+prompt shape, so it recurs in any workload whose retries append rather than
+rewrite.

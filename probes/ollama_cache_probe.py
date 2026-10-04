@@ -283,36 +283,55 @@ def affinity_probe(endpoint="generate", short=False, fracs=(0.05, 0.25, 0.50, 0.
     # boundary lies somewhere above 0.50, not at 0.10, and the earlier verdict
     # text asserted a conclusion its own rows contradicted. Report the
     # transition the data shows and name what is still unpinned.
-    restored = [r for r in rows if r[1] < 0.10]
-    trimmed = [r for r in rows if r[1] >= 0.10]
-    print(f"  restored intact (A again < 10% of cold): "
-          f"{', '.join(f'{r[0]:.0%}' for r in restored) or 'none'}")
-    print(f"  paid a recompute:                        "
-          f"{', '.join(f'{r[0]:.0%}' for r in trimmed) or 'none'}")
+    # At high sharing the two hypotheses predict the SAME recompute: restoring
+    # costs ~0 and trimming costs (1 - shared), and once shared > ~0.85 those
+    # are within measurement noise of each other. Rows like that are
+    # INDISTINGUISHABLE and must not be scored either way -- an earlier version
+    # labelled 95%/5% "restored" and then printed a nonsensical boundary.
+    AMBIG = 0.12          # trim cost below this is not separable from a restore
+    restored, trimmed, ambiguous = [], [], []
+    for r in rows:
+        frac, a_frac = r[0], r[1]
+        if (1.0 - frac) < AMBIG:
+            ambiguous.append(r)
+        elif a_frac < 0.10:
+            restored.append(r)
+        else:
+            trimmed.append(r)
+
+    def fl(rs):
+        return ", ".join(f"{r[0]:.0%}" for r in rs) or "none"
+    print(f"  restored intact (A again ~ 0):            {fl(restored)}")
+    print(f"  paid a recompute (~ unshared fraction):   {fl(trimmed)}")
+    print(f"  INDISTINGUISHABLE (trim cost < {AMBIG:.0%}):      {fl(ambiguous)}")
+    if ambiguous:
+        print(f"      at these levels restoring and trimming predict the same")
+        print(f"      recompute, so these rows are evidence for neither.")
     print()
     if restored and trimmed:
-        lo = max(r[0] for r in restored)
-        hi = min(r[0] for r in trimmed)
+        lo, hi = max(r[0] for r in restored), min(r[0] for r in trimmed)
+        if lo < hi:
+            print(f"  => the restore-to-trim boundary lies between {lo:.0%} and {hi:.0%}.")
+        else:
+            print(f"  => NON-MONOTONIC: restored up to {lo:.0%} but trimmed from "
+                  f"{hi:.0%}. One of these rows is wrong; do not infer a boundary.")
         tracks = all(abs(r[1] - (1.0 - r[0])) < 0.15 for r in trimmed)
-        print(f"  => the restore-to-trim boundary lies between {lo:.0%} and {hi:.0%}.")
-        print(f"     Below it the displaced state comes back intact from the host")
-        print(f"     prompt cache. Above it the slot is reused in place and A pays")
-        print(f"     {'its unshared fraction, which the numbers track.' if tracks else 'a recompute that does NOT track its unshared fraction.'}")
-        if lo >= 0.10:
-            print()
-            print(f"     NOTE: A survived at {lo:.0%} shared, well above the 0.10 slot")
-            print(f"     similarity threshold. So crossing 0.10 does NOT destroy the")
-            print(f"     displaced state. llama-server logs 'idle slots will be saved")
-            print(f"     to prompt cache upon starting a new task' unconditionally,")
-            print(f"     which is consistent with that.")
+        print(f"     Above it the slot is reused in place and A pays "
+              f"{'its unshared fraction, which the numbers track.' if tracks else 'a recompute that does NOT track its unshared fraction.'}")
     elif restored:
-        print("  => A was restored intact at every level tried. The boundary, if")
-        print("     there is one, is above the highest fraction tested.")
+        print(f"  => A was restored at every separable level ({fl(restored)}).")
     elif trimmed:
-        print("  => A paid a recompute at every level tried. The boundary, if")
-        print("     there is one, is below the lowest fraction tested.")
+        print(f"  => A paid a recompute at every separable level ({fl(trimmed)}).")
     else:
-        print("  => no rows; nothing to conclude.")
+        print("  => every row was indistinguishable; nothing can be concluded.")
+    print()
+    print("  CONFIRMED MECHANISM (llama.cpp tools/server/server-context.cpp):")
+    print("    f_sim  = lcp_len / task.tokens.size()        (incoming prompt)")
+    print("    f_keep = f_sim_best * task.tokens.size()")
+    print("             / ret->prompt.tokens.size()         (cached/slot prompt)")
+    print("    if (f_keep < 0.5f) { update_cache = true; }")
+    print("  So 0.5 on f_keep -- not 0.10 on f_sim -- decides whether the")
+    print("  displaced state is saved and the cache searched.")
     print()
     return rows
 
