@@ -361,7 +361,15 @@ refcounting and byte accounting stay correct by construction.
 Cost: slightly artificial, in that problem P's 2nd occurrence shares boilerplate
 with Q's 2nd but not with Q's 1st. Aggregate sharing rates are preserved.
 
-## 26. The ski-rental release rule never fires on the replayed traces
+## 26. PARTLY RETRACTED — "the ski-rental release rule never fires"
+
+> **Two overstatements, both mine.** (a) The zero-releases measurement was taken
+> at util 0.6; at util 0.8 the rule does fire (4-1315 releases). (b) I then
+> concluded no KV budget could make rent live, having swept the wrong knob —
+> the lever is **max_batch**, not KV. See §27 for the band that does exist.
+> What survives: the rule is inert at batch >= 8, which is where every earlier
+> comparison was run.
+
 
 **Open. This is the biggest threat to mechanism 1's claim and should be the
 next thing addressed.**
@@ -417,3 +425,50 @@ block and the predictions policy degenerated to the deterministic one for a
 second, independent reason. It now prefers the per-block gap, lifting hint
 coverage from 0% to 26.2% of blocks. Necessary, but as the table above shows,
 not enough to make the rule fire.
+
+## 27. The live-rent band is set by concurrency, not by KV budget
+
+Joint sweep, `holdout_qwen` 1x, util 0.8, arrival rate fixed, FCFS:
+
+| batch | retained KV | rent-active ticks | vol releases | ski-rental/keep-all | pred/keep-all |
+|---|---|---|---|---|---|
+| 2 | 96.6-99.1% | **50-59%** | 578-1315 | 1.107-1.408 | 1.117-1.417 |
+| 4 | 95.1-98.6% | **14-16%** | 16-985 | 1.196-1.380 | **1.169**-1.264 |
+| 8 | 93.8-98.3% | 2.6-3.5% | 0-420 | 1.204-1.375 | same as ski-rental |
+| 16 | 93.7-98.3% | 0.9-1.0% | 0-56 | 1.218-1.365 | same |
+| 32 | identical to 16 | identical | identical | identical | same |
+
+Three results:
+
+1. **KV budget is nearly irrelevant to whether retention is active.** Across
+   512/1024/2048 MB the rent-active fraction barely moves; `max_batch` moves it
+   by two orders of magnitude. Tightening KV actually *lowers* rent-active
+   ticks, because the budget then goes to pinned ACTIVE requests and almost
+   nothing is evictable. So the planned `--kv-mb` auto-calibration had no
+   target to bisect toward; the knob is concurrency.
+2. **Retained KV fraction does not discriminate** — it is 93-99% everywhere, so
+   it is useless as a calibration target. `rent_active_tick_frac` is the one
+   that tracks whether the mechanism can act.
+3. **Batch 16 and 32 are byte-identical**, so effective concurrency on this
+   trace caps out below 16: the queue never holds 16 ready requests. Every
+   earlier retention comparison ran at batch 8 or 16, i.e. outside the band.
+
+### The uncomfortable part
+
+Even inside the band, **ski-rental never beats keep-all** — the ratio runs
+1.107 to 1.408, always above 1. One cell is suggestive: at batch 4 / 512MB the
+learning-augmented variant scores 1.169 against plain ski-rental's 1.380, which
+is the first place predictions have measurably helped on real trace data. One
+cell is not a result.
+
+So mechanism 1 currently has no operating point on this workload where it beats
+the incumbent. That is the finding to either overturn with the full grid or
+report as negative.
+
+### What this means for calibration
+
+Calibrate on `rent_active_tick_frac` by varying `max_batch`, not `--kv-mb`. A
+target band of roughly 15-50% puts the run between batch 4 and batch 2. Note
+that batch 2-4 is a small-deployment regime — plausible for the single-GPU
+local server MAARA actually runs on, but it must be stated rather than
+presented as a general setting.
