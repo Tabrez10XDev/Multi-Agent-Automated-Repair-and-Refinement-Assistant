@@ -197,8 +197,14 @@ def main():
                   f"{len(seeds)} seeds | chunked prefill 512 ===")
             print(f"  hindsight denominator {hind:.1f} recompute-s "
                   f"(min(rebuild, rent) per block, measured under keep-all)")
-            print(f"  {'retention':<17}{'sched':<6}{'recompute':>11}{'rent':>9}"
-                  f"{'p50':>8}{'p95':>9}{'ratio':>8}{'controlled':>12}")
+            # USER-FACING metrics first. Rent is kept as an internal column
+            # because it is nearly invariant to the policy in this regime and
+            # the composite "recompute + rent" ratio actually INVERTS the
+            # ranking -- it rates evict-now above keep-all while evict-now is
+            # worse on both latency and GPU work (FINDINGS 24).
+            print(f"  {'retention':<17}{'sched':<6}{'p50':>8}{'p95':>9}"
+                  f"{'gpu_recomp':>12}{'| rent':>9}{'ratio':>8}{'ctrl':>7}"
+                  f"{'rent-act':>10}")
             for pol in POLICIES:
                 for sched in ("fcfs", "lsf"):
                     rs = []
@@ -237,10 +243,12 @@ def main():
                         "prefix_hit_rate": m("prefix_hit_rate"),
                         "deadline_miss_rate": m("deadline_miss_rate"),
                     })
-                    print(f"  {pol:<17}{sched:<6}{m('recompute_seconds'):>11.1f}"
-                          f"{m('total_rent_s'):>9.1f}{m('p50_task_latency_s'):>8.0f}"
-                          f"{m('p95_task_latency_s'):>9.0f}{ratio:>8.2f}"
-                          f"{ctrl:>12.0f}", flush=True)
+                    print(f"  {pol:<17}{sched:<6}"
+                          f"{m('p50_task_latency_s'):>8.1f}"
+                          f"{m('p95_task_latency_s'):>9.1f}"
+                          f"{m('recompute_seconds'):>12.1f}"
+                          f"{m('total_rent_s'):>9.1f}{ratio:>8.2f}{ctrl:>7.0f}"
+                          f"{m('rent_active_tick_frac'):>9.1%}", flush=True)
             print(f"  [cell done at {time.time()-t0:.0f}s]\n", flush=True)
 
     out = {"trace_set": args.trace_set, "scales": scales, "utils": utils,

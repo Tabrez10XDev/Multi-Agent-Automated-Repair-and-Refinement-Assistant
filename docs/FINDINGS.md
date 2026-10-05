@@ -795,3 +795,110 @@ and lands FCFS in the target miss band.
 So any scheduling claim about this workload has to state the concurrency limit
 it holds at. At generous batch sizes the queue is nearly always trivial and
 scheduling is a non-question.
+
+## 24. Why retention cannot move latency on this workload
+
+Diagnostic before the grid, `holdout_qwen` 1x, util 0.8, batch 4, KV 512MB,
+FCFS — inside the live-rent band (OPEN_ISSUES §27).
+
+### The decisive number: recompute is ~1% of makespan
+
+| policy | recompute | prefill | decode | idle | makespan | recomp/makespan | p95 |
+|---|---|---|---|---|---|---|---|
+| keep-all | 13.4s | 408.7s | 883.1s | 285.8s | 1603.9s | **0.8%** | 187.6 |
+| ski-rental | 18.4s | 413.8s | 882.8s | 283.8s | 1606.7s | **1.1%** | 185.8 |
+| evict-now | 127.4s | 522.8s | 856.9s | 207.4s | 1612.4s | 7.9% | 220.3 |
+| offline-ref | 29.4s | 424.8s | 878.8s | 286.6s | 1616.3s | 1.8% | 184.7 |
+
+Decode is 55% of makespan, prefill 25%, idle 18%. Avoided recompute is the
+*only* thing a retention policy can win, and it is **under 1%**. So the
+latency spread across every deployable policy is 185.8-187.6s p95 — **within
+1%** — and the offline reference, the best achievable, beats keep-all's p95 by
+1.5%.
+
+**Retention is not a latency mechanism on this workload.** It is a GPU-work
+mechanism: 13.4s against evict-now's 127.4s is a 9.5x difference in wasted
+prefill, which matters for throughput and cost per task, not for what a user
+feels.
+
+### The decision space is not empty, but the headroom is in the wrong term
+
+Answering the direct question: keep-all's realized ratio against its own
+hindsight is **1.20-1.55**, not ~1.0, so there *is* cost headroom.
+
+| batch | KV | keep-all ratio | ski-rental ratio | rent-active |
+|---|---|---|---|---|
+| 2 | 512 | 1.545 | 1.554 | 44.9% |
+| 2 | 1024 | 1.465 | 1.225 | 37.4% |
+| 4 | 512 | 1.461 | 1.300 | 12.6% |
+| 4 | 1024 | 1.362 | 1.197 | 14.2% |
+| 8 | 512 | 1.450 | 1.475 | 3.5% |
+
+**But `realized_ratio` is not comparable across policies** and these numbers
+are misleading on their own. It divides by each run's *own* hindsight, and
+ski-rental accrues more rent, which inflates `min(rebuild, rent)` per key and
+therefore its own denominator. That is why ski-rental looks better here while
+costing more in absolute terms. Against the **shared keep-all denominator**
+(109.1 recompute-s), which is what the grid uses:
+
+| policy | cost | ratio | vs keep-all | p50 | p95 |
+|---|---|---|---|---|---|
+| keep-all / lru | 159.4 | 1.461 | 1.000 | 49.6 | 187.6 |
+| evict-now | 127.4 | 1.168 | **0.800** | 54.1 | 220.3 |
+| ski-rental | 184.6 | 1.693 | 1.158 | 50.9 | 185.8 |
+| ski-rental-pred | 184.2 | 1.689 | 1.156 | 50.9 | 184.0 |
+| offline-ref | 116.3 | 1.067 | **0.730** | 50.8 | 184.7 |
+
+### The composite objective inverts the ranking
+
+`recompute + rent` rates **evict-now as 20% better than keep-all** — while
+evict-now is 17% worse on p95 and 9.5x worse on GPU work. It also rates
+`offline-ref` best, yet offline-ref's recompute (29.4s) is *higher* than
+keep-all's (13.4s): it trades recompute for rent. The reference is optimising
+an objective that does not correspond to anything a user or an operator cares
+about.
+
+So latency and GPU recompute are the reportable metrics. Rent stays as an
+internal diagnostic.
+
+### Why ski-rental pays more rent while holding less — not a bug
+
+It holds **4.5MB less** (470.8 → 466.3 mean retained) and pays **20.2s more
+rent** (146.0 → 166.2), at an essentially identical eviction rate (5.058 vs
+5.070). Traced over all 862 of its voluntary releases:
+
+| | |
+|---|---|
+| releases | 862 |
+| released and never needed again | **776 (90%)** |
+| released then rebuilt later | 86 (10%), p50 gap 31.7s |
+| rebuilt more than once | 6 |
+| rent at release vs break-even | p50 0.0597s vs p50 b 0.0597s — **fires exactly at break-even** |
+| `useful_tokens / tokens` at release | **1.000** — break-even is priced on the full block, no mispricing |
+| keys rebuilt *and* charged >1.5x their rebuild cost in rent | 57 |
+
+No bug: the rule fires exactly where it is designed to, and 90% of its releases
+are correct in hindsight. The explanation is the **rent model**, not the policy.
+Ski-rental's threshold is the entry's own recompute cost, so it releases the
+**cheapest-to-rebuild** entries first, leaving an expensive-to-rebuild residue.
+Derived rent is proportional to the victim's recompute-per-byte and normalised
+by the evictable pool (DECISIONS §13), so a more expensive residue accrues rent
+faster. Releasing shifts rent onto whoever still holds rather than removing it.
+
+The structural consequence: **rent is nearly invariant to the policy in the
+regime where the policy operates** — 146s vs 166s — and only collapses when
+almost nothing is held (evict-now: 0s). An objective dominated by a term the
+policy cannot reduce will mislead, and here it does: ski-rental spends 5.0s of
+extra recompute to chase 20.2s of rent it cannot actually avoid.
+
+### Framing the Ollama comparison
+
+The Ollama-vs-block gap (239.3s vs 159.4s, DECISIONS §22) is an **architecture**
+result: shared block prefix caching against one slot plus a host tier.
+**`keep-all` already captures all of it** — no clever policy is needed.
+
+So workflow-aware retention's own contribution must be measured as
+**block/ski-rental against block/keep-all**, never against Ollama. Quoting the
+1.50x architecture gap as if a retention policy earned it would be wrong. On
+that honest comparison, ski-rental is currently **1.158x worse** than keep-all
+on cost and level on latency.
