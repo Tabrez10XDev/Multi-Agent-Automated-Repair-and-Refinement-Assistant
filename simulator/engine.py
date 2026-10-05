@@ -310,6 +310,14 @@ class Engine:
             "w_queue": 0.0, "max_queue": 0, "admit_calls": 0, "calls_with_choice": 0,
             "tail_entries_created": 0, "tail_evictions": 0, "w_evict_rate": 0.0,
             "voluntary_evictions": 0,
+            # ACTIVITY counters. Three mechanisms in this engine can be
+            # silently inert -- KV never blocks, the scheduler never has
+            # a choice, rent never accrues -- and each time that happened
+            # a comparison measured nothing while still printing a table.
+            # These make inactivity visible in the report itself.
+            "rent_ticks": 0, "rent_active_ticks": 0,
+            "voluntary_releases": 0,
+
         }
 
         # Isolated task time is computed ONCE, from the estimator's priors,
@@ -751,6 +759,9 @@ class Engine:
                 pressure = self._under_pressure()
             if evictable is None:
                 evictable = [e for e in self.entries.values() if e.evictable]
+            self.m["rent_ticks"] += 1
+            if pressure and evictable:
+                self.m["rent_active_ticks"] += 1
             self._accrue_derived_rent(dt, pressure, evictable)
 
     def _accrue_blocking_rent(self, dt: float, blocked):
@@ -874,6 +885,11 @@ class Engine:
         a policy could only ever react to pressure, never anticipate it.
         """
         release = self.retention.on_tick(list(self.entries.values()), self.now)
+        # Counted separately from voluntary_evictions: a policy can ASK to
+        # release a key that turns out to be pinned. The gap between the two
+        # tells you whether the rule is firing at all, which is exactly what
+        # was invisible when ski-rental made zero releases across 24M ticks.
+        self.m["voluntary_releases"] += len(release)
         for key in release:
             e = self.entries.get(key)
             if e is not None and e.evictable:
@@ -1058,6 +1074,11 @@ class Engine:
             "ewma_tau_s": self.cfg.ewma_tau_s,
             "tail_entries_created": self.m["tail_entries_created"],
             "voluntary_evictions": self.m["voluntary_evictions"],
+            "voluntary_releases_requested": self.m["voluntary_releases"],
+            "rent_active_tick_frac": (
+                self.m["rent_active_ticks"] / self.m["rent_ticks"]
+                if self.m["rent_ticks"] else 0.0),
+
             "tail_evictions": self.m["tail_evictions"],
             "mean_eviction_rate_per_s": w("w_evict_rate"),
             "hindsight_cost_s": hindsight,
@@ -1127,6 +1148,45 @@ def scheduling_provenance(cfg: EngineConfig, estimator) -> str:
     return "\n".join(lines)
 
 
+def activity_summary(rep) -> dict:
+    """
+    Which mechanisms were actually ACTIVE in this run.
+
+    Each of the engine's three mechanisms can be silently inert, and each one
+    has already produced a comparison that measured nothing while printing a
+    perfectly plausible table:
+
+      scheduling  at max_batch=16 the queue is nearly always trivial, so the
+                  scheduler has no choice to make (FINDINGS 23)
+      retention   with no eviction pressure rent never accrues, so the
+                  ski-rental rule never fires (OPEN_ISSUES 26)
+      reuse       with nothing blocking on KV, retention cannot matter at all
+
+    So inactivity is reported as data, not left to prose.
+    """
+    sched = rep.get("frac_decisions_with_choice", 0.0)
+    rent = rep.get("rent_active_tick_frac", 0.0)
+    rel = rep.get("voluntary_releases_requested", 0)
+    inactive = []
+    if sched < 0.10:
+        inactive.append("scheduling")
+    if rent < 0.01:
+        inactive.append("rent")
+    if rel == 0:
+        inactive.append("voluntary-release")
+    return {"sched_choice_frac": sched, "rent_active_tick_frac": rent,
+            "voluntary_releases_requested": rel, "inactive": inactive}
+
+
+def activity_line(rep) -> str:
+    a = activity_summary(rep)
+    flag = ("  ACTIVE" if not a["inactive"]
+            else "  INACTIVE: " + ",".join(a["inactive"]))
+    return (f"  activity   sched-choice {a['sched_choice_frac']:>6.1%}  "
+            f"rent-active ticks {a['rent_active_tick_frac']:>6.1%}  "
+            f"vol-releases {a['voluntary_releases_requested']:>7}{flag}")
+
+
 def format_report(rep: dict, engine: "Engine") -> str:
     L = [
         "=" * 68,
@@ -1182,6 +1242,8 @@ def format_report(rep: dict, engine: "Engine") -> str:
         f"  mean eviction rate     {rep['mean_eviction_rate_per_s']:.3f}/s",
         f"  tail entries created   {rep['tail_entries_created']} "
         f"({rep['tail_evictions']} evicted)",
+        "=" * 68,
+        activity_line(rep),
         "=" * 68,
     ]
     if rep["blocked_iterations"] == 0:
