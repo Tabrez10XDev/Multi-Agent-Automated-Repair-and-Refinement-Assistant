@@ -571,3 +571,83 @@ def test_synthetic_path_has_no_block_reuse_gaps():
     populated = sum(len(n.block_reuse_gap) for t in tasks for n in t.nodes)
     assert populated == 0, (
         f"synthetic trace unexpectedly annotated {populated} per-block gaps")
+
+
+# --------------------------------------------------------------------------
+# Ollama cache mode (DECISIONS 22)
+# --------------------------------------------------------------------------
+
+def _ollama_run(kv_mb=512, batch=4, mode="ollama", policy="keep-all"):
+    from simulator.engine import Engine, EngineConfig
+    from simulator.policies import (RETENTIONS, SCHEDULERS, ExecutionEstimator,
+                                    HintBuilder)
+    from simulator.workload import CostModel, CpuStageSeconds, StageTokens
+    lt = _load_real("holdout_qwen")
+    cost, tok, cpu = CostModel(), StageTokens(), CpuStageSeconds()
+    eng = Engine(lt.tasks, cost,
+                 EngineConfig(kv_budget_mb=kv_mb, max_batch=batch,
+                              prefill_chunk_tokens=512, cache_mode=mode),
+                 retention=RETENTIONS[policy](), scheduler=SCHEDULERS["fcfs"](),
+                 estimator=ExecutionEstimator(cost, tok, cpu),
+                 hints=HintBuilder(sigma=0.5, seed=1))
+    return eng.run()
+
+
+def test_ollama_mode_runs_and_exercises_the_slot_and_host_tier():
+    rep = _ollama_run()
+    assert rep["cache_mode"] == "ollama"
+    assert rep["ollama_host_saves"] > 0, "host tier was never written"
+    assert rep["ollama_discarded_blocks"] > 0, "nothing was ever discarded"
+    assert rep["tasks_completed"] > 0
+
+
+def test_ollama_mode_costs_more_recompute_than_a_shared_block_cache():
+    """
+    The architectural point of the baseline.
+
+    One slot per model plus a host tier must recompute more than a shared,
+    content-keyed block cache that every request can hit -- that gap is what a
+    workflow-aware policy is trying to recover.
+    """
+    ollama = _ollama_run(mode="ollama")
+    block = _ollama_run(mode="block")
+    assert ollama["recompute_seconds"] > block["recompute_seconds"], (
+        f"ollama {ollama['recompute_seconds']:.1f}s vs block "
+        f"{block['recompute_seconds']:.1f}s")
+
+
+def test_ollama_match_is_side_effect_free():
+    """
+    _match_blocks is called more than once per admission attempt and the
+    attempt can fail, so the ollama matcher must not mutate the slot. When it
+    did, a failed admission left the slot naming blocks that were never
+    allocated and the next matching request raised KeyError on self.entries.
+    """
+    from simulator.engine import Engine, EngineConfig
+    from simulator.policies import RETENTIONS, SCHEDULERS, ExecutionEstimator
+    from simulator.workload import CostModel, CpuStageSeconds, StageTokens
+    lt = _load_real("holdout_qwen")
+    cost, tok, cpu = CostModel(), StageTokens(), CpuStageSeconds()
+    eng = Engine(lt.tasks, cost,
+                 EngineConfig(kv_budget_mb=512, max_batch=4,
+                              prefill_chunk_tokens=512, cache_mode="ollama"),
+                 retention=RETENTIONS["keep-all"](), scheduler=SCHEDULERS["fcfs"](),
+                 estimator=ExecutionEstimator(cost, tok, cpu))
+    r = eng.ready[0] if getattr(eng, "ready", None) else None
+    if r is None:
+        import pytest
+        pytest.skip("no ready request to probe")
+    before = {m: list(v) for m, v in eng._ollama_slot.items()}
+    for _ in range(3):
+        eng._match_blocks(r)
+    assert {m: list(v) for m, v in eng._ollama_slot.items()} == before
+
+
+def test_ollama_slot_match_never_claims_an_evicted_block():
+    """
+    The slot is a list of keys, not proof of residency: the retention policy
+    can evict a slot block under pressure. Claiming it as a hit used to
+    dereference a missing entry.
+    """
+    rep = _ollama_run(kv_mb=256, batch=8)   # tight budget, heavy eviction
+    assert rep["tasks_completed"] > 0

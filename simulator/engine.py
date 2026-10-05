@@ -66,6 +66,29 @@ class EngineConfig:
     # "blocking" : the Phase 1 model, charged only while a request is hard-blocked
     rent_model: str = "derived"
 
+    # Prefix-cache ARCHITECTURE, not a retention policy.
+    #   "block"  vLLM-style: one shared, content-keyed block cache that every
+    #            request can hit, with a retention policy deciding what to keep.
+    #   "ollama" what the real server does (FINDINGS 20): ONE active slot per
+    #            model plus a host-RAM tier. A new prompt whose f_keep >= 0.50
+    #            reuses the slot IN PLACE and the rest of the previous prompt is
+    #            discarded with no saved copy; below that the displaced state is
+    #            saved to host RAM and the tier is searched for a better start.
+    #
+    # This cannot be a RetentionPolicy: policies choose what to keep within a
+    # shared cache, whereas Ollama's defining behaviour is that only one prompt
+    # is resident at all and similarity decides whether the displaced one
+    # survives. Modelling it as LRU would erase exactly the effect that loses
+    # coder-retry caches (FINDINGS 21).
+    cache_mode: str = "block"
+    # Host-RAM tier, MEASURED from the server log ("size limit: 8192 MiB"). It
+    # is HOST memory, so it does NOT consume kv_budget_mb -- the Ollama baseline
+    # therefore gets a second tier the block-cache policies do not have. That is
+    # generous to the incumbent and deliberate, but it must be stated whenever
+    # the comparison is reported.
+    ollama_host_mb: float = 8192.0
+    ollama_keep_gate: float = 0.50
+
     # Smoothing constant for the observed eviction rate, seconds. PLACEHOLDER:
     # an estimator parameter, not a price -- it changes how noisily an
     # observable is measured, not what memory costs.
@@ -201,6 +224,11 @@ class Request:
     held_blocks: list = field(default_factory=list)
     matched_blocks: int = 0
     prefix_hit: bool = False
+    # Ollama mode only: blocks whose prefill a host-tier restore skips
+    # but whose bytes must still be allocated, since a saved state has
+    # to be loaded back into GPU KV.
+    ollama_restored_blocks: int = 0
+    _ollama_plan: tuple = ()
     kv_blocked_seconds: float = 0.0
     # Prediction recorded at enqueue, scored against the true output at
     # completion. Kept per request so estimator error is measurable per role.
@@ -277,6 +305,7 @@ class Engine:
         # is a cold miss nobody could have prevented.
         self.seen_keys = set()
 
+        self._ollama_slot, self._ollama_host = {}, {}
         self.m = {
             "prefill_seconds": 0.0, "decode_seconds": 0.0, "switch_seconds": 0.0,
             "idle_seconds": 0.0, "iterations": 0,
@@ -316,6 +345,10 @@ class Engine:
             # a comparison measured nothing while still printing a table.
             # These make inactivity visible in the report itself.
             "rent_ticks": 0, "rent_active_ticks": 0,
+            "ollama_slot_reuse": 0, "ollama_host_restore": 0,
+            "ollama_slot_partial": 0, "ollama_cold": 0,
+            "ollama_discarded_blocks": 0, "ollama_host_saves": 0,
+            "ollama_host_evictions": 0,
             "voluntary_releases": 0,
 
         }
@@ -406,6 +439,8 @@ class Engine:
         is what makes a hit PARTIAL -- matched blocks skip prefill, everything
         after is computed.
         """
+        if self.cfg.cache_mode == "ollama":
+            return self._match_ollama(r)
         matched = 0
         for k in r.node.block_keys:
             e = self.entries.get(k)
@@ -413,6 +448,118 @@ class Engine:
                 break
             matched += 1
         return matched
+
+    @staticmethod
+    def _lcp(a, b):
+        n = 0
+        for x, y in zip(a, b):
+            if x != y:
+                break
+            n += 1
+        return n
+
+    def _match_ollama(self, r: Request):
+        """
+        One slot per model plus a host-RAM tier, after FINDINGS 20.
+
+        The gate is on f_keep = lcp / SLOT length, not / incoming length, and
+        the constant is 0.5 -- both read out of llama.cpp's
+        `if (f_keep < 0.5f) { update_cache = true; }`. Above the gate the slot
+        is reused in place and its tail is dropped with nothing saved; below it
+        the displaced state goes to host RAM and the tier is searched.
+        """
+        chain = r.node.block_keys
+        slot = self._ollama_slot.get(r.model, [])
+        host = self._ollama_host.setdefault(r.model, [])
+
+        lcp_slot = self._lcp(chain, slot)
+        # f_keep is the server's own bookkeeping and is computed against the
+        # whole slot, which is what llama.cpp does.
+        f_keep = lcp_slot / len(slot) if slot else 0.0
+        # The match itself must be capped by what is ACTUALLY resident. The
+        # slot is only a list of keys; eviction pressure can have taken some of
+        # those blocks out of GPU KV already, and claiming them as a hit left
+        # the engine dereferencing entries that no longer exist.
+        resident = 0
+        for k in chain[:lcp_slot]:
+            e = self.entries.get(k)
+            if e is None or e.model != r.model:
+                break
+            resident += 1
+        lcp_slot = resident
+
+        # PURE: this is called more than once per admission attempt and the
+        # attempt can still fail, so it must not mutate the slot or the host
+        # tier. An earlier version did, which left a phantom slot pointing at
+        # blocks that were never allocated -- a KeyError two requests later.
+        # All mutation happens in _commit_ollama, after admission succeeds.
+        if slot and f_keep >= self.cfg.ollama_keep_gate:
+            r._ollama_plan = ("reuse", lcp_slot, 0)
+            return lcp_slot
+
+        best, best_i = 0, None
+        for i, saved in enumerate(host):
+            n = self._lcp(chain, saved)
+            if n > best:
+                best, best_i = n, i
+        if best_i is not None and best > lcp_slot:
+            # A restore COPIES the saved state (DECISIONS 17); the host keeps it.
+            #
+            # Prefill is skipped for the restored prefix, but those blocks are
+            # NOT resident in GPU KV -- they were evicted when the slot was
+            # displaced. Loading a saved state back costs bytes, not prefill.
+            # So the resident match stays `lcp_slot` (which is what drives
+            # entry bookkeeping) and the extra restored blocks are recorded
+            # separately for the prefill discount.
+            r.ollama_restored_blocks = max(0, best - lcp_slot)
+            r._ollama_plan = ("restore", lcp_slot, r.ollama_restored_blocks)
+            return lcp_slot
+        r._ollama_plan = ("partial" if lcp_slot > 0 else "cold", lcp_slot, 0)
+        return lcp_slot
+
+    def _commit_ollama(self, r):
+        """Apply the slot/host transition, once admission has succeeded."""
+        kind, lcp_slot, _restored = getattr(r, "_ollama_plan", ("cold", 0, 0))
+        slot = self._ollama_slot.get(r.model, [])
+        if kind == "reuse":
+            # The slot's unmatched tail is destroyed outright: not saved to
+            # host, not retained. This is the behaviour that loses a coder's
+            # state across a retry (FINDINGS 21).
+            self.m["ollama_slot_reuse"] += 1
+            self._drop_ollama_tail(r.model, slot[lcp_slot:])
+        else:
+            if slot:
+                self._host_save(r.model, slot)
+            self.m["ollama_" + ("host_restore" if kind == "restore"
+                                else "slot_partial" if kind == "partial"
+                                else "cold")] += 1
+            # Whatever the previous slot still held beyond the shared prefix is
+            # no longer reachable from the slot; it lives in the host tier now.
+            self._drop_ollama_tail(r.model, slot[lcp_slot:])
+        self._ollama_slot[r.model] = list(r.node.block_keys)
+
+    def _drop_ollama_tail(self, model, keys):
+        """Discard slot blocks that the new prompt did not keep."""
+        for k in keys:
+            e = self.entries.get(k)
+            if e is not None and e.evictable:
+                self._evict(e, forced=False)
+                self.m["ollama_discarded_blocks"] += 1
+
+    def _host_save(self, model, keys):
+        """Save a displaced slot to the host tier, oldest-out by byte budget."""
+        if not keys:
+            return
+        host = self._ollama_host.setdefault(model, [])
+        host.append(list(keys))
+        self.m["ollama_host_saves"] += 1
+        bt = self.cfg.block_tokens
+        limit = self.cfg.ollama_host_mb * 1024 * 1024
+        size = lambda ks: self.cost.kv_bytes(model, bt) * len(ks)
+        total = sum(size(k) for k in host)
+        while total > limit and len(host) > 1:
+            total -= size(host.pop(0))
+            self.m["ollama_host_evictions"] += 1
 
     def _try_admit(self, r: Request) -> bool:
         """
@@ -501,7 +648,11 @@ class Engine:
         self.m["hits"] += matched
         r.prefix_hit = matched > 0
         r.matched_blocks = matched
-        r.prefill_tokens = max(0, node.prompt_tokens - matched_tokens)
+        restored_tokens = min(
+            r.ollama_restored_blocks * bt,
+            max(0, node.prompt_tokens - matched_tokens))
+        r.prefill_tokens = max(0, node.prompt_tokens - matched_tokens
+                               - restored_tokens)
         r.prefill_remaining = r.prefill_tokens
 
         for k in chain[:matched]:
@@ -537,6 +688,9 @@ class Engine:
                 self._model_blocks[e.model] = self._model_blocks.get(e.model, 1) - 1
             e.refcount += 1
         r.held_blocks = list(chain)
+
+        if self.cfg.cache_mode == "ollama":
+            self._commit_ollama(r)
 
         r.private_bytes = output_bytes
         self.pinned_bytes += output_bytes
@@ -1075,6 +1229,11 @@ class Engine:
             "tail_entries_created": self.m["tail_entries_created"],
             "voluntary_evictions": self.m["voluntary_evictions"],
             "voluntary_releases_requested": self.m["voluntary_releases"],
+            "cache_mode": self.cfg.cache_mode,
+            "ollama_slot_reuse": self.m["ollama_slot_reuse"],
+            "ollama_host_restore": self.m["ollama_host_restore"],
+            "ollama_discarded_blocks": self.m["ollama_discarded_blocks"],
+            "ollama_host_saves": self.m["ollama_host_saves"],
             "rent_active_tick_frac": (
                 self.m["rent_active_ticks"] / self.m["rent_ticks"]
                 if self.m["rent_ticks"] else 0.0),

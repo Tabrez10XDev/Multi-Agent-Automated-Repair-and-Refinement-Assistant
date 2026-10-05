@@ -484,3 +484,60 @@ this change, and a test asserts the map stays empty for `generate_trace()`.
 `ski-rental-pred` gets a within-run-only hint. That is left as-is deliberately:
 the hint is meant to be noisy and partial, and the oracle is the thing that had
 to be correct.
+
+## 22. Ollama is a cache MODE, not a retention policy
+
+I first argued that `LRURetention` was a faithful stand-in for Ollama's prompt
+cache, on the grounds that a block-level cache has no "slot" for the `f_keep`
+gate to act on. That was wrong, and it erased the one behaviour that matters.
+
+Ollama's defining behaviour (FINDINGS §20) is that **only one prompt is
+resident per model**, and similarity decides whether the displaced one
+survives: at `f_keep >= 0.5` the slot is reused in place and the rest of the
+previous prompt is discarded with **no saved copy**. That is precisely what
+loses a coder's state across a retry (FINDINGS §21). A retention policy chooses
+what to keep *within a shared cache*; it cannot express "there is only one
+slot". So this is `EngineConfig.cache_mode`:
+
+- `"block"` — vLLM-style shared, content-keyed block cache (the default)
+- `"ollama"` — one slot per model plus a host-RAM tier
+
+Measured, `holdout_qwen` 1x, util 0.8, batch 4, KV 512MB, FCFS:
+
+| mode / policy | recompute | rent | total | slot reuse | discarded | restores | host saves |
+|---|---|---|---|---|---|---|---|
+| block / keep-all | 13.4s | 146.0s | **159.4s** | — | — | — | — |
+| block / ski-rental | 18.4s | 166.2s | 184.6s | — | — | — | — |
+| **ollama / keep-all** | **122.1s** | 117.1s | **239.3s** | 1 | 3724 | 184 | 317 |
+
+So today's server pays **9.1x the recompute** and **1.50x the total cost** of a
+shared block cache. That gap is the thesis's opportunity, and it is now
+measured rather than asserted.
+
+### The host tier is free, deliberately
+
+`ollama_host_mb` defaults to 8192, MEASURED from the server log
+("prompt cache is enabled, size limit: 8192 MiB"). It is **host** memory, so it
+does not consume `kv_budget_mb` — the Ollama baseline gets a second tier the
+block-cache policies do not have. That is generous to the incumbent, which is
+the right direction for a baseline, but it must be stated wherever the
+comparison is reported or Ollama looks artificially strong.
+
+### Three bugs this shook out, all from the same root
+
+The matcher is called more than once per admission attempt, and the attempt can
+still fail.
+
+1. **Mutation in the matcher.** The first version updated the slot inside
+   `_match_ollama`, so a failed admission left the slot naming blocks that were
+   never allocated — `KeyError` two requests later. Split into a pure
+   `_match_ollama` plus `_commit_ollama`, called only after admission succeeds.
+2. **Prefill and residency were conflated.** A host restore skips prefill but
+   the blocks are *not* in GPU KV; loading a saved state costs bytes. The
+   resident match and the restored-block discount are now tracked separately
+   (`Request.ollama_restored_blocks`).
+3. **The slot is not proof of residency.** Eviction pressure can remove a slot
+   block. `f_keep` is still computed against the whole slot, as llama.cpp does,
+   but the *match* is capped by what is actually resident.
+
+Block mode is unchanged: four fixed-seed synthetic runs are byte-identical.
