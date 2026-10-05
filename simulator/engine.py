@@ -508,7 +508,7 @@ class Engine:
                 # the node-level field otherwise (synthetic path, where
                 # cross-task sharing cannot occur). See Node.block_reuse_gap.
                 true_gap_s=node.block_reuse_gap.get(k, node.next_reuse_gap_s),
-                hint_gap_s=(self.hints.hint_for(node) if self.hints else None))
+                hint_gap_s=(self.hints.hint_for(node, k) if self.hints else None))
             self.entries[k].clock = self._clock
             self.entries[k].rent_cum_at = self._clock.cum
             self._entry_bytes += block_bytes
@@ -1082,6 +1082,12 @@ class Engine:
             "forced_evictions": self.m["forced_evictions"],
             "recompute_seconds": self.m["recompute_seconds"],
             "recompute_tokens": self.m["recompute_tokens"],
+            # Misses on a block that HAD been seen before: recompute the
+            # retention policy could have avoided. A block never seen is a cold
+            # miss nobody could prevent, so these two separate "the policy was
+            # wrong" from "the policy had no say".
+            "retention_controlled_decisions": self.m["recompute_misses"],
+            "cold_misses": self.m["cold_misses"],
             "kv_blocked_seconds": self.m["kv_blocked_seconds"],
             "blocked_iterations": self.m["blocked_events"],
             "blocked_with_evictable": self.m["blocked_with_evictable"],

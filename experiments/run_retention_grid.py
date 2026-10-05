@@ -34,6 +34,8 @@ HINDSIGHT AS A SHARED DENOMINATOR
 from __future__ import annotations
 
 import argparse
+import json
+import time
 import hashlib
 import os
 import statistics as st
@@ -91,8 +93,8 @@ def build(scale, seed, arrival_rate, cost, tok, cpu, trace_set="original"):
 
 
 def run_one(policy, sched, scale, seed, kv_mb, arrival_rate, cost, tok, cpu,
-            batch=16, lam=0.5, sigma=0.5, chunk=512):
-    tasks = build(scale, seed, arrival_rate, cost, tok, cpu)
+            batch=8, lam=0.5, sigma=0.5, chunk=512, trace_set="holdout_qwen"):
+    tasks = build(scale, seed, arrival_rate, cost, tok, cpu, trace_set=trace_set)
     pol = (SkiRentalPredictionsRetention(lam) if policy == "ski-rental-pred"
            else RETENTIONS[policy]())
     eng = Engine(tasks, cost,
@@ -105,7 +107,8 @@ def run_one(policy, sched, scale, seed, kv_mb, arrival_rate, cost, tok, cpu,
 
 
 def calibrate_rate(target_util, scale, seed, kv_mb, cost, tok, cpu,
-                   lo=0.005, hi=8.0, iters=12):
+                   lo=0.005, hi=8.0, iters=12, trace_set="holdout_qwen",
+                   batch=8):
     """Binary-search the arrival rate giving `target_util` GPU busy under
     FCFS/keep-all. Monotone in rate, so bisection is safe."""
     best = hi
@@ -113,7 +116,7 @@ def calibrate_rate(target_util, scale, seed, kv_mb, cost, tok, cpu,
         mid = (lo + hi) / 2
         try:
             _, rep = run_one("keep-all", "fcfs", scale, seed, kv_mb, mid,
-                             cost, tok, cpu)
+                             cost, tok, cpu, batch=batch, trace_set=trace_set)
             busy = rep["gpu_busy_frac"]
         except RuntimeError:
             busy = 1.0
@@ -125,10 +128,11 @@ def calibrate_rate(target_util, scale, seed, kv_mb, cost, tok, cpu,
     return best
 
 
-def hindsight_denominator(scale, seed, kv_mb, arrival_rate, cost, tok, cpu):
+def hindsight_denominator(scale, seed, kv_mb, arrival_rate, cost, tok, cpu,
+                          trace_set="holdout_qwen", batch=8):
     """min(rebuild, rent-while-held) per key, measured under keep-all."""
     eng, _ = run_one("keep-all", "fcfs", scale, seed, kv_mb, arrival_rate,
-                     cost, tok, cpu)
+                     cost, tok, cpu, batch=batch, trace_set=trace_set)
     return sum(min(eng._key_recompute.get(k, 0.0), rent)
                for k, rent in eng._key_rent.items())
 
@@ -141,6 +145,18 @@ def main():
     ap.add_argument("--scales", default=None,
                     help="comma-separated context scales, e.g. 1 or 1,8,16")
     ap.add_argument("--seeds", type=int, default=5)
+    ap.add_argument("--seeds-16x", type=int, default=3,
+                    help="fewer seeds at 16x, where each run is slowest")
+    ap.add_argument("--trace-set", default="holdout_qwen",
+                    help="which TRACE_SETS entry to replay. Defaults to the "
+                         "held-out trace; the fit traces contain cross-config "
+                         "replay and should not be used for retention claims "
+                         "(OPEN_ISSUES 20).")
+    ap.add_argument("--batch", type=int, default=8,
+                    help="max concurrent requests. 8 matches the scheduler "
+                         "table's operating point; at 16 the scheduler has a "
+                         "choice on under 9%% of decisions (FINDINGS 23).")
+    ap.add_argument("--out", default=None, help="JSON path (default: results/)")
     args = ap.parse_args()
 
     cost = CostModel()
@@ -150,20 +166,34 @@ def main():
     utils = [0.6] if args.quick else [0.6, 0.8]
     scales = ([int(x) for x in args.scales.split(",")] if args.scales
               else ([1] if args.quick else [1, 8, 16]))
-    seeds = [1, 2] if args.quick else list(range(1, args.seeds + 1))
+    # --seeds used to be ignored under --quick, which silently capped a run the
+    # caller had asked to be larger.
+    n_seeds = 2 if args.quick else args.seeds
+
+    t0 = time.time()
+    cells, total_runs = [], 0
+    print(f"trace={args.trace_set}  scales={scales}  utils={utils}  "
+          f"batch={args.batch}  kv={args.kv_mb:.0f}MB@1x  "
+          f"seeds={n_seeds} ({args.seeds_16x} at 16x)", flush=True)
 
     for scale in scales:
         # Bigger contexts need a bigger budget simply to admit one request.
         kv = args.kv_mb * max(1, scale // 2)
+        seeds = list(range(1, (args.seeds_16x if scale >= 16 else n_seeds) + 1))
         for util in utils:
-            print(f"[{scale}x util {util:.0%}] calibrating arrival rate...", flush=True)
-            rate = calibrate_rate(util, scale, seeds[0], kv, cost, tok, cpu)
-            print(f"[{scale}x util {util:.0%}] rate={rate:.4f}/s; "
-                  f"measuring hindsight...", flush=True)
-            hind = st.fmean([hindsight_denominator(scale, s, kv, rate, cost, tok, cpu)
+            el = time.time() - t0
+            print(f"[{el:6.0f}s] [{scale}x util {util:.0%}] calibrating "
+                  f"arrival rate...", flush=True)
+            rate = calibrate_rate(util, scale, seeds[0], kv, cost, tok, cpu,
+                                  trace_set=args.trace_set, batch=args.batch)
+            print(f"[{time.time()-t0:6.0f}s] [{scale}x util {util:.0%}] "
+                  f"rate={rate:.4f}/s; measuring hindsight...", flush=True)
+            hind = st.fmean([hindsight_denominator(scale, s, kv, rate, cost, tok,
+                                                   cpu, trace_set=args.trace_set,
+                                                   batch=args.batch)
                              for s in seeds]) or float("nan")
             print(f"=== context {scale}x | target util {util:.0%} "
-                  f"(arrival {rate:.3f}/s) | KV {kv:.0f}MB | B=16 | "
+                  f"(arrival {rate:.3f}/s) | KV {kv:.0f}MB | B={args.batch} | "
                   f"{len(seeds)} seeds | chunked prefill 512 ===")
             print(f"  hindsight denominator {hind:.1f} recompute-s "
                   f"(min(rebuild, rent) per block, measured under keep-all)")
@@ -175,23 +205,54 @@ def main():
                     for s in seeds:
                         try:
                             eng, rep = run_one(pol, sched, scale, s, kv, rate,
-                                               cost, tok, cpu)
+                                               cost, tok, cpu,
+                                               trace_set=args.trace_set,
+                                               batch=args.batch)
                             rs.append((eng, rep))
+                            total_runs += 1
                         except RuntimeError as e:
-                            print(f"  {pol:<17}{sched:<6} ERROR {str(e)[:50]}")
+                            print(f"  {pol:<17}{sched:<6} ERROR {str(e)[:50]}",
+                                  flush=True)
                             rs = []
                             break
                     if not rs:
                         continue
                     m = lambda k: st.fmean([r[k] for _, r in rs])  # noqa: E731
-                    ctrl = st.fmean([e.m["recompute_misses"] for e, _ in rs])
+                    ctrl = m("retention_controlled_decisions")
                     cost_s = m("recompute_seconds") + m("total_rent_s")
                     ratio = cost_s / hind if hind and hind == hind else float("nan")
+                    cells.append({
+                        "trace_set": args.trace_set, "scale": scale,
+                        "util": util, "kv_mb": kv, "max_batch": args.batch,
+                        "arrival_rate": rate, "seeds": len(seeds),
+                        "retention": pol, "scheduler": sched,
+                        "hindsight_denominator_s": hind,
+                        "recompute_seconds": m("recompute_seconds"),
+                        "total_rent_s": m("total_rent_s"),
+                        "p50_task_latency_s": m("p50_task_latency_s"),
+                        "p95_task_latency_s": m("p95_task_latency_s"),
+                        "realized_ratio_vs_hindsight": ratio,
+                        "retention_controlled_decisions": ctrl,
+                        "cold_misses": m("cold_misses"),
+                        "prefix_hit_rate": m("prefix_hit_rate"),
+                        "deadline_miss_rate": m("deadline_miss_rate"),
+                    })
                     print(f"  {pol:<17}{sched:<6}{m('recompute_seconds'):>11.1f}"
                           f"{m('total_rent_s'):>9.1f}{m('p50_task_latency_s'):>8.0f}"
-                          f"{m('p95_task_latency_s'):>9.0f}{ratio:>8.2f}{ctrl:>12.0f}",
-                          flush=True)
-            print()
+                          f"{m('p95_task_latency_s'):>9.0f}{ratio:>8.2f}"
+                          f"{ctrl:>12.0f}", flush=True)
+            print(f"  [cell done at {time.time()-t0:.0f}s]\n", flush=True)
+
+    out = {"trace_set": args.trace_set, "scales": scales, "utils": utils,
+           "max_batch": args.batch, "kv_mb_at_1x": args.kv_mb,
+           "engine_runs": total_runs, "elapsed_s": round(time.time() - t0, 1),
+           "cells": cells}
+    path = args.out or os.path.join(
+        _REPO, "results", f"retention_grid_{args.trace_set}.json")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(out, f, indent=2)
+    print(f"{total_runs} engine runs in {out['elapsed_s']:.0f}s -> {path}")
     return 0
 
 

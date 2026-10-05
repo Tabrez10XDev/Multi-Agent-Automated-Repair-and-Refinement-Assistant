@@ -360,3 +360,60 @@ refcounting and byte accounting stay correct by construction.
 
 Cost: slightly artificial, in that problem P's 2nd occurrence shares boilerplate
 with Q's 2nd but not with Q's 1st. Aggregate sharing rates are preserved.
+
+## 26. The ski-rental release rule never fires on the replayed traces
+
+**Open. This is the biggest threat to mechanism 1's claim and should be the
+next thing addressed.**
+
+Instrumenting `SkiRentalPredictionsRetention.on_tick` over one `holdout_qwen`
+replay at 1x, util 60%, KV 1024MB, batch 8:
+
+| | |
+|---|---|
+| entry-ticks considered | 24,185,847 |
+| of those, carrying a prediction | 4,850,553 (20.1%) |
+| hinted entries with `rent_rate == 0` | **4,850,553 (100%)** |
+| **voluntary releases made** | **0** |
+
+So the voluntary "hold until accrued rent reaches the recompute cost, then let
+go" rule — the actual ski-rental decision — **never fired once**. Every
+difference between `ski-rental`, `ski-rental-pred` and `lru` in the grid comes
+from the forced-eviction ordering they inherit, not from ski-rental at all.
+That is why `ski-rental` and `ski-rental-pred` print byte-identical rows.
+
+### Why
+
+Rent only accrues under eviction pressure (DECISIONS §13). At this operating
+point there is almost none, so `rent_rate` is 0 for every entry that has a
+prediction. `_predicted_rent = hint_gap_s * rent_rate` is then 0, which reads
+as "predicted near", so the threshold becomes `b / lambda` and nothing is ever
+released. With no rent accruing, plain ski-rental's threshold `b` is never
+reached either.
+
+### What this means
+
+This is the same failure mode as "nothing ever blocked on KV" (DECISIONS §8)
+and "the scheduler has a choice on under 9% of decisions" (FINDINGS §23): the
+engine is not in the regime where the mechanism can act, so the comparison
+measures nothing. It is not a bug in the policy.
+
+Two things follow, and the second matters more:
+
+1. The grid must run where rent is live. A KV sweep to locate that band was in
+   progress when this was written; the 1x/1024MB cell is definitively outside
+   it.
+2. **The learning-augmented half of mechanism 1 has never been exercised on
+   real trace data.** Hints were absent entirely until the per-block fix
+   (DECISIONS §21 follow-up), and now that they exist at 20% coverage they
+   still reach only entries whose rent rate is zero. Any claim about
+   ski-rental-with-predictions currently rests on synthetic runs only.
+
+### Note on a related fix that was necessary but not sufficient
+
+`HintBuilder.hint_for` read only node-level `next_reuse_gap_s`, which is None
+for **320 of 320** nodes on `holdout_qwen` — so the hint was `None` for every
+block and the predictions policy degenerated to the deterministic one for a
+second, independent reason. It now prefers the per-block gap, lifting hint
+coverage from 0% to 26.2% of blocks. Necessary, but as the table above shows,
+not enough to make the rule fire.

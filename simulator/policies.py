@@ -682,8 +682,23 @@ class HintBuilder:
         self.sigma = sigma
         self._rng = random.Random(seed)
 
-    def hint_for(self, node):
-        true_gap = getattr(node, "next_reuse_gap_s", None)
+    def hint_for(self, node, key=None):
+        """
+        Noisy prediction of when this block will next be wanted.
+
+        `key` matters: node-level `next_reuse_gap_s` is derived from
+        `prefix_key`, and on the trace path it is None for EVERY node -- 320 of
+        320 on holdout_qwen -- so a hint was never produced and
+        `ski-rental-pred` degenerated silently into deterministic ski-rental.
+        The learning-augmented half of the mechanism was therefore untested on
+        real data, and the two policies printed byte-identical grid rows.
+        Per-block gaps (DECISIONS 21) are the usable signal.
+        """
+        true_gap = None
+        if key is not None:
+            true_gap = getattr(node, "block_reuse_gap", {}).get(key)
+        if true_gap is None:
+            true_gap = getattr(node, "next_reuse_gap_s", None)
         if true_gap is None:
             return None
         if self.sigma <= 0:
