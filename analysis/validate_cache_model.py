@@ -34,7 +34,12 @@ from simulator.workload import CostModel
 HIT_FRAC = 1 / 3          # frozen: reusing f of a prompt gives 1/(1-f) speedup
 SPEEDUP = 1.5             # frozen: the trace detector's threshold
 
-FIT_TO = {os.path.basename(p) for paths in TRACE_SETS.values() for p in paths}
+# ONLY the sets the rule was actually fit to. Deriving this from all of
+# TRACE_SETS was a bug: registering the held-out trace there made the validator
+# refuse it as "fit to", which is the opposite of the intent.
+FIT_SET_NAMES = ("original", "shared_first")
+FIT_TO = {os.path.basename(p)
+          for name in FIT_SET_NAMES for p in TRACE_SETS[name]}
 
 
 def measured_hit(row, cost):

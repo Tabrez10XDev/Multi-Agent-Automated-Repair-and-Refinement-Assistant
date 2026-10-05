@@ -422,6 +422,12 @@ TRACE_SETS = {
     "original": ["data/traces/full_zs_4cfg.jsonl.gz",
                  "data/traces/full_zs_4cfg_smoke5.jsonl.gz"],
     "shared_first": ["data/traces/full_zs_4cfg_sharedfirst.jsonl.gz"],
+    # Held-out, collected 2026-10-04/05 on 54 problems disjoint from the fit
+    # set, two configs in two separate processes with Ollama restarted between
+    # them. Separate run ids on purpose: one process per file, so the
+    # two-processes-one-run-id hazard of section 14c cannot recur.
+    "holdout_qwen": ["data/traces/holdout_A_qwen2.jsonl.gz"],
+    "holdout_llama": ["data/traces/holdout_B_llama.jsonl.gz"],
 }
 DEFAULT_TRACES = TRACE_SETS["original"]
 

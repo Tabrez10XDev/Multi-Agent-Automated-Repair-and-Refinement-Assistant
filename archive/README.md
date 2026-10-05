@@ -29,3 +29,10 @@ and enforces the sandbox guard this harness never had.
 `analysis/check_trace_clean.py` still lists the old directory names. Those
 entries are deliberately left in place: the committed traces were collected when
 these files were live, so the guards must still recognise them.
+
+## aborted_runs/
+
+| Path | Reason retired |
+|---|---|
+| `holdout_A_qwen.jsonl.gz` + `.prompts` | First attempt at the held-out config-A collection, aborted after 4 of 54 tasks (23 calls). Superseded by `holdout_A_qwen2`. Kept because the append guard's refusal of a same-run-id retry is recorded against it. |
+| `results_holdout_raw.jsonl` | The raw outcome file from that sequence: 4 partial `single_agent` rows, 54 `single_agent` rows that errored out on the append guard, and the 54 good `homo_llama3` rows. Tidied into `data/outcomes/results_holdout.jsonl`; kept verbatim so the tidy-up is auditable. |
