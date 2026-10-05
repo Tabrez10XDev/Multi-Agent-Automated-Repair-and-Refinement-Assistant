@@ -732,3 +732,66 @@ where 23 of the 23 false negatives and all 5 false positives live. With
 disjoint problems its prompts no longer recur exactly, so whatever reuse it
 gets is not exact-match restoration and is not yet modelled. That is the next
 thing to explain, and it is now a narrow question rather than a diffuse one.
+
+## 23. Scheduler table: LSF buys tail latency, and a perfect estimator does not help
+
+`experiments/run_scheduler_table.py`, `holdout_qwen`, scale 1x, util 80%,
+kv 1024MB, batch 8, retention held fixed at `lru`, **20 seeds**,
+`slack_factor` calibrated to 1.875 so FCFS misses 29.0% of deadlines.
+
+| scheduler | p50 | p95 | miss | slack@done | MAPE | choice |
+|---|---|---|---|---|---|---|
+| fcfs | **115.8** | 321.6 | 32.1% | 30.3 | 37.8% | 34.7% |
+| sjf | 119.8 | 293.6 | 31.3% | 34.1 | 37.6% | 33.1% |
+| edf | 118.6 | 274.7 | **29.9%** | **39.5** | 37.7% | 30.8% |
+| lsf | 120.5 | **274.0** | **29.9%** | 38.0 | 37.7% | 31.5% |
+| static-priority | 119.7 | 293.1 | 31.0% | 34.0 | 37.6% | 33.3% |
+| lsf [ORACLE] | 131.0 | 272.2 | 34.3% | 32.8 | 0.0% | 33.1% |
+
+### LSF trades median for tail, as intended
+
+p95 falls **14.8%** (321.6s → 274.0s) and the deadline miss rate from 32.1% to
+29.9%, while p50 *rises* 4% (115.8 → 120.5). That is the expected shape: LSF
+deprioritises work with slack, which costs the median slightly and protects the
+tail. EDF is statistically indistinguishable from LSF here.
+
+The effect is real but modest — a 15% p95 improvement, not a transformation.
+
+### A perfect estimator makes LSF WORSE
+
+The oracle row has zero estimation error (MAPE 37.7% → 0.0%) and is **worse on
+the miss rate** (34.3% vs 29.9%) and on p50 (131.0 vs 120.5), gaining only
+0.7% on p95. This is counter-intuitive and it undercuts the premise of
+workstream 3.
+
+Likely mechanism: with true remaining critical paths, LSF orders decisively
+toward tasks that genuinely have the most work left, which starves short tasks
+and pushes them past their deadlines. The online estimator's stage-typical
+prompt sizes and expected-retry term effectively *regularise* the ordering,
+and that smoothing is worth more than accuracy at this operating point.
+
+**Treat this as provisional.** It is one trace at one operating point, and the
+oracle's `remaining_s` is the realised critical path while the online one is an
+expectation over retries — related but not the same quantity. It should be
+re-checked at other utilisations and on `holdout_llama` before workstream 3 is
+rescoped. But the burden of proof has shifted: a better estimator can no longer
+be assumed to help.
+
+### The operating point had to be engineered, and that is itself a result
+
+At the engine's default `max_batch=16` the scheduler has a choice on under 9%
+of admission decisions, so **no scheduling rule can distinguish itself** — the
+first version of this table showed all five schedulers within noise and the
+oracle row byte-identical to the online one. `max_batch=8` yields ~34% choice
+and lands FCFS in the target miss band.
+
+| max_batch | choice | p95 | FCFS miss |
+|---|---|---|---|
+| 16 | 8.9% | 339.9 | 22.2% |
+| 8 | 41.8% | 396.8 | 27.8% |
+| 4 | 71.8% | 560.4 | 44.4% |
+| 2 | 90.5% | 903.3 | 63.0% |
+
+So any scheduling claim about this workload has to state the concurrency limit
+it holds at. At generous batch sizes the queue is nearly always trivial and
+scheduling is a non-question.

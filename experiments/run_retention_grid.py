@@ -69,9 +69,18 @@ def scale_context(tasks, factor: int):
             n.prefix_tokens *= factor
             n.suffix_tokens *= factor
             n.output_tokens *= factor
-            n.block_keys = [
-                hashlib.sha1(f"{k}|x{j}".encode()).hexdigest()[:12]
-                for k in n.block_keys for j in range(factor)]
+            derive = (lambda k, j:
+                      hashlib.sha1(f"{k}|x{j}".encode()).hexdigest()[:12])
+            # The per-block reuse gaps are keyed by block key, so they must be
+            # remapped with the keys. Without this they all miss at scale > 1
+            # and the engine silently falls back to the node-level gap, which
+            # is None for cross-run reuse -- reintroducing the bug DECISIONS 21
+            # fixed, but only in the scaled cells.
+            n.block_reuse_gap = {derive(k, j): g
+                                 for k, g in n.block_reuse_gap.items()
+                                 for j in range(factor)}
+            n.block_keys = [derive(k, j)
+                            for k in n.block_keys for j in range(factor)]
     return tasks
 
 

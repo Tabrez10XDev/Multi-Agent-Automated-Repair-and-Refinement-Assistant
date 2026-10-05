@@ -244,7 +244,7 @@ class ExecutionEstimator:
         return self.service_s(model, self._typical_prompt(stage), stage, attempt_index)
 
     def remaining_s(self, stage: str, attempt_index: int, model: str,
-                    req_id=None) -> float:
+                    req_id=None, node=None) -> float:
         """
         Expected work left in this task from `stage` onward, in seconds. This is
         the DAG's remaining critical path as estimated online, and it is what
@@ -291,6 +291,27 @@ class OracleEstimator(ExecutionEstimator):
         if true_output is None:
             return super().predict_output(stage, attempt_index)
         return float(true_output)
+
+    def remaining_s(self, stage: str, attempt_index: int, model: str,
+                    req_id=None, node=None) -> float:
+        """
+        True remaining critical path, when the caller supplies the node.
+
+        Overriding predict_output alone was not enough to make this an oracle:
+        remaining_s builds its estimate from _typical_prompt() and the attempt
+        distribution and never consults predict_output, so an "oracle" run
+        handed the scheduler byte-identical estimates to the online run -- same
+        314 distinct est_remaining_s values, same mean -- and the oracle row
+        came out identical to the online row on every metric. That looked like
+        the finding "a perfect estimator buys nothing" when it was a plumbing
+        gap.
+
+        critical_path_remaining includes this node's own service time, so the
+        work remaining AFTER it is the difference.
+        """
+        if node is None:
+            return super().remaining_s(stage, attempt_index, model, req_id=req_id)
+        return max(0.0, node.critical_path_remaining - node.expected_seconds)
 
 
 ESTIMATORS = {"online": ExecutionEstimator, "oracle": OracleEstimator}

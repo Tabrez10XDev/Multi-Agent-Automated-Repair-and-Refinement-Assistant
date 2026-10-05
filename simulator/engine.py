@@ -577,10 +577,17 @@ class Engine:
             enqueued_at=r.enqueued_at, prompt_tokens=n.prompt_tokens,
             attempt_index=n.attempt_index, replan_index=n.replan_index,
             priority=0, deadline=self.task_deadline.get(n.task_id),
+            # true_output and node are handed over so an ORACLE estimator can
+            # use them; ExecutionEstimator ignores both by contract (there are
+            # tests asserting it). Without them an oracle run produced
+            # estimates identical to an online one.
             est_service_s=est.service_s(n.model, n.prompt_tokens, n.stage,
-                                        n.attempt_index, req_id=r.req_id) if est else 0.0,
+                                        n.attempt_index,
+                                        true_output=n.output_tokens,
+                                        req_id=r.req_id) if est else 0.0,
             est_remaining_s=est.remaining_s(n.stage, n.attempt_index, n.model,
-                                            req_id=r.req_id) if est else 0.0,
+                                            req_id=r.req_id,
+                                            node=n) if est else 0.0,
         )
 
     def _admit_loop(self):
