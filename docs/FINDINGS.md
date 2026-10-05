@@ -635,3 +635,55 @@ the server cannot know and does not.
 The rate is modest but it is structural rather than incidental: it follows from
 prompt shape, so it recurs in any workload whose retries append rather than
 rewrite.
+
+## 22. Held-out validation: the rule generalises, and the Milestone 1 hit rate halves
+
+Two traces collected 2026-10-04/05 on 54 problems disjoint from the fit set,
+two configs in two processes with Ollama restarted between them. The frozen v2
+rule was run against them with **no tuning**.
+
+| trace | calls | measured hits | matched | FP | FN | agreement |
+|---|---|---|---|---|---|---|
+| `holdout_A_qwen2` (qwen coder) | 320 | 54 | 44 | 1 | 10 | **96.6%** |
+| `holdout_B_llama` (llama coder) | 370 | 66 | 53 | 4 | 13 | **95.4%** |
+
+Against 97.8% / 89.3% on the fit set. The rule holds up on data it never saw,
+which is the first evidence that it is a mechanism rather than a fit.
+
+### The repetition artefact, confirmed quantitatively
+
+OPEN_ISSUES §20 predicted that Milestone 1's hit rate was inflated by the
+harness replaying 15 tasks under 4 configs. Removing that — disjoint problems,
+one config per process, cache cleared between — gives:
+
+| trace | calls | hits | hit rate | exact repeats | partial reuse | exact share |
+|---|---|---|---|---|---|---|
+| Milestone 1 `original` | 255 | 89 | **34.9%** | 41 | 48 | **46%** |
+| `holdout_A_qwen2` | 320 | 54 | **16.9%** | 4 | 50 | **7%** |
+| `holdout_B_llama` | 370 | 66 | **17.8%** | 1 | 65 | **2%** |
+
+The headline figure **halves**, from ~35% to ~17%, and the exact-repeat share
+collapses from 46% to 2-7%. "Roughly one call in three hits Ollama's cache" was
+about half benchmark artefact. The corrected figure is **roughly one call in
+six, and it is almost entirely partial prefix reuse.**
+
+The encouraging half: partial reuse is not only intact but larger in absolute
+terms (48 → 50 and 65 hits). Genuine workflow prefix reuse is real, robust, and
+was being obscured by the artefact sitting on top of it.
+
+### Where the rule still fails: `issue_parser`
+
+The residual is concentrated in one role, in both traces:
+
+| role | A matched/measured | B matched/measured |
+|---|---|---|
+| coder | 25/25 | 47/49 |
+| debugger | 13/13 | 6/6 |
+| evaluator | 3/3 | 0/1 |
+| **issue_parser** | **3/13** | **0/10** |
+
+The roles the workflow actually chains are near-perfect. `issue_parser` is
+where 23 of the 23 false negatives and all 5 false positives live. With
+disjoint problems its prompts no longer recur exactly, so whatever reuse it
+gets is not exact-match restoration and is not yet modelled. That is the next
+thing to explain, and it is now a narrow question rather than a diffuse one.
