@@ -324,6 +324,16 @@ class Node:
     critical_path_remaining: float = 0.0
     next_reuse_node: Optional[int] = None
     next_reuse_gap_s: Optional[float] = None
+    # Per-BLOCK next-reuse gap, keyed by block key. The node-level fields above
+    # are derived from `prefix_key`, which on the trace path already embeds the
+    # task-run index, so they can only ever describe reuse WITHIN one run. The
+    # engine matches on `block_keys`, which are content hashes shared across
+    # the whole trace -- so a block genuinely reused by another run was invisible
+    # to the offline reference, which then discarded exactly the reuse the
+    # engine serves. Populated by trace_loader._annotate_block_reuse; left empty
+    # by the synthetic generator, where cross-task sharing cannot occur because
+    # t{task_id} is baked into every segment ident.
+    block_reuse_gap: dict = field(default_factory=dict)
 
     @property
     def prompt_tokens(self) -> int:

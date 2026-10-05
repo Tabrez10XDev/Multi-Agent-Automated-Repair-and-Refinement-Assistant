@@ -504,7 +504,10 @@ class Engine:
                 created=self.now, last_used=self.now,
                 useful_tokens=bt,
                 recompute_s=self.cost.recompute_seconds(r.model, bt),
-                true_gap_s=node.next_reuse_gap_s,
+                # Per-block gap when the loader computed one (trace path);
+                # the node-level field otherwise (synthetic path, where
+                # cross-task sharing cannot occur). See Node.block_reuse_gap.
+                true_gap_s=node.block_reuse_gap.get(k, node.next_reuse_gap_s),
                 hint_gap_s=(self.hints.hint_for(node) if self.hints else None))
             self.entries[k].clock = self._clock
             self.entries[k].rent_cum_at = self._clock.cum

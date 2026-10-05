@@ -406,6 +406,52 @@ def _annotate_measured(task: Task) -> None:
         last[n.prefix_key] = n
 
 
+def _annotate_block_reuse(tasks) -> dict:
+    """
+    Per-block next-reuse gaps, computed across the WHOLE trace.
+
+    `_annotate_measured` keys reuse on `prefix_key`, which contains the task-run
+    index, so it describes only within-run reuse. The engine matches on
+    `block_keys` -- content hashes that collide freely across runs -- so a block
+    reused by a different run carried `true_gap_s = None`, and
+    `OfflineReferenceRetention` dropped it on sight. The "optimal" baseline was
+    therefore discarding exactly the reuse the engine is capable of serving,
+    biasing every realized_ratio and the shared hindsight denominator with it.
+
+    Gaps use a global clock (task arrival + within-task offset), so a cross-run
+    gap is a real elapsed time rather than a difference of within-task offsets.
+    Normalising arrival times afterwards shifts every clock by one constant and
+    so leaves these gaps unchanged.
+    """
+    emissions = {}        # (model, block key) -> [(global_time, node)]
+    for t in tasks:
+        acc = 0.0
+        for n in t.nodes:
+            at = t.arrival_time + acc
+            acc += n.expected_seconds
+            for k in getattr(n, "block_keys", ()) or ():
+                emissions.setdefault((n.model, k), []).append((at, n))
+
+    cross = within = 0
+    for (_model, k), uses in emissions.items():
+        if len(uses) < 2:
+            continue
+        uses.sort(key=lambda x: x[0])
+        for (t0, prior), (t1, nxt) in zip(uses, uses[1:]):
+            gap = max(0.0, t1 - t0)
+            # Keep the SOONEST reuse when a block is emitted repeatedly.
+            prev = prior.block_reuse_gap.get(k)
+            if prev is None or gap < prev:
+                prior.block_reuse_gap[k] = gap
+            if prior.task_id == nxt.task_id:
+                within += 1
+            else:
+                cross += 1
+    return {"block_keys_reused": sum(1 for v in emissions.values() if len(v) > 1),
+            "reuse_edges_within_run": within,
+            "reuse_edges_cross_run": cross}
+
+
 @dataclass
 class LoadedTrace:
     tasks: list
@@ -560,11 +606,14 @@ def load_trace(main_path, prompts_path=None,
         _annotate_measured(t)
         tasks.append(t)
 
+    block_reuse = _annotate_block_reuse(tasks)
+
     if not arrival_rate and tasks:
         base = min(t.arrival_time for t in tasks)
         for t in tasks:
             t.arrival_time -= base
 
+    validation = dict(validation, **block_reuse)
     return LoadedTrace(tasks=tasks, validation=validation, cache=cache,
                        prefixes=all_prefixes, blocks=blocks, configs=configs)
 

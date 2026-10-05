@@ -480,3 +480,94 @@ def test_context_scaling_scales_the_shared_part_too():
     assert sum(n.prefix_tokens for n in sllm) == sum(n.prefix_tokens for n in llm) * 4
     # Sharing structure preserved: distinct-key count scales by the same factor.
     assert len({k for n in sllm for k in n.block_keys}) == before_shared * 4
+
+
+# --------------------------------------------------------------------------
+# Cross-run reuse must be visible to the offline reference (DECISIONS 21)
+# --------------------------------------------------------------------------
+
+def _load_real(name="original", seed=1):
+    import os as _os
+    from simulator.trace_loader import load_trace, trace_set
+    paths = trace_set(name)
+    if not paths:
+        import pytest
+        pytest.skip(f"trace set {name} not present")
+    return load_trace(paths[0], seed=seed)
+
+
+def test_block_reuse_gaps_are_populated_on_the_trace_path():
+    """
+    The loader must annotate per-BLOCK reuse, not only per prefix_key.
+
+    prefix_key embeds the task-run index, so node-level gaps can only ever
+    describe within-run reuse. The engine matches on content-hashed block_keys,
+    which collide across runs.
+    """
+    lt = _load_real()
+    populated = sum(len(n.block_reuse_gap) for t in lt.tasks for n in t.nodes)
+    assert populated > 0, "no per-block reuse gaps were annotated"
+    assert lt.validation["reuse_edges_cross_run"] > 0, (
+        "this trace is expected to contain cross-run block reuse")
+
+
+def test_offline_reference_retains_cross_run_reuse():
+    """
+    Regression guard for the bug this fixed.
+
+    With only node-level gaps, every cross-run block carried true_gap_s=None,
+    OfflineReferenceRetention dropped it on sight, and the "optimal" baseline
+    retained nothing at all -- it behaved as evict-now and paid 3.7x the
+    recompute it should. That made realized_ratio nan and the baseline useless.
+    """
+    from simulator.engine import Engine, EngineConfig
+    from simulator.policies import (RETENTIONS, SCHEDULERS, ExecutionEstimator,
+                                    HintBuilder)
+    from simulator.workload import CostModel, CpuStageSeconds, StageTokens
+    cost, tok, cpu = CostModel(), StageTokens(), CpuStageSeconds()
+
+    def run(wipe):
+        lt = _load_real()
+        if wipe:
+            for t in lt.tasks:
+                for n in t.nodes:
+                    n.block_reuse_gap = {}
+        eng = Engine(lt.tasks, cost,
+                     EngineConfig(kv_budget_mb=512, max_batch=16,
+                                  prefill_chunk_tokens=512),
+                     retention=RETENTIONS["offline-ref"](),
+                     scheduler=SCHEDULERS["fcfs"](),
+                     estimator=ExecutionEstimator(cost, tok, cpu),
+                     hints=HintBuilder(sigma=0.5, seed=1))
+        return eng.run()
+
+    fixed, buggy = run(False), run(True)
+    assert fixed["total_rent_s"] > 0.0, (
+        "offline-ref retained nothing, so it is not acting as a reference")
+    assert fixed["recompute_seconds"] < buggy["recompute_seconds"], (
+        "seeing cross-run reuse must reduce recompute, not increase it")
+    assert fixed["recompute_seconds"] < 0.5 * buggy["recompute_seconds"], (
+        f"expected a large win; got {buggy['recompute_seconds']:.1f}s -> "
+        f"{fixed['recompute_seconds']:.1f}s")
+
+
+def test_block_reuse_gap_keeps_the_soonest_reuse():
+    """A block emitted many times must record its NEXT reuse, not its last."""
+    lt = _load_real()
+    for t in lt.tasks:
+        for n in t.nodes:
+            for k, gap in n.block_reuse_gap.items():
+                assert gap >= 0.0, f"negative reuse gap for {k}"
+
+
+def test_synthetic_path_has_no_block_reuse_gaps():
+    """
+    The synthetic generator bakes t{task_id} into every segment ident, so
+    cross-task sharing cannot occur and the per-block map must stay empty --
+    which is what keeps synthetic results byte-identical across this change.
+    """
+    from simulator.workload import generate_trace
+    tasks = generate_trace()
+    populated = sum(len(n.block_reuse_gap) for t in tasks for n in t.nodes)
+    assert populated == 0, (
+        f"synthetic trace unexpectedly annotated {populated} per-block gaps")

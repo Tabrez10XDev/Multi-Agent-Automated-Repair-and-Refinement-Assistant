@@ -424,3 +424,63 @@ verbatim) and `data/tasks/humaneval_new.json`. `MAARA_TASK_SET` selects:
 `original` (default, `HumanEval/1-15` — reproduces Milestone 1 exactly and is
 asserted byte-identical), `original30`, or `new`. The raw dataset is not
 committed; the URL and hash above make it reproducible.
+
+## 21. Reuse is annotated per block across the whole trace, not per prefix_key
+
+`_annotate_measured` keys reuse edges on `Node.prefix_key`. On the trace path
+that key is built as `f"{run_key}:{model}:{digest}"`
+(`simulator/trace_loader.py:362`), so it **embeds the task-run index** and can
+only ever describe reuse within one run. The engine, however, matches on
+`Node.block_keys` — content hashes seeded only with the model
+(`simulator/workload.py:400-413`) — which collide freely across runs.
+
+So every block genuinely reused by a *different* task run carried
+`true_gap_s = None`. `OfflineReferenceRetention.on_complete` returns `False` on
+that and `on_tick` drops it immediately, which means **the offline reference
+retained nothing at all on the trace path** — it behaved as `evict-now`:
+
+| trace | buggy recompute | fixed | rent (buggy → fixed) | ratio (buggy) |
+|---|---|---|---|---|
+| `original` | 74.0s | **20.0s** | 0.0s → 5.7s | `nan` |
+| `holdout_qwen` | 140.3s | **19.4s** | 0.0s → 8.3s | `nan` |
+
+A "reference" that retains nothing is not an upper bound on anything. Any
+trace-replay figure quoting `offline-ref`, `hindsight_cost_s` or
+`realized_ratio` from before this fix should be discarded. The grid's shared
+keep-all denominator is computed from `_key_rent`/`_key_recompute` rather than
+`true_gap_s`, so that column survives — but the `offline-ref` row did not.
+
+### The fix
+
+`trace_loader._annotate_block_reuse(tasks)` runs once after all tasks are
+built. It groups emissions by `(model, block_key)` on a **global** clock
+(`task.arrival_time + within-task offset`), links consecutive users, and stores
+the gap in a new `Node.block_reuse_gap` dict. The engine prefers it and falls
+back to the node-level field:
+
+```python
+true_gap_s=node.block_reuse_gap.get(k, node.next_reuse_gap_s)
+```
+
+Scale of what was missing, from `LoadedTrace.validation`:
+
+| trace | reused block keys | within-run edges | **cross-run edges** |
+|---|---|---|---|
+| `original` | 624 | 817 | **821** |
+| `holdout_qwen` | 1154 | 2108 | **400** |
+
+On `original` roughly half the reuse edges were invisible. Normalising arrival
+times afterwards shifts every clock by one constant, so the gaps are unaffected.
+
+### Why the synthetic path is untouched
+
+The generator bakes `t{task_id}` into every segment ident
+(`simulator/workload.py:462-465, 472-473`), so cross-task block collisions
+cannot occur and `block_reuse_gap` stays empty — the node-level fallback then
+applies. Verified: four fixed-seed synthetic runs are **byte-identical** across
+this change, and a test asserts the map stays empty for `generate_trace()`.
+
+`HintBuilder` still reads the node-level `next_reuse_gap_s`, so
+`ski-rental-pred` gets a within-run-only hint. That is left as-is deliberately:
+the hint is meant to be noisy and partial, and the oracle is the thing that had
+to be correct.
