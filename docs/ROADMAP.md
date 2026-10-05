@@ -18,8 +18,11 @@ FINDINGS §20): `f_keep < 0.5f` gates both the save and the cache search;
 (`original`), 76/78 (`shared_first`), with exact repeats and partial prefix
 reuse reported separately.
 
-Held open deliberately: validation on the new trace, because over half the
-fit-set hits are harness repetition (OPEN_ISSUES §20).
+Held-out scores: **hit recall 81% (44/54) and 80% (53/66)**, agreement 96.6%
+and 95.4%. Recall is the number to quote — agreement is dominated by true
+negatives, since only ~17% of held-out calls are hits. Against 94%/97% recall
+on the fit set, so the rule loses ~14 points on unseen data, all of it in
+`issue_parser` (OPEN_ISSUES §24).
 
 ## 2. Retention comparison — next
 

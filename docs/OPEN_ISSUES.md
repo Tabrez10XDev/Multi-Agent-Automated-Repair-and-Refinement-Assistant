@@ -280,3 +280,83 @@ be wrong by a factor.
 
 Fix: one server-log line from a llama3.2 call with a known prompt length.
 Cheap, and worth doing during the new collection while the model is loaded.
+
+## 24. The cache model's held-out recall gap is entirely `issue_parser`
+
+**Open. To investigate after workstream 2 step 1.**
+
+Held-out hit recall is 81% (44/54) and 80% (53/66), against 94% and 97% on the
+fit traces (FINDINGS §22). The whole ~14-point gap sits in one role:
+
+| role | `holdout_qwen` matched/measured | `holdout_llama` |
+|---|---|---|
+| coder | 25/25 | 47/49 |
+| debugger | 13/13 | 6/6 |
+| evaluator | 3/3 | 0/1 |
+| **issue_parser** | **3/13** | **0/10** |
+
+`issue_parser` holds all 23 false negatives and all 5 false positives across
+both traces. On the fit traces its hits were exact-prompt repeats, which the
+frozen rule captures perfectly; with disjoint problems its prompts no longer
+recur exactly, so whatever reuse it gets is partial and not modelled.
+
+The roles the workflow actually chains — coder and debugger — are near-perfect,
+so this does not block the retention work. It does bound any claim about the
+model's accuracy, and the claim should be stated per role until it is resolved.
+
+Cheapest next step: `/tmp/ollama_holdout_A.log` and `_B.log` cover these exact
+calls, so the server's own `f_keep` and `looking for better prompt` decisions
+are on disk per call. Compare them against the model's decision for the 23
+false negatives rather than inferring from timings.
+
+## 25. Scoping prefix reuse cannot be done with a match-time guard
+
+**Open. Blocks workstream 2 step 1a as originally planned.**
+
+The plan was to enforce `reuse_scope` in `Engine._match_blocks`
+(`simulator/engine.py:402-406`). That is unsafe, and the reason is structural.
+
+`_match_blocks` returns the longest leading run of keys present in
+`Engine.entries`, and `_try_admit` then computes `new_keys = chain[matched:]`
+and **unconditionally overwrites** at the insertion site
+(`simulator/engine.py:501-508`):
+
+```python
+for k in new_keys:
+    self.entries[k] = KVEntry(key=k, ...)
+    self._entry_bytes += block_bytes
+```
+
+Today that is safe because of an invariant: the key that stopped the match is
+absent, and since keys are a hash chain, every later key is absent too. A
+scope guard breaks the invariant — the match stops at a key that *is* present,
+and because two runs of the same problem produce byte-identical prompts, every
+subsequent key is present as well.
+
+Measured on `original`: **16 node chains are emitted identically by more than
+one task run, the longest being 32 blocks (runs 12 and 42).** Blocking a match
+there would overwrite 32 live entries, resetting `refcount` to 0 while other
+requests hold them and double-counting `_entry_bytes`. That is refcount and
+budget corruption, not a wrong metric.
+
+### The deeper point: the engine is not what is wrong
+
+A content-keyed prefix cache *should* serve two identical prompts from the same
+entry — that is what a real server does, and `simulator/ollama_cache.py` is
+frozen on exactly that behaviour. The artefact is that the `original` trace
+**contains** the same prompt four times, because the harness replayed 15
+problems under 4 configs. The fix for that belongs in the workload, and it is
+already done: the holdout traces have 0.0% same-task cross-run reuse
+(FINDINGS §22).
+
+### Safe implementation, if the scope flag is still wanted as a diagnostic
+
+Salt the block chain at trace-load time by **problem occurrence index** rather
+than guarding at match time. For the k-th occurrence of problem P, seed the
+chain with k. Then two runs of the same problem get disjoint keys (no
+collision, no overwrite), while different problems still share their boilerplate
+prefix whenever their occurrence indices match. The engine is untouched, so
+refcounting and byte accounting stay correct by construction.
+
+Cost: slightly artificial, in that problem P's 2nd occurrence shares boilerplate
+with Q's 2nd but not with Q's 1st. Aggregate sharing rates are preserved.

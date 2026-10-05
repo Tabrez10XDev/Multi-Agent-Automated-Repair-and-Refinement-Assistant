@@ -608,33 +608,66 @@ Calls with `f_keep` within ±0.05 of the gate are therefore uncertain: **3 of
 `shared_first`'s layout pushes more calls toward the gate, so it is the trace
 where the approximation matters most.
 
-## 21. Today's server discards state the workflow is about to reuse — in the retry loop
+## 21. The server discards reusable state in the retry loop — at a rate set by how often the coder retries
+
+**Recomputed 2026-10-05 on the held-out traces.** The original 25/152 figure
+came from traces containing cross-config replay, so it is no longer the
+headline. The two holdout traces disagree, and the disagreement is the finding.
 
 For every within-task, same-model handoff — the calls the workflow actually
-chains (`coder -> debugger -> coder`, retries, replans):
+chains (`coder -> debugger -> coder`, retries, replans) — counting those whose
+`f_keep >= 0.5`, where the slot is reused in place and the remainder is
+discarded with no cached copy:
 
-| trace | handoffs | `f_keep >= 0.5`, remainder discarded unsaved | median `f_keep` |
-|---|---|---|---|
-| `original` | 152 | **25 (16.4%)** | 0.053 |
-| `shared_first` | 94 | **9 (9.6%)** | 0.204 |
+| trace | handoffs | `f_keep >= 0.5` | coder→coder share of crossings | median `f_keep` | coder pass rate |
+|---|---|---|---|---|---|
+| `holdout_llama` (llama coder) | 262 | **51 (19.5%)** | **47/51 (92%)** | 0.107 | 34/54 |
+| `holdout_qwen` (qwen coder) | 212 | **3 (1.4%)** | 0/3 | 0.012 | 45/54 |
+| `original` (fit, has replay) | 152 | 25 (16.4%) | 24/25 (96%) | 0.053 | — |
+| `shared_first` (fit, has replay) | 94 | 9 (9.6%) | 0/9 | 0.204 | — |
 
-Most handoffs sit far below the gate, so their state is saved and recoverable.
-The crossings concentrate in essentially one handoff type:
+### The headline, and why the two traces differ
 
-- `original`: **24 of the 25 crossings are `coder -> coder`** — the retry loop.
-- `shared_first`: `evaluator -> coder` (7) and `evaluator -> evaluator` (1).
+**Taking the held-out llama-coder trace as the headline: 19.5% of within-task
+same-model handoffs discard reusable state, and 92% of those are
+`coder -> coder` retries.** That reproduces the `original` pattern closely
+(16.4%, 96%), so the effect is not an artefact of cross-config replay — the
+replay-free trace shows it just as strongly.
 
-That is the result worth carrying into the thesis. The one handoff where the
-workflow is most certain to want its predecessor's state — a coder retrying
-after a failed test, with a prompt differing only by an appended diagnosis — is
-exactly the handoff whose `f_keep` clears 0.5. So the server reuses the slot in
-place and silently drops the part it did not keep, with no cached copy to fall
-back on. A policy that knew the workflow would reuse that state could keep it;
-the server cannot know and does not.
+But the qwen-coder trace shows almost none of it (1.4%). The difference is not
+the workload — both ran the same 54 problems — it is **how often the coder
+retries**:
 
-The rate is modest but it is structural rather than incidental: it follows from
-prompt shape, so it recurs in any workload whose retries append rather than
-rewrite.
+| | qwen coder | llama coder |
+|---|---|---|
+| coder calls | 79 | 103 |
+| debugger calls | 34 | 69 |
+| tasks passed | 45/54 | 34/54 |
+
+The weaker coder fails more, retries more, and a retry is precisely the handoff
+whose prompt differs from its predecessor only by an appended diagnosis — so
+`f_keep` clears 0.5 and the server overwrites the slot in place. The strong
+coder mostly succeeds first time, so the retry handoff barely occurs.
+
+**This causal story is consistent with all four traces but is not proven.** It
+is a correlation across two configs, and coder model and retry rate are
+confounded here: we cannot tell whether the llama coder crosses the gate more
+because it retries more, or because its prompts happen to be shaped differently.
+Separating them needs a run where the same model is made to retry more (e.g. by
+tightening the test suite), which has not been done.
+
+### Why it matters for the thesis
+
+The handoff most certain to want its predecessor's state is the one the server
+drops the remainder of, with no cached copy to fall back on. A policy that knew
+the workflow would reuse that state could keep it; the server cannot know and
+does not.
+
+The dependence on retry rate sharpens rather than weakens the claim: the
+opportunity is largest exactly where the pipeline is struggling, which is also
+where latency hurts most. But it also means the benefit is **not uniform** — a
+deployment with a strong coder would see little of it, and any headline number
+has to name the coder it was measured with.
 
 ## 22. Held-out validation: the rule generalises, and the Milestone 1 hit rate halves
 
@@ -642,13 +675,22 @@ Two traces collected 2026-10-04/05 on 54 problems disjoint from the fit set,
 two configs in two processes with Ollama restarted between them. The frozen v2
 rule was run against them with **no tuning**.
 
-| trace | calls | measured hits | matched | FP | FN | agreement |
-|---|---|---|---|---|---|---|
-| `holdout_A_qwen2` (qwen coder) | 320 | 54 | 44 | 1 | 10 | **96.6%** |
-| `holdout_B_llama` (llama coder) | 370 | 66 | 53 | 4 | 13 | **95.4%** |
+| trace | calls | measured hits | matched | FP | FN | **hit recall** | agreement |
+|---|---|---|---|---|---|---|---|
+| `holdout_A_qwen2` (qwen coder) | 320 | 54 | 44 | 1 | 10 | **81%** (44/54) | 96.6% |
+| `holdout_B_llama` (llama coder) | 370 | 66 | 53 | 4 | 13 | **80%** (53/66) | 95.4% |
+| `original` (fit) | 272 | 89 | 84 | 1 | 5 | 94% (84/89) | 97.8% |
+| `shared_first` (fit) | 214 | 78 | 76 | 21 | 2 | 97% (76/78) | 89.3% |
 
-Against 97.8% / 89.3% on the fit set. The rule holds up on data it never saw,
-which is the first evidence that it is a mechanism rather than a fit.
+**Read the recall column, not the agreement column.** Agreement is dominated
+by true negatives — only ~17% of held-out calls are hits, so a model that
+predicted "miss" for everything would already score ~83%. Recall is the number
+that says whether the model finds the reuse: **81% and 80% held out, against
+94% and 97% on the traces it was fit to.**
+
+So the rule does generalise, but it loses about 14 points of recall on unseen
+data. That gap is the honest measure of how much the fit-set scores were
+flattered, and all of it sits in one role (below).
 
 ### The repetition artefact, confirmed quantitatively
 
@@ -662,10 +704,13 @@ one config per process, cache cleared between — gives:
 | `holdout_A_qwen2` | 320 | 54 | **16.9%** | 4 | 50 | **7%** |
 | `holdout_B_llama` | 370 | 66 | **17.8%** | 1 | 65 | **2%** |
 
-The headline figure **halves**, from ~35% to ~17%, and the exact-repeat share
-collapses from 46% to 2-7%. "Roughly one call in three hits Ollama's cache" was
-about half benchmark artefact. The corrected figure is **roughly one call in
-six, and it is almost entirely partial prefix reuse.**
+**The corrected statement, which supersedes the Milestone 1 figure wherever it
+appears: about 1 call in 6 hits Ollama's cache on disjoint problems, and it is
+almost entirely partial prefix reuse. The earlier "1 in 3" was about half
+replay artefact.**
+
+The headline halves from ~35% to ~17% and the exact-repeat share collapses from
+46% to 2-7%.
 
 The encouraging half: partial reuse is not only intact but larger in absolute
 terms (48 → 50 and 65 hits). Genuine workflow prefix reuse is real, robust, and
