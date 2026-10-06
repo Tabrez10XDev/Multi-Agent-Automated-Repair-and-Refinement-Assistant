@@ -733,7 +733,17 @@ disjoint problems its prompts no longer recur exactly, so whatever reuse it
 gets is not exact-match restoration and is not yet modelled. That is the next
 thing to explain, and it is now a narrow question rather than a diffuse one.
 
-## 23. Scheduler table: LSF buys tail latency, and a perfect estimator does not help
+## 23. RETRACTED — "LSF buys tail latency, and a perfect estimator does not help"
+
+> **Measured in accidental overload; the numbers below are void.** At the time,
+> `calibrate_rate` took no `batch` argument, so it calibrated the arrival rate
+> against `run_one`'s default `batch=16` (0.0753/s) and the table then ran at
+> `batch=8`. The run was therefore at about **2.2x the intended load**. With
+> calibration and execution agreeing the rate is 0.0343/s, p95 is ~133s rather
+> than 274-322s, and the scheduler's `choice` fraction is **0.3%, not 34.7%**.
+> The claimed 14.8% p95 win and the "oracle is worse" result are both gone.
+> Corrected in §27. Kept as a record of the error.
+
 
 `experiments/run_scheduler_table.py`, `holdout_qwen`, scale 1x, util 80%,
 kv 1024MB, batch 8, retention held fixed at `lru`, **20 seeds**,
@@ -989,3 +999,57 @@ violates, will be beaten by a trivial policy.
 A genuine minimum-recompute reference here needs either a size-aware offline
 solver or an explicitly-labelled lower bound that is not claimed to be
 achievable.
+
+## 27. Scheduler table, corrected: no scheduling rule differs significantly
+
+Supersedes the retracted §23. `holdout_qwen` 1x, util 80%, KV 1024MB,
+retention fixed at `lru`, **20 seeds**, `slack_factor` calibrated to 0.844 so
+FCFS misses 27.8%. Arrival rate 0.0343/s, calibrated **at the same batch the
+table runs at** — the error that invalidated §23.
+
+| batch | row | p50 | p95 | miss | missed tasks | already infeasible at first pick |
+|---|---|---|---|---|---|---|
+| 8 | fcfs | 47.3 | 133.2 | 31.4% | 16.9 | 1.0 (**6%**) |
+| 8 | lsf | 47.6 | 133.0 | 31.4% | 16.9 | 1.0 (6%) |
+| 8 | edf | 47.5 | 132.4 | 31.6% | 17.1 | 1.0 (6%) |
+| 8 | lsf [ORACLE] | 47.4 | 132.5 | 31.6% | 17.1 | 1.0 (6%) |
+| 16 | fcfs | 47.4 | 132.5 | 31.5% | 17.0 | 1.0 (6%) |
+| 16 | lsf | 47.5 | 132.6 | 31.5% | 17.0 | 1.0 (6%) |
+
+### Paired 95% confidence intervals on the p95 difference against FCFS
+
+Paired, because every row runs the same 20 seeds.
+
+| batch | row | p95 difference | 95% CI | verdict |
+|---|---|---|---|---|
+| 8 | lsf | -0.25s | [-0.92, +0.42] | **not significant** |
+| 8 | edf | -0.78s | [-1.98, +0.43] | **not significant** |
+| 8 | lsf [ORACLE] | -0.73s | [-2.36, +0.91] | **not significant** |
+| 16 | lsf | +0.03s | [-0.07, +0.13] | **not significant** |
+| 16 | edf | +0.04s | [-0.05, +0.14] | **not significant** |
+| 16 | lsf [ORACLE] | +0.08s | [-0.78, +0.93] | **not significant** |
+
+**Every scheduling rule is statistically indistinguishable from arrival order,
+at both concurrency limits.** So is the oracle. The reason is in the activity
+line: at the correctly calibrated rate the scheduler has a choice on **0.3-0.4%
+of admission decisions** — the ready queue almost never holds more than one
+request. A scheduler with nothing to choose between cannot differ from FCFS.
+
+### The overload hypothesis is not supported
+
+The proposed explanation for §23's oracle result was that under overload
+LSF/EDF keep serving tasks that will miss anyway, cascading. Classifying every
+missed task by whether it was **already infeasible at its first pick**, judged
+by the true critical path for all rows so the classification is identical
+across them: only **6%** (1.0 of 17) were doomed from the start, in every row
+alike. There is no pool of hopeless tasks being serviced, so cascading misses
+are not what happened. The §23 oracle result was the overload artefact itself,
+not a property of LSF.
+
+### What would make scheduling measurable
+
+Genuine overload, which is what §23 had by accident. That is a legitimate
+regime to study, but it has to be *chosen* and labelled, with the arrival rate
+calibrated at the concurrency the run actually uses. The methodological rule
+this cost us: **calibrate every parameter at the configuration the measurement
+runs at**, and check the activity line before believing any comparison.
