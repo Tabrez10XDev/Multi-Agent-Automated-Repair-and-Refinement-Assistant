@@ -902,3 +902,90 @@ So workflow-aware retention's own contribution must be measured as
 1.50x architecture gap as if a retention policy earned it would be wrong. On
 that honest comparison, ski-rental is currently **1.158x worse** than keep-all
 on cost and level on latency.
+
+## 25. Ski-rental retention: an analysed negative result
+
+Ski-rental's premise is that **holding has a cost the policy can avoid by
+releasing**. On this workload that premise is false, which is why voluntary
+release cannot pay off — and the reason is structural rather than a tuning
+failure.
+
+Releasing does not remove rent, it **shifts** it. Derived rent is normalised by
+the evictable pool, so when an entry is released the remaining holders absorb a
+larger share of the same pressure. Measured at `holdout_qwen` 1x, util 0.8,
+batch 4, KV 512MB:
+
+| | keep-all | ski-rental |
+|---|---|---|
+| mean retained | 470.8 MB | **466.3 MB** (4.5 MB less) |
+| rent | 146.0s | **166.2s** (20.2s more) |
+| GPU recompute | 13.4s | 18.4s |
+| eviction rate | 5.058/s | 5.070/s |
+| p95 | 187.6s | 185.8s |
+
+It holds *less* and pays *more*. The policy is not malfunctioning: over all
+862 of its voluntary releases, **90% were never needed again**, the rule fires
+exactly at break-even (p50 accrued rent 0.0597s against p50 break-even
+0.0597s), and `useful_tokens / tokens` is 1.000, so the break-even is not
+mispriced. Only 57 keys were rebuilt *and* charged more than 1.5x their rebuild
+cost in rent.
+
+The mechanism is selection. Ski-rental's threshold is each entry's own
+recompute cost, so it releases the **cheapest-to-rebuild** entries first and
+leaves an expensive-to-rebuild residue — which accrues rent *faster*, because
+rent scales with the victim's recompute-per-byte. Net effect: it spends 5.0s of
+real GPU recompute chasing 20.2s of rent it cannot actually avoid.
+
+**Conclusion.** Ski-rental is the wrong shape of mechanism for this setting.
+Hold-or-release only pays when holding carries a private, avoidable cost; here
+the cost is shared and roughly invariant (DECISIONS §23). The measured failure
+in the real server is not that it holds too long — it is that it discards state
+the workflow is about to reuse (§21), which is an **ordering** problem. That is
+what §26 tests instead.
+
+## 26. Belady ordering loses to LRU here, and Belady's optimality does not apply
+
+`pred-belady` ranks forced-eviction victims by predicted next use, furthest
+first; `offline-belady` does the same with the true next use. Measured at
+`holdout_qwen` 1x, util 0.8, batch 4, KV 512MB, FCFS:
+
+| policy | p50 | p95 | GPU recompute | forced evictions |
+|---|---|---|---|---|
+| keep-all / lru | 49.6 | 187.6 | **13.4s** | 6813 |
+| ski-rental | 50.9 | 185.8 | 18.4s | 5984 |
+| pred-belady sigma=0 | 50.8 | **184.7** | 29.4s | 7094 |
+| pred-belady sigma=0.5 | 52.9 | 190.5 | 46.6s | 7332 |
+| offline-belady | 50.8 | **184.7** | 29.4s | 7094 |
+
+`pred-belady` at sigma=0 is identical to `offline-belady`, which is the
+consistency check passing: perfect predictions reproduce the oracle. Noise
+degrades it gracefully (29.4 -> 46.6s recompute).
+
+**But Belady loses to LRU on the metric it is supposed to optimise** — 29.4s of
+recompute against 13.4s. The oracle is not at fault; that was checked
+directly. Of 7094 forced evictions under `offline-belady`, 6030 were entries
+the oracle said would never be reused and **0%** of those were ever rebuilt,
+while 35.7% of the 1064 evictions with a real future gap were. The ordering and
+the next-use information are both correct.
+
+### Why: Belady's optimality does not hold in this engine
+
+Belady's rule is optimal for **uniform-size items evicted one at a time**. This
+engine satisfies neither condition. Blocks differ in size across models — qwen
+is 56 KiB/token and llama3.2 112 KiB/token, and `holdout_qwen` contains both —
+and eviction is **bulk**: the engine frees whatever is needed to admit an
+entire prompt, not one block per miss. Choosing a set of victims to free N
+bytes while minimising future misses is a knapsack-shaped problem, and
+furthest-next-use is not its solution.
+
+**Consequence for the plan: `offline-belady` is not a valid "minimum recompute
+under the memory budget" reference.** It is a well-defined, verified ordering
+with a correct oracle, and it is beaten by LRU, so it cannot be an upper bound
+on what retention can achieve. This is the same trap as `offline-ref`
+(FINDINGS §24), arrived at from the other direction: a reference that optimises
+the wrong objective, or the right objective under assumptions the engine
+violates, will be beaten by a trivial policy.
+
+A genuine minimum-recompute reference here needs either a size-aware offline
+solver or an explicitly-labelled lower bound that is not claimed to be
+achievable.

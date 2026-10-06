@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import math
 import random
+import statistics
 from dataclasses import dataclass
 from typing import Optional
 
@@ -621,6 +622,106 @@ class SkiRentalPredictionsRetention(SkiRentalRetention):
         return out
 
 
+class PredictedBeladyRetention(RetentionPolicy):
+    """
+    Workflow-aware eviction ORDER: evict whatever the workflow will want
+    latest, using the DAG's reuse hints. Belady with predictions.
+
+    This exists because of what the measurements actually showed. Ski-rental's
+    premise is that HOLDING costs something a policy can avoid by releasing;
+    in this regime releasing only shifts rent onto whoever still holds, so
+    voluntary release cannot pay off (FINDINGS 24). What *is* real is the
+    measured Ollama failure: the server discards state the workflow is about to
+    reuse (FINDINGS 21). That is an ORDERING problem, not a hold-or-release
+    problem, so this policy never releases voluntarily -- it only changes who
+    gets evicted when eviction is forced.
+
+    Ordering, worst-to-keep first:
+      1. hinted entries whose predicted next use is FAR (gap above `far_s`),
+         furthest first -- Belady's rule where we have a prediction
+      2. unhinted entries, LRU among themselves
+      3. hinted entries whose predicted next use is NEAR, furthest first --
+         protected most, since the workflow is about to come back for them
+
+    `far_s` is the running median of observed hints rather than a constant, so
+    the boundary adapts to the workload instead of needing a tuned number. An
+    unhinted entry is therefore treated as "reuse distance unknown, assume
+    typical", which is the honest default.
+
+    Prediction noise comes from HintBuilder's sigma, so sigma=0 is the
+    consistency end (perfect hints) and larger sigma tests robustness --
+    the Purohit trade-off, applied to ordering instead of to a threshold.
+    """
+    name = "pred-belady"
+
+    def __init__(self, far_s: float = None):
+        # far_s is retained for API compatibility and is unused: the ordering
+        # is now a single sort by predicted next use, which is what Belady
+        # actually says. The earlier tiered version put UNHINTED entries in the
+        # middle, ahead of hinted-but-far ones. That was backwards here,
+        # because a missing hint means the block is never reused again -- next
+        # use is infinity, so it should be evicted FIRST. It cost 97.2s of
+        # recompute against keep-all's 13.4s.
+        self._far_s = far_s
+
+    def on_complete(self, entry, now):
+        return True                  # ordering policy: never drop on completion
+
+    def on_tick(self, entries, now):
+        return []                    # and never release voluntarily
+
+    def choose_victims(self, candidates, need_bytes, now):
+        def rank(e):
+            # No prediction at all -> treat next use as infinitely far and
+            # evict first. With HintBuilder(never_gap_s=...) this branch is
+            # unreachable, which is the configuration that keeps the policy
+            # honest (see HintBuilder).
+            if e.hint_gap_s is None:
+                return (0, 0.0, e.key)
+            return (1, -e.hint_gap_s, e.key)
+
+        victims, freed = [], 0
+        for e in sorted(candidates, key=rank):
+            if freed >= need_bytes:
+                break
+            victims.append(e)
+            freed += e.nbytes
+        return victims
+
+
+class OfflineBeladyRetention(PredictedBeladyRetention):
+    """
+    OFFLINE REFERENCE -- Belady's rule with the TRUE next-use time.
+
+    The least-recompute eviction order achievable under a given memory budget,
+    which is the quantity a retention policy can actually win (FINDINGS 24).
+    It replaces `offline-ref` as the headline reference, because `offline-ref`
+    minimises recompute PLUS rent and so trades away real recompute to reduce a
+    rent term the policy cannot remove -- its recompute (29.4s) came out higher
+    than keep-all's (13.4s), which makes it useless as an upper bound on the
+    thing being optimised.
+
+    Not deployable: it reads `true_gap_s`. An entry with no true reuse is
+    evicted first, since it will never be wanted again.
+    """
+    name = "offline-belady"
+
+    def choose_victims(self, candidates, need_bytes, now):
+        def rank(e):
+            # Never reused again -> evict first. Otherwise furthest use first.
+            if e.true_gap_s is None:
+                return (0, 0.0, e.key)
+            return (1, -e.true_gap_s, e.key)
+
+        victims, freed = [], 0
+        for e in sorted(candidates, key=rank):
+            if freed >= need_bytes:
+                break
+            victims.append(e)
+            freed += e.nbytes
+        return victims
+
+
 class OfflineReferenceRetention(RetentionPolicy):
     """
     OFFLINE REFERENCE -- not optimal, and must never be labelled as such.
@@ -678,9 +779,18 @@ class HintBuilder:
     which is the consistency end of the Purohit trade-off.
     """
 
-    def __init__(self, sigma: float = 0.0, seed: int = 0):
+    def __init__(self, sigma: float = 0.0, seed: int = 0,
+                 never_gap_s: float = None):
         self.sigma = sigma
         self._rng = random.Random(seed)
+        # A block that is never reused has no true gap. Returning None for it
+        # leaks an ORACLE bit: absence of a hint means "never reused again",
+        # which no online predictor would know for free. With never_gap_s set,
+        # every block gets a prediction and a never-reused block is predicted
+        # to come back beyond the horizon -- so hint presence carries nothing.
+        # Leave it None to preserve the older behaviour for ski-rental-pred,
+        # whose rule is explicitly "no prediction -> use the plain threshold".
+        self.never_gap_s = never_gap_s
 
     def hint_for(self, node, key=None):
         """
@@ -700,7 +810,9 @@ class HintBuilder:
         if true_gap is None:
             true_gap = getattr(node, "next_reuse_gap_s", None)
         if true_gap is None:
-            return None
+            if self.never_gap_s is None:
+                return None
+            true_gap = self.never_gap_s
         if self.sigma <= 0:
             return true_gap
         return true_gap * math.exp(self._rng.gauss(0.0, self.sigma))
@@ -709,4 +821,5 @@ class HintBuilder:
 RETENTIONS = {c.name: c for c in [
     LRURetention, KeepAllRetention, EvictNowRetention, SkiRentalRetention,
     SkiRentalPredictionsRetention, OfflineReferenceRetention,
+    PredictedBeladyRetention, OfflineBeladyRetention,
 ]}

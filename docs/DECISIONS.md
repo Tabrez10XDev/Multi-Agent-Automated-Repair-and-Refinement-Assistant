@@ -541,3 +541,29 @@ still fail.
    but the *match* is capped by what is actually resident.
 
 Block mode is unchanged: four fixed-seed synthetic runs are byte-identical.
+
+## 23. OPEN QUESTION — the derived-rent model is policy-invariant in this regime
+
+Not changed, recorded. Revisiting §13 mid-grid would invalidate everything
+measured so far, so this is logged for a deliberate decision later.
+
+Derived rent charges a holder in proportion to its bytes times the victim's
+recompute-per-byte, normalised by the evictable pool. The consequence, measured
+(FINDINGS §24): in the regime where a retention policy actually operates, total
+rent barely moves with the policy — 146.0s under keep-all against 166.2s under
+ski-rental — and only collapses to zero when almost nothing is held at all
+(evict-now). Releasing **shifts** rent onto whoever still holds rather than
+removing it.
+
+So an objective of `recompute + rent` is dominated by a term the policy cannot
+reduce, and it misranks: it rates `evict-now` 20% better than `keep-all` while
+evict-now is 17% worse on p95 and 9.5x worse on GPU work.
+
+If this is revisited, the question to answer first is what rent is supposed to
+represent. As a *shared pressure* signal it is behaving correctly and simply
+is not a policy-reducible cost. As a *private holding cost* it would need to
+charge a holder only for pressure it personally caused, which is a different
+model and would need its own validation.
+
+Until then: report latency and GPU recompute, treat rent as a diagnostic, and
+do not use `recompute + rent` to rank policies.
