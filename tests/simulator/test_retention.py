@@ -651,3 +651,60 @@ def test_ollama_slot_match_never_claims_an_evicted_block():
     """
     rep = _ollama_run(kv_mb=256, batch=8)   # tight budget, heavy eviction
     assert rep["tasks_completed"] > 0
+
+
+# --------------------------------------------------------------------------
+# Common random numbers for paired comparisons (DECISIONS 24)
+# --------------------------------------------------------------------------
+
+class _FakeNode:
+    node_id = 0
+    next_reuse_gap_s = None
+
+    def __init__(self):
+        self.block_reuse_gap = {"k1": 10.0, "k2": 20.0}
+
+
+def test_hint_noise_does_not_depend_on_query_order():
+    """
+    The noise must be a property of the block, not of when it was asked for.
+
+    A single shared RNG draws in hint_for call order, which follows the
+    admission sequence and therefore differs by policy -- so the same block got
+    a different predicted gap under each policy and a paired comparison
+    silently became unpaired. Measured before the fix: 0% of blocks hinted
+    under two policies received the same noised value.
+    """
+    from simulator.policies import HintBuilder
+    n = _FakeNode()
+    a = HintBuilder(sigma=0.5, seed=3)
+    b = HintBuilder(sigma=0.5, seed=3)
+    forward = [a.hint_for(n, "k1"), a.hint_for(n, "k2")]
+    reverse = [b.hint_for(n, "k2"), b.hint_for(n, "k1")][::-1]
+    assert forward == reverse
+
+
+def test_hint_noise_varies_with_seed_and_is_exact_at_sigma_zero():
+    from simulator.policies import HintBuilder
+    n = _FakeNode()
+    assert (HintBuilder(sigma=0.5, seed=3).hint_for(n, "k1")
+            != HintBuilder(sigma=0.5, seed=4).hint_for(n, "k1"))
+    assert HintBuilder(sigma=0.0, seed=3).hint_for(n, "k1") == 10.0
+
+
+def test_arrivals_are_common_across_policies_for_a_fixed_seed():
+    """Paired designs need identical arrivals; only the policy may differ."""
+    from experiments.run_retention_grid import build
+    from simulator.workload import CostModel, CpuStageSeconds, StageTokens
+    cost, tok, cpu = CostModel(), StageTokens(), CpuStageSeconds()
+    try:
+        a = [t.arrival_time for t in
+             build(1, 7, 0.03, cost, tok, cpu, trace_set="holdout_qwen")]
+        b = [t.arrival_time for t in
+             build(1, 7, 0.03, cost, tok, cpu, trace_set="holdout_qwen")]
+        c = [t.arrival_time for t in
+             build(1, 8, 0.03, cost, tok, cpu, trace_set="holdout_qwen")]
+    except (KeyError, FileNotFoundError, IndexError):
+        import pytest
+        pytest.skip("holdout trace not present")
+    assert a == b and a != c

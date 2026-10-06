@@ -567,3 +567,38 @@ model and would need its own validation.
 
 Until then: report latency and GPU recompute, treat rent as a diagnostic, and
 do not use `recompute + rent` to rank policies.
+
+## 24. Paired comparisons use common random numbers
+
+Retention and scheduler comparisons are paired: every policy sees the same
+seeds, and a difference is reported as a paired difference with a confidence
+interval. On this trace seed variance is large — plus or minus 20% on composite
+cost (FINDINGS §27) — so unpaired comparisons cannot resolve the effects being
+measured.
+
+Verified, and one channel was broken:
+
+| channel | status |
+|---|---|
+| task arrival times | **common** — identical for a fixed seed, different across seeds |
+| estimator noise | **common** — already cached per `req_id`, not per call |
+| hint noise | **was NOT common**; fixed |
+
+`HintBuilder` drew from one shared RNG, so draws followed `hint_for` call
+order, which follows the admission sequence, which differs by policy. The same
+block therefore received a different predicted gap under each policy: of 12
+blocks hinted under both `ski-rental-pred` and `pred-belady`, **0%** got the
+same noised value. That turns a paired comparison into an unpaired one and
+reintroduces precisely the variance pairing exists to remove.
+
+Noise is now derived from `(seed, block key)`, so a prediction is a property of
+the block rather than of when it was queried — which is also what a real
+predictor would be. After the fix, 50 of 56 blocks hinted under both policies
+agree exactly.
+
+The remaining 6 are **not** a CRN violation. The multiplier is deterministic
+per `(seed, key)`, so a difference means the *base* `true_gap` differed: the
+same block key can be created by a different node under a different eviction
+order, and each node carries its own per-block gap. That is a structural
+property of replay, not randomness, and it is why the end-to-end figure is 89%
+rather than 100% while the unit-level noise is exactly reproducible.

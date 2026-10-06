@@ -782,7 +782,7 @@ class HintBuilder:
     def __init__(self, sigma: float = 0.0, seed: int = 0,
                  never_gap_s: float = None):
         self.sigma = sigma
-        self._rng = random.Random(seed)
+        self._seed = seed
         # A block that is never reused has no true gap. Returning None for it
         # leaks an ORACLE bit: absence of a hint means "never reused again",
         # which no online predictor would know for free. With never_gap_s set,
@@ -815,7 +815,26 @@ class HintBuilder:
             true_gap = self.never_gap_s
         if self.sigma <= 0:
             return true_gap
-        return true_gap * math.exp(self._rng.gauss(0.0, self.sigma))
+        return true_gap * math.exp(self._noise_for(node, key))
+
+    def _noise_for(self, node, key):
+        """
+        Noise derived from (seed, block key), NOT from call order.
+
+        COMMON RANDOM NUMBERS. A single shared RNG draws in the order hint_for
+        is called, and that order follows the admission sequence, which differs
+        by policy -- so the same block received a different predicted gap under
+        each policy. Measured: of 12 blocks hinted under both ski-rental-pred
+        and pred-belady, 0% got the same noised value. That silently turns a
+        paired comparison into an unpaired one and reintroduces exactly the
+        variance pairing exists to remove, which matters here because seed
+        variance on this trace is +/-20% (FINDINGS 27).
+
+        Keying on the block also makes a prediction a property of the block,
+        which is what a real predictor would be.
+        """
+        tag = f"{self._seed}|{key if key is not None else getattr(node, 'node_id', 0)}"
+        return random.Random(tag).gauss(0.0, self.sigma)
 
 
 RETENTIONS = {c.name: c for c in [
