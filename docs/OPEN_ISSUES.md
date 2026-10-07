@@ -53,6 +53,35 @@ The engine reaches the contended state the old one could not. Trace evidence:
    Milestone 1 Phase 4; the old model stays selectable as `blocking_rent`.
 3. **`batch_decode_coeff = 0.15` is a placeholder** and is load-bearing — it
    decides how much throughput a blocked request forgoes. Sweep it in `ablate.py`.
+
+   > **Swept 2026-10-07; still a placeholder, but the conclusions do not rest
+   > on it.** `experiments/sweep_decode_coeff.py`, holdout_qwen 1x, util 0.8,
+   > rate recalibrated per coefficient, 10 paired seeds, manifest-checked;
+   > output `results/decode_coeff_sweep.json`.
+   >
+   > | coeff | keep-all recompute / makespan | ski-rental − keep-all recompute | ski − keep p95 | sched choice | lsf − fcfs p95 |
+   > |---|---|---|---|---|---|
+   > | 0.05 | 0.4% | +7.6s [+3.4, +11.8] | −1.8s [−6.1, +2.5] | 0.2% | −1.4s [−3.7, +0.9] |
+   > | 0.15 | 0.4% | +11.2s [+5.6, +16.7] | +2.2s [−0.7, +5.0] | 0.3% | −1.0s [−2.0, +0.1] |
+   > | 0.30 | 0.6% | +10.4s [+2.5, +18.4] | +7.9s [−4.1, +19.8] | 0.7% | −4.3s [−9.2, +0.7] |
+   > | 0.50 | 0.7% | +11.7s [+4.7, +18.6] | +7.8s [−1.5, +17.1] | 1.0% | −2.3s [−7.1, +2.6] |
+   >
+   > Across a 10x range: recompute stays under 1% of makespan; ski-rental is
+   > significantly *worse* than keep-all on GPU recompute at every value and
+   > never significantly different on p95; the scheduler has a choice on at
+   > most 1% of decisions and LSF is never significantly different from FCFS.
+   > One trend to watch: LSF's point estimate is negative at every value and
+   > the 0.15 interval only just spans zero, so a costlier decode leans
+   > towards LSF without reaching significance here.
+   >
+   > Absolute values differ from FINDINGS §24 at 0.15 (keep-all recompute
+   > 7.4s here against 13.4s there, p95 148.9s against 187.6s). This sweep
+   > averages 10 seeds; how many seeds §24 used is unclear in the records.
+   > Do not mix the two tables.
+   >
+   > A **measurement** of the coefficient is still wanted (a probe was in
+   > progress in `probes/` on 2026-10-07); the sweep only shows the
+   > conclusions are insensitive across 0.05 to 0.50.
 4. Rates are Mac/Metal, not CUDA.
 5. `model_switch_seconds = 0.0` assumes both models stay resident.
 6. `REPRESENTATIVE_ISSUE` in `measure_context.py` is invented, not real
