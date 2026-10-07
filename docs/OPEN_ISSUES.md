@@ -78,6 +78,10 @@ The engine reaches the contended state the old one could not. Trace evidence:
    > 7.4s here against 13.4s there, p95 148.9s against 187.6s). This sweep
    > averages 10 seeds; how many seeds §24 used is unclear in the records.
    > Do not mix the two tables.
+   > **Explained 2026-10-07:** §24 is seed 1 alone; the current code at 0.15,
+   > seed 1, reproduces it exactly. Seed spread is large (keep-all recompute
+   > 0.4s to 16.3s over seeds 1 to 3). §24 now carries a 20-seed table at the
+   > measured coefficient.
    >
    > A **measurement** of the coefficient is still wanted (a probe was in
    > progress in `probes/` on 2026-10-07); the sweep only shows the

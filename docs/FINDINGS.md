@@ -37,7 +37,7 @@ measurements and are unaffected.
 | 21. Retry-loop state discard | current | With a llama coder, 19.5% of within-task same-model handoffs discard reusable state, 92% of them coder→coder retries. With a qwen coder it is 1.4%. That retry rate is the cause is unproven: it is confounded with the model. |
 | 22. Held-out validation | current | About **1 call in 6** hits Ollama's cache on disjoint problems (16.9%, 17.8%), almost all of it partial prefix reuse. Hit recall held out is 80–81% against 94–97% on the fit traces, and all of the shortfall is in `issue_parser`. |
 | 23. LSF buys tail latency | **retracted**, superseded by §27 | Measured at ~2.2x the intended load. The 14.8% p95 win and the "oracle is worse" result are void. |
-| 24. Retention cannot move latency | current, *sim* | Recompute is **0.8–1.1% of makespan**, so retention is a GPU-work mechanism, not a latency one. Keep-all recomputes 13.4s against evict-now's 127.4s (9.5x), yet p95 across deployable policies differs by under 1%. At 0.841 recompute is 0.6% (DECISIONS §28). Seed count not recorded; do not mix with the OPEN_ISSUES §9.3 sweep. |
+| 24. Retention cannot move latency | current, *sim* | Recompute is **0.8–1.1% of makespan**, so retention is a GPU-work mechanism, not a latency one. Keep-all recomputes 13.4s against evict-now's 127.4s (9.5x), yet p95 across deployable policies differs by under 1%. At 0.841 recompute is 0.6% (DECISIONS §28). The original table is **seed 1 only** (reproduced exactly 2026-10-07); the 20-seed table at the measured coefficient is in §24 itself and supersedes it for absolute numbers. |
 | 25. Ski-rental negative result | current, *sim* | Ski-rental holds 4.5 MB less than keep-all yet pays 20.2s more rent and 5.0s more recompute. Releasing shifts rent onto the remaining holders rather than removing it. |
 | 26. Belady loses to LRU | current, *sim* | Belady recomputes 29.4s against LRU's 13.4s, because eviction here is bulk and block sizes differ. `offline-belady` is not a valid minimum-recompute reference. |
 | 27. Scheduler table, corrected | current, *sim* | **No scheduling rule differs significantly** from arrival order on p95, at batch 8 or 16, nor does the oracle (paired CIs, 20 seeds). The scheduler has a choice on only 0.3–0.4% of admissions. Still tied at 0.841 (DECISIONS §28). |
@@ -854,6 +854,31 @@ Diagnostic before the grid, `holdout_qwen` 1x, util 0.8, batch 4, KV 512MB,
 FCFS — inside the live-rent band (OPEN_ISSUES §27).
 
 ### The decisive number: recompute is ~1% of makespan
+
+> **Regenerated 2026-10-07: 20 paired seeds, measured `batch_decode_coeff`
+> 0.841 (DECISIONS §28).** The table below this note is a **single seed**:
+> rerunning the current code at 0.15 with seed 1 reproduces it exactly
+> (keep-all 13.4s / 187.6s / makespan 1603.9s), while seeds 2 and 3 give
+> 16.3s / 146.8s and 0.4s / 91.7s. Its absolute numbers are one draw; the
+> table here supersedes them. Same point (holdout_qwen 1x, util 0.8, batch 4,
+> KV 512MB, FCFS), rate recalibrated to 0.0265/s, manifest in
+> `results/finding24_measured.json` (`experiments.sweep_decode_coeff --coeffs
+> 0.841 --seeds 20 --ret-policies keep-all ski-rental evict-now offline-ref`).
+>
+> | policy | recompute | prefill | decode | idle | makespan | p95 | vs keep-all p95 | vs keep-all recompute |
+> |---|---|---|---|---|---|---|---|---|
+> | keep-all | 13.8s | 409.2s | 1201.8s | 542.7s | 2178.3s | 277.7 | | |
+> | ski-rental | 24.0s | 419.4s | 1201.6s | 540.2s | 2185.8s | 278.3 | +0.6 [-7.0, +8.2] | +10.2 [+4.8, +15.6] |
+> | evict-now | 125.7s | 521.0s | 1197.9s | 477.9s | 2220.7s | 314.7 | +36.9 [+24.8, +49.0] | +111.9 [+103.6, +120.2] |
+> | offline-ref | 24.6s | 420.0s | 1201.7s | 541.6s | 2187.9s | 278.7 | +1.0 [-6.4, +8.4] | +10.8 [+6.0, +15.6] |
+>
+> Means over seeds; intervals are paired 95% CIs (DECISIONS §24). Keep-all
+> recompute is **0.7% of makespan** (mean of per-seed ratios). Decode is 55%
+> of makespan, prefill 19%, idle 25%. The conclusion stands and is sharper:
+> no deployable policy differs from keep-all on p95, evict-now is
+> significantly worse on both, and ski-rental and the offline reference both
+> recompute significantly more than keep-all.
+
 
 | policy | recompute | prefill | decode | idle | makespan | recomp/makespan | p95 |
 |---|---|---|---|---|---|---|---|

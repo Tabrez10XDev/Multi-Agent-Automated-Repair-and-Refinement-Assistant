@@ -44,6 +44,9 @@ TRACE = "holdout_qwen"
 UTIL = 0.8
 RETENTION_POINT = {"batch": 4, "kv_mb": 512.0}
 SCHED_POINT = {"batch": 8, "kv_mb": 1024.0}
+RET_POLICIES = ["keep-all", "ski-rental", "evict-now"]
+BREAKDOWN = ("p50_task_latency_s", "p95_task_latency_s", "recompute_seconds",
+             "prefill_seconds", "decode_seconds", "idle_seconds", "makespan_s")
 
 
 def calibrated(manifest, name, coeff, point, cost, tok, cpu, cache_mode):
@@ -73,6 +76,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--seeds", type=int, default=10)
     ap.add_argument("--coeffs", type=float, nargs="+", default=COEFFS)
+    ap.add_argument("--ret-policies", nargs="+", default=RET_POLICIES,
+                    help="retention policies at the retention point; keep-all "
+                         "and ski-rental are always included")
     ap.add_argument("--out", default=os.path.join(_REPO, "results",
                                                   "decode_coeff_sweep.json"))
     args = ap.parse_args()
@@ -80,9 +86,11 @@ def main():
     tok, cpu = StageTokens.from_measured(), CpuStageSeconds.from_measured()
     cache_mode = EngineConfig().cache_mode
     seeds = list(range(1, args.seeds + 1))
+    ret_policies = list(dict.fromkeys(["keep-all", "ski-rental"] + args.ret_policies))
     manifest = Manifest.start("decode_coeff_sweep", params={
         "trace_set": TRACE, "util": UTIL, "coeffs": args.coeffs, "seeds": seeds,
         "retention_point": RETENTION_POINT, "sched_point": SCHED_POINT,
+        "ret_policies": ret_policies,
         "cache_mode": cache_mode})
     t0 = time.time()
     out_rows = []
@@ -96,7 +104,7 @@ def main():
         rate, busy = calibrated(manifest, f"arrival_rate[ret,c={coeff}]", coeff,
                                 p, cost, tok, cpu, cache_mode)
         ret = {}
-        for pol in ("keep-all", "ski-rental", "evict-now"):
+        for pol in ret_policies:
             ret[pol] = [run_one(pol, "fcfs", 1, s, p["kv_mb"], rate, cost, tok,
                                 cpu, batch=p["batch"], trace_set=TRACE)[1]
                         for s in seeds]
@@ -145,10 +153,16 @@ def main():
                 "keep_all_recompute_share_of_makespan": recomp_share,
                 "ski_rental_rent_active_tick_frac":
                     mean("ski-rental", "rent_active_tick_frac"),
-                "by_policy": {pol: {k: mean(pol, k) for k in
-                                    ("p50_task_latency_s", "p95_task_latency_s",
-                                     "recompute_seconds", "makespan_s")}
+                "by_policy": {pol: {k: mean(pol, k) for k in BREAKDOWN}
                               for pol in ret},
+                "per_seed": {pol: {k: [r[k] for r in ret[pol]] for k in BREAKDOWN}
+                             for pol in ret},
+                "vs_keep_all": {pol: {
+                    "p95": paired_ci([r["p95_task_latency_s"] for r in ret[pol]],
+                                     [r["p95_task_latency_s"] for r in ret["keep-all"]]),
+                    "recompute": paired_ci([r["recompute_seconds"] for r in ret[pol]],
+                                           [r["recompute_seconds"] for r in ret["keep-all"]])}
+                    for pol in ret if pol != "keep-all"},
                 "ski_minus_keep_p95": ski_vs_keep_p95,
                 "ski_minus_keep_recompute": ski_vs_keep_rc},
             "scheduler": {
