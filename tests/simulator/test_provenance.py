@@ -77,3 +77,90 @@ def test_stage_tokens_records_which_fields_were_measured():
                 assert "stable_prefix_tokens" in tok.measured_fields
                 return
     assert tok.measured_fields == ()
+
+
+# --------------------------------------------------------------------------
+# Hardware profiles. Every finding so far is a Mac result; these tests keep
+# that visible and keep the Mac baseline from drifting.
+# --------------------------------------------------------------------------
+
+import pytest
+
+from simulator.workload import DEFAULT_PROFILE, PROFILES, get_profile
+
+
+def test_default_profile_is_the_mac_and_its_measured_fields_say_so():
+    cm = CostModel()
+    assert DEFAULT_PROFILE == "mac_ollama_measured"
+    assert cm.profile == "mac_ollama_measured"
+    for model in (CODER_MODEL, SENTINEL_MODEL):
+        assert cm.rates_for(model).measured is True
+    assert CODER_MODEL in cm.hardware_profile.kv_measured
+    # llama3.2's KV figure is DERIVED (OPEN_ISSUES 23); it must not be promoted.
+    assert SENTINEL_MODEL not in cm.hardware_profile.kv_measured
+
+
+def test_gpu_4060_exists_and_nothing_in_it_is_measured():
+    cm = CostModel.from_profile("gpu_4060")
+    assert all(r.measured is False for r in cm.rates.values())
+    assert cm.hardware_profile.kv_measured == frozenset()
+    assert cm.hardware_profile.batch_decode_coeff_measured is False
+    text = cm.provenance()
+    assert "MEASURED" not in text.replace("PLACEHOLDER", "")
+    assert "PLACEHOLDER" in next(l for l in text.splitlines() if "hardware profile" in l)
+
+
+def test_provenance_names_the_active_profile():
+    for name in PROFILES:
+        text = CostModel.from_profile(name).provenance()
+        line = next(l for l in text.splitlines() if "hardware profile" in l)
+        assert name in line
+
+
+def test_unknown_profile_fails_clearly():
+    with pytest.raises(ValueError, match="unknown hardware profile 'rtx9090'"):
+        CostModel(profile="rtx9090")
+    with pytest.raises(ValueError, match="known profiles"):
+        get_profile("rtx9090")
+
+
+def test_explicit_override_is_reported_not_hidden():
+    line = next(l for l in CostModel(batch_decode_coeff=0.3).provenance().splitlines()
+                if "batch_decode_coeff" in l)
+    assert "OVERRIDDEN from profile value 0.15" in line
+
+
+def test_mac_profile_values_are_pinned():
+    """
+    The baseline every finding was measured against. If one of these moves,
+    every number in FINDINGS moves with it, so a change must be deliberate:
+    update this test in the same commit and say why in DECISIONS.
+    """
+    cm = CostModel()
+    assert cm.batch_decode_coeff == 0.15
+    assert cm.iteration_overhead_s == 0.001
+    assert cm.homogeneous is False
+    expected = {
+        CODER_MODEL: (267.9, 28.09, 57344),
+        SENTINEL_MODEL: (541.87, 59.9, 114688),
+    }
+    for model, (prefill, decode, kv) in expected.items():
+        r = cm.rates_for(model)
+        assert (r.prefill_rate, r.decode_rate, r.kv_bytes_per_token) == (prefill, decode, kv)
+
+
+def test_profiles_are_independent_objects():
+    """Building the placeholder profile must not mark the Mac's rates unmeasured."""
+    a, b = CostModel(), CostModel.from_profile("gpu_4060")
+    assert a.rates is not b.rates
+    assert a.rates[CODER_MODEL].measured is True
+    assert b.rates[CODER_MODEL].measured is False
+
+
+def test_rates_measured_on_another_machine_are_refused(monkeypatch):
+    """measured.json from a GPU box must not load under the Mac profile's name."""
+    import simulator.workload as w
+    monkeypatch.setattr(w, "MEASURED", {"backend": "cuda", "rates": {
+        CODER_MODEL: {"prefill_rate": 5000.0, "decode_rate": 60.0}}})
+    with pytest.raises(ValueError, match="backend 'cuda'"):
+        w.CostModel()

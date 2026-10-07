@@ -703,3 +703,39 @@ converted test does not import. All 164 problems are accounted for, and
    One run, reported as it comes out. Tuning in response to it turns it into
    another fitting set, and HumanEval has no problems left to replace it.
 4. Pass rates on it are implement-from-spec rates and carry §20's caveat.
+
+## 27. Cost constants live in a named hardware profile; every finding so far is a Mac result
+
+Added 2026-10-07 (brief 02). `simulator/workload.py` now holds `PROFILES`, and
+`CostModel` takes the machine-dependent constants (per-model rates, KV bytes
+per token, `batch_decode_coeff`, `iteration_overhead_s`) from the one named in
+`CostModel.profile`. `provenance()` prints the profile on its second line.
+
+**Why.** The prefill-to-decode ratio decides whether retention has anything
+to win (FINDINGS §24 put recompute at about 1% of makespan), and it differs by
+several times between a Mac and a discrete GPU. Until now nothing in the code
+or output said which machine a number described.
+
+**The convention.**
+
+1. `mac_ollama_measured` is the default and reproduces the previous behaviour
+   exactly: the two fixed-seed engine runs in brief 02 are byte-identical
+   apart from the new provenance line. **Every result in FINDINGS to date is a
+   `mac_ollama_measured` result**, and should be quoted as one.
+2. `gpu_4060` is a **PLACEHOLDER**: the Mac numbers copied so it runs, every
+   field marked unmeasured. It is not an estimate of an RTX 4060. Workstream 4
+   replaces its values with measurements, and flips each `measured` flag only
+   for a value it actually measured.
+3. Unchanged labels: `batch_decode_coeff` stays PLACEHOLDER at 0.15;
+   llama3.2's KV bytes per token stays DERIVED (OPEN_ISSUES §23).
+4. A constant passed explicitly (the decode-coefficient sweep) overrides the
+   profile, and `provenance()` reports it as OVERRIDDEN rather than hiding it.
+5. `data/calibration/measured.json` loads only under the Mac profile and only
+   if its `backend` is `mac-metal`; otherwise construction fails. Calibrating
+   another machine must add a profile, never overwrite the Mac's.
+6. `test_mac_profile_values_are_pinned` pins the Mac numbers. Changing one is
+   a deliberate act: update the test in the same commit and record why here.
+
+Not done here, by file ownership: the engine CLI and the experiment drivers
+still build `CostModel()` (the Mac default) and do not yet write
+`hardware_profile` into their manifests.

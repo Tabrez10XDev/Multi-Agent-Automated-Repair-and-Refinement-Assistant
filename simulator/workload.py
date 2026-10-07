@@ -86,6 +86,8 @@ class ModelRates:
     measured: bool = False
 
 
+MAC_BACKEND = "mac-metal"
+
 _DEFAULT_RATES = {
     # MAC / METAL PLACEHOLDERS - measured by the author on Ollama + Metal.
     # Replace with CUDA measurements before publishing any absolute numbers.
@@ -100,6 +102,15 @@ _DEFAULT_RATES = {
 
 def _rates_from_measured() -> dict:
     rates = dict(_DEFAULT_RATES)
+    # measured.json is written by probes/calibrate.py on whatever machine ran
+    # it. Every finding so far is a Mac result, so rates measured anywhere else
+    # must not be loaded under the Mac profile's name. Give them their own.
+    backend = MEASURED.get("backend")
+    if MEASURED.get("rates") and backend != MAC_BACKEND:
+        raise ValueError(
+            f"{_MEASURED_PATH} was measured on backend {backend!r}, but the "
+            f"mac_ollama_measured profile only accepts {MAC_BACKEND!r}. Add a "
+            f"hardware profile for that machine instead of overwriting this one.")
     for name, m in MEASURED.get("rates", {}).items():
         key = name if name in rates else (SENTINEL_MODEL if name.startswith("llama") else name)
         if key in rates:
@@ -112,6 +123,64 @@ def _rates_from_measured() -> dict:
     return rates
 
 
+def _gpu_4060_rates() -> dict:
+    # PLACEHOLDER. The Mac numbers copied verbatim, every one marked
+    # unmeasured, so the profile runs end to end. They are NOT an estimate of
+    # an RTX 4060; workstream 4 replaces them with measurements. KV bytes per
+    # token are fp16 architecture arithmetic and so do not depend on the GPU,
+    # but on this machine neither has been checked against a server log.
+    return {name: replace(r, measured=False) for name, r in _rates_from_measured().items()}
+
+
+@dataclass(frozen=True)
+class HardwareProfile:
+    """
+    Every cost constant that depends on the machine, under one name.
+
+    The name exists so that a number can always be traced to the hardware it
+    describes. The prefill-to-decode ratio decides whether retention has
+    anything to win, and it differs by several times between machines, so a
+    finding without its profile is not interpretable.
+    """
+    name: str
+    description: str
+    rates: object                 # zero-argument factory -> {model: ModelRates}
+    batch_decode_coeff: float
+    iteration_overhead_s: float
+    # Models whose kv_bytes_per_token was confirmed against a server log on
+    # this machine. Everything else is DERIVED from published configs.
+    kv_measured: frozenset = frozenset()
+    batch_decode_coeff_measured: bool = False
+
+
+DEFAULT_PROFILE = "mac_ollama_measured"
+
+PROFILES = {
+    "mac_ollama_measured": HardwareProfile(
+        name="mac_ollama_measured",
+        description="measured values are Mac / Ollama / Metal (data/calibration/measured.json)",
+        rates=_rates_from_measured,
+        batch_decode_coeff=0.15,
+        iteration_overhead_s=0.001,
+        kv_measured=frozenset({CODER_MODEL}),
+    ),
+    "gpu_4060": HardwareProfile(
+        name="gpu_4060",
+        description="PLACEHOLDER for RTX 4060 8 GB: Mac values copied, nothing measured",
+        rates=_gpu_4060_rates,
+        batch_decode_coeff=0.15,
+        iteration_overhead_s=0.001,
+    ),
+}
+
+
+def get_profile(name: str) -> HardwareProfile:
+    if name not in PROFILES:
+        raise ValueError(f"unknown hardware profile {name!r}; "
+                         f"known profiles: {sorted(PROFILES)}")
+    return PROFILES[name]
+
+
 @dataclass
 class CostModel:
     """
@@ -120,9 +189,14 @@ class CostModel:
     Deliberately has NO memory-price knob. Per the design, rent is emergent: the
     engine charges it by observing that a retained entry kept a request waiting.
     Adding a price here would let the retention policy cheat by reading it.
+
+    The machine-dependent constants come from a named HardwareProfile. Any of
+    them passed explicitly (the decode-coefficient sweep does this) overrides
+    the profile, and provenance() says so.
     """
-    rates: dict = field(default_factory=_rates_from_measured)
+    rates: Optional[dict] = None
     homogeneous: bool = False
+    profile: str = DEFAULT_PROFILE
 
     # Batching efficiency. decode_rate is a single-stream number; a real engine
     # decodes a batch of n in much less than n times that. Iteration time is
@@ -131,11 +205,28 @@ class CostModel:
     # PLACEHOLDER: 0.15 is a plausible memory-bound-decode value, NOT measured.
     # This is the single most load-bearing unmeasured constant in the sim,
     # because it decides how much throughput a blocked request actually forgoes.
-    # ablate.py should sweep it.
-    batch_decode_coeff: float = 0.15
+    # Swept in experiments/sweep_decode_coeff.py (OPEN_ISSUES 9.3).
+    batch_decode_coeff: Optional[float] = None
 
     # Fixed per-iteration engine overhead (scheduling, sampling), seconds.
-    iteration_overhead_s: float = 0.001
+    iteration_overhead_s: Optional[float] = None
+
+    def __post_init__(self):
+        p = get_profile(self.profile)
+        if self.rates is None:
+            self.rates = p.rates()
+        if self.batch_decode_coeff is None:
+            self.batch_decode_coeff = p.batch_decode_coeff
+        if self.iteration_overhead_s is None:
+            self.iteration_overhead_s = p.iteration_overhead_s
+
+    @classmethod
+    def from_profile(cls, name: str, **overrides) -> "CostModel":
+        return cls(profile=name, **overrides)
+
+    @property
+    def hardware_profile(self) -> HardwareProfile:
+        return get_profile(self.profile)
 
     def rates_for(self, model: str) -> ModelRates:
         if self.homogeneous:
@@ -165,19 +256,24 @@ class CostModel:
         return self.prefill_seconds(model, tokens)
 
     def provenance(self) -> str:
-        lines = ["CostModel provenance:"]
+        p = self.hardware_profile
+        lines = ["CostModel provenance:",
+                 f"  hardware profile     {p.name}  [{p.description}]"]
         for name, r in self.rates.items():
             tag = "MEASURED" if r.measured else "PLACEHOLDER"
             # KV bytes/token has its own provenance: qwen's is confirmed
             # against an Ollama 0.33.3 prompt-cache log line ("3791 tokens,
             # 207.364 MiB" -> 57,356 B/token vs 57,344 derived, 0.02% apart).
             # llama3.2's is still derived from published config only.
-            kv_tag = "MEASURED from ollama log" if name == CODER_MODEL else "DERIVED"
+            kv_tag = "MEASURED from ollama log" if name in p.kv_measured else "DERIVED"
             lines.append(f"  {name:<20} prefill={r.prefill_rate:>7.1f} tok/s  "
                          f"decode={r.decode_rate:>6.1f} tok/s  "
                          f"kv={r.kv_bytes_per_token/1024:>5.0f} KiB/tok  "
                          f"[rates {tag}; kv {kv_tag}]")
-        lines.append(f"  batch_decode_coeff   {self.batch_decode_coeff}  [PLACEHOLDER - sweep this]")
+        coeff_tag = "MEASURED" if p.batch_decode_coeff_measured else "PLACEHOLDER - sweep this"
+        if self.batch_decode_coeff != p.batch_decode_coeff:
+            coeff_tag = f"OVERRIDDEN from profile value {p.batch_decode_coeff}"
+        lines.append(f"  batch_decode_coeff   {self.batch_decode_coeff}  [{coeff_tag}]")
         lines.append(f"  homogeneous          {self.homogeneous}")
         # Applies whenever a trace-derived workload is used (simulator/trace_loader.py).
         # Ollama templates prompts server-side, so a prefix recovered from logged
