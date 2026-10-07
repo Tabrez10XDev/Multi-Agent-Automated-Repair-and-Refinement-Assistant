@@ -123,10 +123,10 @@ def _rates_from_measured() -> dict:
     return rates
 
 
-def _gpu_4060_rates() -> dict:
+def _gpu_5060ti_rates() -> dict:
     # PLACEHOLDER. The Mac numbers copied verbatim, every one marked
     # unmeasured, so the profile runs end to end. They are NOT an estimate of
-    # an RTX 4060; workstream 4 replaces them with measurements. KV bytes per
+    # an RTX 5060 Ti; docs/GPU_TODO.md replaces them with measurements. KV bytes per
     # token are fp16 architecture arithmetic and so do not depend on the GPU,
     # but on this machine neither has been checked against a server log.
     return {name: replace(r, measured=False) for name, r in _rates_from_measured().items()}
@@ -170,10 +170,10 @@ PROFILES = {
         iteration_overhead_s=0.001,
         kv_measured=frozenset({CODER_MODEL}),
     ),
-    "gpu_4060": HardwareProfile(
-        name="gpu_4060",
-        description="PLACEHOLDER for RTX 4060 8 GB: Mac values copied, nothing measured",
-        rates=_gpu_4060_rates,
+    "gpu_5060ti": HardwareProfile(
+        name="gpu_5060ti",
+        description="PLACEHOLDER for RTX 5060 Ti 16 GB: Mac values copied, nothing measured",
+        rates=_gpu_5060ti_rates,
         batch_decode_coeff=0.15,
         iteration_overhead_s=0.001,
     ),

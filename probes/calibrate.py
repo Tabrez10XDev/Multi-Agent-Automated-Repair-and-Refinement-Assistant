@@ -29,6 +29,28 @@ import urllib.request
 OLLAMA = "http://localhost:11434"
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_PATH = os.path.join(REPO, "data", "calibration", "measured.json")
+MAC_BACKEND = "mac-metal"
+
+
+def calibration_path(backend: str, filename: str) -> str:
+    """
+    Where a probe writes. The Mac keeps the original paths, which workload.py
+    loads for the mac_ollama_measured profile; any other machine gets its own
+    directory, so calibrating a GPU can never overwrite the Mac's numbers or
+    label CUDA measurements as Metal (DECISIONS 27 item 5).
+    """
+    if not backend or "/" in backend or backend.startswith("."):
+        raise ValueError(f"invalid backend name {backend!r}")
+    base = os.path.join(REPO, "data", "calibration")
+    if backend == MAC_BACKEND:
+        return os.path.join(base, filename)
+    return os.path.join(base, backend, filename)
+
+
+def add_backend_arg(ap):
+    ap.add_argument("--backend", default=MAC_BACKEND,
+                    help="machine being measured, e.g. cuda-5060ti; anything but "
+                         f"{MAC_BACKEND} writes to data/calibration/<backend>/")
 
 CODER_MODEL = "qwen2.5-coder:7b"
 SENTINEL_MODEL = "llama3.2"
@@ -384,7 +406,10 @@ def main():
                     help="re-measure model rates, keep existing prompt/CPU numbers")
     ap.add_argument("--repo", help="measure stable-prefix size against a real repo "
                                    "instead of this one; keeps other measurements")
+    add_backend_arg(ap)
     args = ap.parse_args()
+    out_path = calibration_path(args.backend, "measured.json")
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
     sys.path.insert(0, REPO)
 
@@ -394,11 +419,11 @@ def main():
         print("ollama is not reachable at localhost:11434 — start it and re-run.")
         return 1
 
-    result = {"measured_at": time.strftime("%Y-%m-%d %H:%M:%S"), "backend": "mac-metal"}
+    result = {"measured_at": time.strftime("%Y-%m-%d %H:%M:%S"), "backend": args.backend}
 
     if args.repo:
         try:
-            with open(OUT_PATH) as f:
+            with open(out_path) as f:
                 result = json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             pass
@@ -406,14 +431,14 @@ def main():
         result.setdefault("realistic_repos", {})
         r = measure_realistic_repo(args.repo, CODER_MODEL)
         result["realistic_repos"][r["repo"]] = r
-        with open(OUT_PATH, "w") as f:
+        with open(out_path, "w") as f:
             json.dump(result, f, indent=2)
         print(json.dumps(r, indent=2))
         return 0
 
     if args.rates_only:
         try:
-            with open(OUT_PATH) as f:
+            with open(out_path) as f:
                 result = json.load(f)
             result["measured_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
         except (FileNotFoundError, json.JSONDecodeError):
@@ -433,10 +458,10 @@ def main():
             SENTINEL_MODEL: measure_rates(SENTINEL_MODEL),
         }
 
-    with open(OUT_PATH, "w") as f:
+    with open(out_path, "w") as f:
         json.dump(result, f, indent=2)
 
-    print(f"\nWrote {OUT_PATH}")
+    print(f"\nWrote {out_path}")
     print(json.dumps(result, indent=2))
     return 0
 

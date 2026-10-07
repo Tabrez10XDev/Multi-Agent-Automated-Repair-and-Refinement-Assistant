@@ -45,7 +45,7 @@ def test_kv_bytes_provenance_distinguishes_the_two_models():
 def test_batch_decode_coeff_provenance_follows_the_profile():
     # Measured on the Mac by probes/batch_decode_probe.py (DECISIONS 28); the
     # GPU profile has no measurement yet and must still say PLACEHOLDER.
-    for profile, label in (("mac_ollama_measured", "MEASURED"), ("gpu_4060", "PLACEHOLDER")):
+    for profile, label in (("mac_ollama_measured", "MEASURED"), ("gpu_5060ti", "PLACEHOLDER")):
         text = CostModel.from_profile(profile).provenance()
         line = next((l for l in text.splitlines() if "batch_decode_coeff" in l), None)
         assert line is not None, "batch_decode_coeff missing from provenance()"
@@ -100,8 +100,8 @@ def test_default_profile_is_the_mac_and_its_measured_fields_say_so():
     assert SENTINEL_MODEL not in cm.hardware_profile.kv_measured
 
 
-def test_gpu_4060_exists_and_nothing_in_it_is_measured():
-    cm = CostModel.from_profile("gpu_4060")
+def test_gpu_5060ti_exists_and_nothing_in_it_is_measured():
+    cm = CostModel.from_profile("gpu_5060ti")
     assert all(r.measured is False for r in cm.rates.values())
     assert cm.hardware_profile.kv_measured == frozenset()
     assert cm.hardware_profile.batch_decode_coeff_measured is False
@@ -152,7 +152,7 @@ def test_mac_profile_values_are_pinned():
 
 def test_profiles_are_independent_objects():
     """Building the placeholder profile must not mark the Mac's rates unmeasured."""
-    a, b = CostModel(), CostModel.from_profile("gpu_4060")
+    a, b = CostModel(), CostModel.from_profile("gpu_5060ti")
     assert a.rates is not b.rates
     assert a.rates[CODER_MODEL].measured is True
     assert b.rates[CODER_MODEL].measured is False

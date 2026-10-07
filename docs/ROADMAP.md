@@ -8,7 +8,7 @@ sections of FINDINGS / OPEN_ISSUES / DECISIONS.
 | 1 | Ollama prompt-cache baseline | **finishing now** — rule being pinned |
 | 2 | Retention comparison | **ready to start** — trace collected |
 | 3 | Better output-length estimator | not started |
-| 4 | vLLM on an RTX 4060 | not started; early feasibility check lands during 2 |
+| 4 | vLLM on an RTX 5060 Ti 16 GB | not started; plan in `docs/GPU_TODO.md` |
 
 ## 1. Ollama prompt-cache baseline — DONE
 
@@ -48,7 +48,12 @@ with a PLACEHOLDER noise term. Planned: the oracle line in the scheduler table
 as an upper bound, 20 seeds, and `slack_factor` calibrated so FCFS misses
 20–30% of deadlines.
 
-## 4. vLLM on an RTX 4060 — not started
+## 4. vLLM on an RTX 5060 Ti 16 GB — not started
+
+> **Retargeted 2026-10-07:** the expected GPU is an RTX 5060 Ti with 16 GB,
+> not a 4060 with 8 GB, and it is the ceiling for this repo (DECISIONS §29).
+> The step-by-step plan and the 16 GB budget are in `docs/GPU_TODO.md`. The
+> original text is kept below.
 
 Out of scope for Milestone 1 and still not committed to. An **early feasibility
 check during workstream 2**, not a full port: does an RTX 4060's 8 GB hold

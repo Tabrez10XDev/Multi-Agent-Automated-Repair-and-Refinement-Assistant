@@ -45,9 +45,10 @@ import time
 import urllib.error
 import urllib.request
 
+from probes.calibrate import add_backend_arg, calibration_path
+
 OLLAMA = "http://localhost:11434"
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT_PATH = os.path.join(REPO, "data", "calibration", "batch_decode.json")
 
 # Must be identical on every request: a different num_ctx makes Ollama reload
 # the model, and with OLLAMA_NUM_PARALLEL=n it allocates n of these.
@@ -153,8 +154,11 @@ def main():
     ap.add_argument("--ns", type=int, nargs="+", default=[1, 2, 4, 8])
     ap.add_argument("--repeats", type=int, default=3)
     ap.add_argument("--num-predict", type=int, default=256)
-    ap.add_argument("--out", default=OUT_PATH)
+    ap.add_argument("--out", default=None,
+                    help="default: data/calibration[/<backend>]/batch_decode.json")
+    add_backend_arg(ap)
     args = ap.parse_args()
+    args.out = args.out or calibration_path(args.backend, "batch_decode.json")
     if 1 not in args.ns:
         args.ns = [1] + args.ns
 
@@ -191,7 +195,7 @@ def main():
     print(f"single-stream decode {fit['single_stream_decode_rate']:.1f} tok/s "
           f"(measured.json has the calibrated rate; compare, do not replace)")
 
-    out = {"measured_at": time.strftime("%Y-%m-%d %H:%M:%S"), "backend": "mac-metal",
+    out = {"measured_at": time.strftime("%Y-%m-%d %H:%M:%S"), "backend": args.backend,
            "ollama_version": version, "model": args.model, "num_ctx": NUM_CTX,
            "num_predict": args.num_predict, "repeats": args.repeats,
            "fit": fit, "rounds": rounds}

@@ -775,3 +775,23 @@ slots on Metal, not the hardware's batching limit and not a vLLM-class
 continuous batcher, which batches decode far more efficiently. The simulator
 models vLLM semantics on Mac costs, so on this profile batching is costed as
 Ollama does it. The GPU profile must measure its own value.
+
+## 29. The GPU is one RTX 5060 Ti with 16 GB, and that is the ceiling
+
+Set by the owner 2026-10-07. The expected GPU is an RTX 5060 Ti with 16 GB,
+replacing the RTX 4060 with 8 GB assumed in brief 02 and ROADMAP §4. **No work
+in this repo may need more than this card**: no second GPU, no larger VRAM,
+no datacenter hardware. A step that does not fit is scaled down or dropped.
+
+Consequences, in detail in `docs/GPU_TODO.md`:
+
+1. The placeholder profile `gpu_4060` (§27 item 2) is renamed `gpu_5060ti`.
+   It is still the Mac values copied, every field unmeasured.
+2. vLLM runs one model per server, AWQ int4, `--max-model-len 16384`. bf16
+   7B weights (about 15 GB) leave no room for KV and are out of scope.
+3. Ollama on CUDA uses the same model tags as the Mac, so quantisation
+   matches across profiles.
+4. The regime map's synthetic long-context scales stay simulator-only.
+5. Both probes take `--backend`. Anything other than `mac-metal` writes to
+   `data/calibration/<backend>/`, so a GPU calibration cannot overwrite the
+   Mac's files or be labelled as Metal.
