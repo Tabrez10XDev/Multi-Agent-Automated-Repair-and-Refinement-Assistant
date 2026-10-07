@@ -160,7 +160,13 @@ PROFILES = {
         name="mac_ollama_measured",
         description="measured values are Mac / Ollama / Metal (data/calibration/measured.json)",
         rates=_rates_from_measured,
-        batch_decode_coeff=0.15,
+        # MEASURED 2026-10-07 by probes/batch_decode_probe.py on Ollama 0.35.1,
+        # OLLAMA_NUM_PARALLEL=8, qwen2.5-coder:7b (data/calibration/batch_decode.json).
+        # Per-n fits 0.82 / 0.79 / 0.85: aggregate decode goes from 28.5 tok/s
+        # alone to about 33 with 8 concurrent, so batching here is nearly
+        # serial. This is Ollama on Metal, not a vLLM-class batcher.
+        batch_decode_coeff=0.841,
+        batch_decode_coeff_measured=True,
         iteration_overhead_s=0.001,
         kv_measured=frozenset({CODER_MODEL}),
     ),

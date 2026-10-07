@@ -1,7 +1,7 @@
 """
 Sensitivity of the headline conclusions to batch_decode_coeff.
 
-    ./venv/bin/python -u -m experiments.sweep_decode_coeff [--seeds 10]
+    ./venv/bin/python -u -m experiments.sweep_decode_coeff [--seeds 10] [--coeffs 0.05 0.15]
 
 WHY
     CostModel.batch_decode_coeff = 0.15 is the most load-bearing unmeasured
@@ -72,6 +72,7 @@ def calibrated(manifest, name, coeff, point, cost, tok, cpu, cache_mode):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--seeds", type=int, default=10)
+    ap.add_argument("--coeffs", type=float, nargs="+", default=COEFFS)
     ap.add_argument("--out", default=os.path.join(_REPO, "results",
                                                   "decode_coeff_sweep.json"))
     args = ap.parse_args()
@@ -80,13 +81,13 @@ def main():
     cache_mode = EngineConfig().cache_mode
     seeds = list(range(1, args.seeds + 1))
     manifest = Manifest.start("decode_coeff_sweep", params={
-        "trace_set": TRACE, "util": UTIL, "coeffs": COEFFS, "seeds": seeds,
+        "trace_set": TRACE, "util": UTIL, "coeffs": args.coeffs, "seeds": seeds,
         "retention_point": RETENTION_POINT, "sched_point": SCHED_POINT,
         "cache_mode": cache_mode})
     t0 = time.time()
     out_rows = []
 
-    for coeff in COEFFS:
+    for coeff in args.coeffs:
         cost = CostModel(batch_decode_coeff=coeff)
         print(f"\n=== batch_decode_coeff {coeff} ===", flush=True)
 

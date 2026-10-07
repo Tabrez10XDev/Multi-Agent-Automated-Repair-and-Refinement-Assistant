@@ -42,14 +42,14 @@ def test_kv_bytes_provenance_distinguishes_the_two_models():
     assert "kv DERIVED" in llama
 
 
-def test_batch_decode_coeff_is_declared_placeholder():
-    # Load-bearing and never measured; it decides how much throughput a blocked
-    # request forgoes. If someone measures it, this test should be updated in
-    # the same commit.
-    text = CostModel().provenance()
-    line = next((l for l in text.splitlines() if "batch_decode_coeff" in l), None)
-    assert line is not None, "batch_decode_coeff missing from provenance()"
-    assert "PLACEHOLDER" in line
+def test_batch_decode_coeff_provenance_follows_the_profile():
+    # Measured on the Mac by probes/batch_decode_probe.py (DECISIONS 28); the
+    # GPU profile has no measurement yet and must still say PLACEHOLDER.
+    for profile, label in (("mac_ollama_measured", "MEASURED"), ("gpu_4060", "PLACEHOLDER")):
+        text = CostModel.from_profile(profile).provenance()
+        line = next((l for l in text.splitlines() if "batch_decode_coeff" in l), None)
+        assert line is not None, "batch_decode_coeff missing from provenance()"
+        assert f"[{label}" in line, (profile, line)
 
 
 def test_measured_json_actually_overrides_defaults():
@@ -127,7 +127,7 @@ def test_unknown_profile_fails_clearly():
 def test_explicit_override_is_reported_not_hidden():
     line = next(l for l in CostModel(batch_decode_coeff=0.3).provenance().splitlines()
                 if "batch_decode_coeff" in l)
-    assert "OVERRIDDEN from profile value 0.15" in line
+    assert "OVERRIDDEN from profile value 0.841" in line
 
 
 def test_mac_profile_values_are_pinned():
@@ -137,7 +137,8 @@ def test_mac_profile_values_are_pinned():
     update this test in the same commit and say why in DECISIONS.
     """
     cm = CostModel()
-    assert cm.batch_decode_coeff == 0.15
+    assert cm.batch_decode_coeff == 0.841
+    assert cm.hardware_profile.batch_decode_coeff_measured is True
     assert cm.iteration_overhead_s == 0.001
     assert cm.homogeneous is False
     expected = {

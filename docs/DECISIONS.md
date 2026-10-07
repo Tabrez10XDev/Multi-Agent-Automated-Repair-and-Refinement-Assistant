@@ -739,3 +739,39 @@ or output said which machine a number described.
 Not done here, by file ownership: the engine CLI and the experiment drivers
 still build `CostModel()` (the Mac default) and do not yet write
 `hardware_profile` into their manifests.
+
+## 28. `batch_decode_coeff` is measured on the Mac: 0.841, not 0.15
+
+Measured 2026-10-07 by `probes/batch_decode_probe.py` (owner-run): Ollama
+0.35.1 with `OLLAMA_NUM_PARALLEL=8`, qwen2.5-coder:7b, n = 1, 2, 4, 8, three
+repeats of 256 decoded tokens each. Output `data/calibration/batch_decode.json`.
+Every round overlapped fully (overlap = n), so the requests really ran
+concurrently, not queued.
+
+| n | per-token per request | aggregate decode |
+|---|---|---|
+| 1 | 34.2 ms | 28.5 tok/s |
+| 2 | 49.7 to 68.7 ms | 28.4 to 38.7 tok/s |
+| 4 | 108 to 118 ms | 33 to 36 tok/s |
+| 8 | 237 to 240 ms | 33 tok/s |
+
+Least-squares fit 0.841 (per n 0.82 / 0.79 / 0.85; max residual 0.16, mostly
+the bimodal n=2 rounds). **Batching on this stack is nearly serial**: eight
+concurrent streams decode only about 15% faster in total than one.
+
+**The decision.** `mac_ollama_measured` now uses 0.841, marked MEASURED, and
+`test_mac_profile_values_are_pinned` pins it (§27 item 6). This changes every
+simulator number from here on; FINDINGS sections written before this commit
+used 0.15 and should be quoted as such.
+
+**Why the conclusions survive.** The sweep (OPEN_ISSUES §9.3) was rerun at
+0.841: recompute 0.6% of makespan, ski-rental still significantly worse than
+keep-all on recompute and tied on p95, scheduler choice 1.6%, LSF tied with
+FCFS. Capacity at util 0.8 falls (rate 0.0323/s to 0.0265/s) and p95 roughly
+doubles.
+
+**Caveat to carry into the writeup.** 0.841 describes Ollama's parallel
+slots on Metal, not the hardware's batching limit and not a vLLM-class
+continuous batcher, which batches decode far more efficiently. The simulator
+models vLLM semantics on Mac costs, so on this profile batching is costed as
+Ollama does it. The GPU profile must measure its own value.

@@ -82,6 +82,18 @@ The engine reaches the contended state the old one could not. Trace evidence:
    > A **measurement** of the coefficient is still wanted (a probe was in
    > progress in `probes/` on 2026-10-07); the sweep only shows the
    > conclusions are insensitive across 0.05 to 0.50.
+   >
+   > **RESOLVED 2026-10-07: measured at 0.841 on the Mac** (DECISIONS §28),
+   > outside the swept range. Rerun at 0.841, same driver and seeds, output
+   > `results/decode_coeff_sweep_measured.json`:
+   >
+   > | coeff | keep-all recompute / makespan | ski-rental − keep-all recompute | ski − keep p95 | sched choice | lsf − fcfs p95 |
+   > |---|---|---|---|---|---|
+   > | 0.841 | 0.6% | +9.1s [+0.3, +17.9] | −1.9s [−13.7, +9.9] | 1.6% | −4.5s [−11.2, +2.2] |
+   >
+   > Every conclusion above holds at the measured value. What moves is
+   > capacity: the util-0.8 rate falls to 0.0265/s and keep-all p95 rises to
+   > 278s.
 4. Rates are Mac/Metal, not CUDA.
 5. `model_switch_seconds = 0.0` assumes both models stay resident.
 6. `REPRESENTATIVE_ISSUE` in `measure_context.py` is invented, not real
