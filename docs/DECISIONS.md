@@ -211,6 +211,15 @@ before touching the engine.
    run. Made incremental via `_entry_bytes` / `_evictable_bytes`; the 8x case
    went 44.3s to 18.7s. The lesson is in the ordering — the suspected cause was
    rent accrual, which was 8s of the same run.
+10. **The evaluator crashed on a reply without a `SCORE:` line** (fixed
+    2026-10-07, commit `d6d0f80`). `evaluate_plan` indexed the first `SCORE:`
+    line before checking one existed, so the intended default of 5 was
+    unreachable and a malformed llama3.2 reply killed the task before any fix
+    attempt — 7 of 60 `shared_first` runs (FINDINGS §14b). Now
+    `_parse_score`: any reply the old code accepted parses identically, and a
+    missing or non-integer score falls back to `DEFAULT_SCORE`. Prompts are
+    unchanged, so traces collected before and after stay comparable. Do not
+    reintroduce an unguarded index into model output anywhere in `maara/`.
 
 ---
 
@@ -659,3 +668,38 @@ of lsf +0.04s [-0.06, +0.14], edf +0.04s [-0.05, +0.14], oracle +0.08s
 process was wrong, the number was not. The driver now also writes per-seed
 p95 and these paired intervals itself, so §27-style tables are reproducible
 from its output.
+
+## 26. The `final` task set is sealed until the policies are frozen
+
+Built 2026-10-07 (commit `7d4a96c`) as `data/tasks/humaneval_final.json`,
+selected with `MAARA_TASK_SET=final`: **every remaining HumanEval problem**,
+92 tasks after validation.
+
+**Why it exists.** `holdout_qwen` was held out for the *cache model*, but the
+retention and scheduler work has since been developed, calibrated and debugged
+on it (FINDINGS §24-27, OPEN_ISSUES §26-27). For policy claims it is now a
+fitting set. Final policy numbers need data none of that work has seen, by the
+same reasoning that froze the cache rule before its held-out test (§18, §19).
+
+**How it was built.** Same source, sha256, stub-body construction and
+validation gate as §20. It excludes the 30-task Milestone 1 file and the 54
+held-out tasks, **and HumanEval/32**, which was selected and dropped there:
+it was looked at, so it is not untouched. 94 candidates, 2 dropped:
+HumanEval/38 and /50, whose `check()` calls the `encode_*` helper that the
+converted test does not import. All 164 problems are accounted for, and
+`tests/maara/test_task_sets.py` asserts the sets stay disjoint.
+
+**The rules.**
+
+1. Collect it under the **same two configs, models and strategy** as the
+   held-out traces (`single_agent` and `homo_llama3`, `zero_shot`), one
+   process per config, Ollama restarted between, never resumed (OPEN_ISSUES
+   §21).
+2. The **cache-model** validation may run on it immediately: that rule is
+   frozen (§19) and was never tuned on any held-out data.
+3. **Retention and scheduler drivers must not run on it** until the policies
+   and their parameters are frozen in a commit, with the freeze commit
+   preceding the first run on `final` so the ordering is checkable in git.
+   One run, reported as it comes out. Tuning in response to it turns it into
+   another fitting set, and HumanEval has no problems left to replace it.
+4. Pass rates on it are implement-from-spec rates and carry §20's caveat.
