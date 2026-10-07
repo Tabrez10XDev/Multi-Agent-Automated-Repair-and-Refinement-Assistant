@@ -8,9 +8,36 @@ What is not settled, not validated, or known to be wrong. Read this before trust
 > resolve. They are not sequential within a file. The other parts live in
 > `ARCHITECTURE.md`, `DECISIONS.md`, `FINDINGS.md` and `OPEN_ISSUES.md`.
 
+## Status index (2026-10-07)
+
+| § | issue | status | next action |
+|---|---|---|---|
+| 6 | Engine invariants | **closed**, kept as a record | none: the suite enforces them |
+| 9.1, 9.2, 9.3, 9.7 | Prefill, rent model, decode coefficient, arrival rate | **resolved** | none |
+| 9.4 | Rates are Mac/Metal | **open**, a standing scope statement | the GPU profile, once GPU time is booked (GPU_TODO) |
+| 9.5 | `model_switch_seconds = 0.0` | **open**, low impact | check `ollama ps` during the `final` collection |
+| 9.6 | Invented `REPRESENTATIVE_ISSUE` | **not needed** for trace-driven results | none |
+| 11 | Old "next steps" list | **closed** | none |
+| 14 | MAARA writeup caveats | **open**, re-verified 2026-10-07 | state them in the writeup; fix the stale header comment |
+| 15 | Ollama cache model | **resolved** | none (the remainder is §24) |
+| 20 | 4-config repetition | **resolved** | none |
+| 21 | New trace design | **resolved**; the sealed `final` set is not collected yet | owner runs the `final` collection |
+| 22 | `shared_first` slow segment | **not needed**: that trace no longer backs any claim | capture machine state during the `final` collection |
+| 23 | llama3.2 KV bytes DERIVED | **resolved by evidence**; code not yet updated | promote it to MEASURED in `workload.py` |
+| 24 | `issue_parser` recall gap | **open**; the server logs it needs are confirmed lost | redo it on the `final` collection's server log |
+| 25 | Scoping reuse with a match-time guard | **not needed**: the holdout traces have 0% cross-run reuse | none |
+| 26 | "Ski-rental never fires" | **superseded** by §27 and FINDINGS §24–25 | none |
+| 27 | No operating point where ski-rental beats keep-all | **open, highest impact** | run the retention grid at 8x/16x context inside the live band |
+
+**Still open and relevant: 6** — 9.4, 9.5, 14, 24, 27, and the `final`
+collection noted in 21.
+
 ---
 
 ## 6. Validation status
+
+> **Closed; kept as a record.** These invariants (no KV or refcount leak,
+> budget never exceeded) are now asserted throughout `tests/simulator/`.
 
 Invariants pass across 3 seeds (3, 11, 42) × 2 context scales (480, 4000):
 
@@ -98,10 +125,16 @@ The engine reaches the contended state the old one could not. Trace evidence:
    > Every conclusion above holds at the measured value. What moves is
    > capacity: the util-0.8 rate falls to 0.0265/s and keep-all p95 rises to
    > 278s.
-4. Rates are Mac/Metal, not CUDA.
-5. `model_switch_seconds = 0.0` assumes both models stay resident.
+4. Rates are Mac/Metal, not CUDA. **Open; now explicit**: every number is
+   tagged with the `mac_ollama_measured` profile (DECISIONS §27), and the GPU
+   profile waits on booked GPU time (`docs/GPU_TODO.md`).
+5. `model_switch_seconds = 0.0` assumes both models stay resident. **Open, low
+   impact.** Check with `ollama ps` during the `final` collection.
 6. `REPRESENTATIVE_ISSUE` in `measure_context.py` is invented, not real
-   `parse_issue` output. Small share of the 480 but not zero.
+   `parse_issue` output. Small share of the 480 but not zero. **Not needed
+   (2026-10-07):** the constant lives on in `probes/calibrate.py` and feeds
+   only the synthetic workload's `stable_prefix_tokens`. Trace-driven results
+   (`holdout_*`) use the recorded prompts.
 7. **RESOLVED (commit `b593cf5`):** the drivers binary-search the arrival rate
    for a target GPU utilisation, and since DECISIONS §25 the rate must be
    calibrated at the configuration the run uses. Original text kept below.
@@ -197,6 +230,13 @@ admission problem rather than a retention one. That half can proceed independent
 
 
 ## 14. MAARA writeup issues
+
+> **Open; re-verified 2026-10-07.** All three still hold in the code:
+> `maara/orchestrator.py:83,99` still gates by exclusion, and the header of
+> `experiments/collect_humaneval.py` still says 6 configs x 3 strategies x 30
+> tasks. FINDINGS §5's root-only `os.listdir` is still in
+> `maara/agents/navigator.py`. These are writeup caveats: changing MAARA
+> would break comparability with the collected traces.
 
 Found while wiring trace logging. **No code was changed for any of these** —
 they are recorded because they affect what the existing results can be claimed
@@ -328,6 +368,11 @@ Open questions before collecting:
 
 ## 22. The `shared_first` trace has an unexplained slow segment
 
+> **Not needed (2026-10-07).** `shared_first` is a fit trace carrying the
+> replay artefact (§20) and backs no current claim, so its cause is no longer
+> worth chasing. The one action that survives: log machine state during the
+> `final` collection.
+
 See FINDINGS §18 for the measurements. Segment 0 (86 calls) ran at a median
 1.20x the calibrated prefill rate with a p10 of 0.21x, and 30% of its calls
 were slower than a cold prefill; segment 1 (128 calls) ran at 1.73x. The two
@@ -340,6 +385,17 @@ trace's "78 measured hits" is an undercount. Capture machine state (`ollama
 ps`, memory pressure, thermals) during the next long collection.
 
 ## 23. `llama3.2`'s `kv_bytes_per_token` is DERIVED, not measured
+
+> **Resolved by evidence 2026-10-07; code not yet updated.** The rotated
+> Ollama log `~/.ollama/logs/server-3.log` records llama3.2 loads, with
+> `general.name = Llama 3.2 3B Instruct`, so it is the 3B, not the 1B. They
+> log `llama_kv_cache: size = 448.00 MiB (4096 cells, 28 layers)` and
+> `896.00 MiB (8192 cells)`, both f16, i.e. **114,688 B/token**, exactly the
+> derived value. qwen2.5-coder in the same log: 224 MiB per 4096 cells =
+> 57,344 B/token, as already confirmed. Remaining step: add `llama3.2` to
+> `kv_measured` in `simulator/workload.py` and update `test_provenance.py`.
+> Copy the log lines into `data/calibration/` first, since `~/.ollama/logs`
+> rotates.
 
 qwen2.5-coder:7b's 56 KiB/token was confirmed against the Ollama server log.
 llama3.2's 112 KiB/token was scaled from it by architecture arithmetic and has
@@ -383,8 +439,18 @@ false negatives rather than inferring from timings.
 > survive in Ollama's rotated `~/.ollama/logs/server-*.log`; not yet checked.
 > Otherwise redo this on the server log of the `final` collection, and copy
 > that log into the repo or a durable path before analysing it.
+>
+> **Checked 2026-10-07: not recoverable.** The newest surviving log with
+> slot decisions, `server-3.log`, ends at 22:37 on 2026-10-04. `holdout_A`
+> started at 22:40 and `holdout_B` ran 23:36 to 00:05, and the logs that
+> covered them have rotated away. This now waits on the `final` collection.
 
 ## 25. Scoping prefix reuse cannot be done with a match-time guard
+
+> **Not needed (2026-10-07).** The problem it guarded against is gone from
+> the workload: the holdout traces have 0.0% same-task cross-run reuse
+> (FINDINGS §22), and no scope flag was built. Keep the salting design below
+> in case a replayed trace is ever used again.
 
 **Open. Blocks workstream 2 step 1a as originally planned.**
 
@@ -437,6 +503,11 @@ Cost: slightly artificial, in that problem P's 2nd occurrence shares boilerplate
 with Q's 2nd but not with Q's 1st. Aggregate sharing rates are preserved.
 
 ## 26. PARTLY RETRACTED — "the ski-rental release rule never fires"
+
+> **Superseded (2026-10-07)** by §27 and FINDINGS §24–25. Ski-rental was run
+> inside the live band (batch 4, KV 512MB), where it fires and still loses to
+> keep-all. Its point 2 (predictions barely exercised on real traces) is
+> carried by §27.
 
 > **Two overstatements, both mine.** (a) The zero-releases measurement was taken
 > at util 0.6; at util 0.8 the rule does fire (4-1315 releases). (b) I then
@@ -502,6 +573,13 @@ coverage from 0% to 26.2% of blocks. Necessary, but as the table above shows,
 not enough to make the rule fire.
 
 ## 27. The live-rent band is set by concurrency, not by KV budget
+
+> **Open, highest impact (2026-10-07).** At 1x context the negative result is
+> now established over 20 seeds (FINDINGS §24–25). What has never been run on
+> real traces is the regime FINDINGS §7 says retention needs: stable context
+> above ~2,000–4,000 tokens. The only saved grid is 1x, util 0.6, batch 8,
+> which is outside the band. Next: `run_retention_grid` at 8x and 16x, batch
+> 2–4, at the measured coefficient.
 
 Joint sweep, `holdout_qwen` 1x, util 0.8, arrival rate fixed, FCFS:
 
