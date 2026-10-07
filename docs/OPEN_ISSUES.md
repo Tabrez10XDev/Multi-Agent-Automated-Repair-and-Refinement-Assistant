@@ -35,7 +35,10 @@ The engine reaches the contended state the old one could not. Trace evidence:
 
 ## 9. Known limitations — read before trusting any number
 
-1. **Prefill is unchunked and unbatched.** One prefill per iteration, so total
+1. **RESOLVED in Phase 5b (commit `b593cf5`):** chunked prefill (512 tokens,
+   PLACEHOLDER) interleaved with decode is now the default; `--prefill-chunk 0`
+   restores the old behaviour. Original text kept below.
+   **Prefill is unchunked and unbatched.** One prefill per iteration, so total
    prefill throughput is capped at ~268 tok/s regardless of B. Two consequences:
    a 26,597-token prefill stalls the whole batch for 99 seconds, and the system
    becomes prefill-bound so capacity is understated by roughly an order of
@@ -54,14 +57,23 @@ The engine reaches the contended state the old one could not. Trace evidence:
 5. `model_switch_seconds = 0.0` assumes both models stay resident.
 6. `REPRESENTATIVE_ISSUE` in `measure_context.py` is invented, not real
    `parse_issue` output. Small share of the 480 but not zero.
-7. Benchmark runs above are heavily oversaturated (p50 ~12,000s). Fine for
+7. **RESOLVED (commit `b593cf5`):** the drivers binary-search the arrival rate
+   for a target GPU utilisation, and since DECISIONS §25 the rate must be
+   calibrated at the configuration the run uses. Original text kept below.
+   Benchmark runs above are heavily oversaturated (p50 ~12,000s). Fine for
    demonstrating contention, wrong for measuring policy performance. Arrival rate
    needs tuning per config for ~70–90% utilisation.
 
 ---
 
 
-## 15. Ollama prompt-cache model — UNVALIDATED (diagnosis superseded)
+## 15. RESOLVED — Ollama prompt-cache model (was: UNVALIDATED)
+
+> **Resolved 2026-10-05.** The model below was replaced by the v2 rule read
+> from llama.cpp's source (`f_keep < 0.5`, DECISIONS §19, FINDINGS §20) and
+> validated on held-out traces with no tuning: hit recall 81% (44/54) and 80%
+> (53/66) (FINDINGS §22). The remaining gap is entirely `issue_parser`, tracked
+> in §24. Everything below is kept for the record.
 
 > The scores and diagnosis below predate 2026-10-04. The mechanism they blame
 > was retracted; see FINDINGS §19 for what actually predicts a cache hit, and
@@ -226,9 +238,15 @@ exactly the regression, and it did not exist when the 120 rows were produced.
 **The existing `results.jsonl` and `benchmark/results/*.json` remain usable.**
 The contaminated artefacts are only the 2026-09-29 traced run's outputs.
 
-## 20. The 4-config repetition problem — the current traces cannot benchmark a cache
+## 20. RESOLVED — The 4-config repetition problem — the current traces cannot benchmark a cache
 
-**Open. Blocks workstream 1's validation and workstream 2's workload.**
+> **Resolved 2026-10-05** by the held-out traces (`holdout_qwen`,
+> `holdout_llama`): disjoint problems, one config per process, Ollama
+> restarted between. The hit rate fell from 34.9% to 16.9% / 17.8% and the
+> exact-repeat share from 46% to 7% / 2% (FINDINGS §22). The fit traces still
+> carry the artefact and must not be used for cache or retention claims.
+
+~~**Open. Blocks workstream 1's validation and workstream 2's workload.**~~
 
 Both committed traces replay the *same 15 HumanEval tasks* under 4 configs in
 one process. An `issue_parser` prompt therefore recurs **byte-identically**
@@ -243,7 +261,14 @@ scores in §15 should not be read as evidence about the mechanism.
 Fix is the new trace (ROADMAP, Part 3): disjoint problems, 2 configs, Ollama
 restarted between them.
 
-## 21. New trace design — not yet collected
+## 21. RESOLVED — New trace design (was: not yet collected)
+
+> **Collected 2026-10-04/05** as `holdout_A_qwen2` (320 calls) and
+> `holdout_B_llama` (370 calls), 54 tasks each, both passing
+> `check_trace_clean` (ROADMAP, commit `0c8fe40`). The `TASKS[:15]` question
+> was answered by moving tasks to `data/tasks/` (DECISIONS §20). A further
+> sealed set of 92 tasks, `MAARA_TASK_SET=final`, was built 2026-10-07
+> (commit `7d4a96c`) and has not been collected yet.
 
 50+ distinct HumanEval problems not among the current 15; 2 configs (full
 pipeline with the qwen coder; llama coder for model mixing); original layout;
@@ -308,6 +333,11 @@ Cheapest next step: `/tmp/ollama_holdout_A.log` and `_B.log` cover these exact
 calls, so the server's own `f_keep` and `looking for better prompt` decisions
 are on disk per call. Compare them against the model's decision for the 23
 false negatives rather than inferring from timings.
+
+> **2026-10-07: those two logs are gone** (`/tmp` was cleared). They may
+> survive in Ollama's rotated `~/.ollama/logs/server-*.log`; not yet checked.
+> Otherwise redo this on the server log of the `final` collection, and copy
+> that log into the repo or a durable path before analysing it.
 
 ## 25. Scoping prefix reuse cannot be done with a match-time guard
 

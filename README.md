@@ -153,12 +153,11 @@ to honest display names.
 
 See `docs/OPEN_ISSUES.md` for the full list. The two that bite soonest:
 
-- **`simulator/ollama_cache.py` is unvalidated and its rule is superseded.**
-  The 2026-10-04 affinity rerun refuted the threshold mechanism it encodes.
-  What actually predicts a cache hit is exact prompt recurrence — every one of
-  the 93 exact-prompt repeats across both traces is a measured hit. See
-  `docs/FINDINGS.md` §19. Do not use it as a baseline, and do not re-freeze it
-  until `--affinity-sweep` pins the restore-to-trim cutoff.
+- **`simulator/ollama_cache.py` is validated per role, not uniformly.** Its
+  rule is read from llama.cpp's source (`f_keep < 0.5`) and was frozen before
+  held-out testing (`docs/DECISIONS.md` §19). Held-out hit recall is 81% and
+  80% (`docs/FINDINGS.md` §22), with every miss in `issue_parser`
+  (`docs/OPEN_ISSUES.md` §24). Quote accuracy per role.
 - **`llama3.2`'s `kv_bytes_per_token` is DERIVED, not measured.** qwen's was
   confirmed against the Ollama server log; llama3.2's still needs the same check.
 

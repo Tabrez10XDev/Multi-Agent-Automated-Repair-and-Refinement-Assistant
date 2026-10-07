@@ -54,7 +54,7 @@ can, and `probes/` is the only place that talks to a live model server.
 | `simulator/engine.py` | Continuous-batching engine: shared KV budget, wait queue, block-hash prefix cache with refcounts, eviction, rent accounting |
 | `simulator/policies.py` | Schedulers (FCFS, SJF, EDF, LSF, static priority) and retention policies (LRU, keep-all, evict-now, ski-rental, ski-rental-pred, offline-ref) |
 | `simulator/trace_loader.py` | Replay of real traces: segmentation, config fingerprinting, prefix recovery, cache-hit detection |
-| `simulator/ollama_cache.py` | Model of Ollama's own prompt cache. **UNVALIDATED** — see OPEN_ISSUES §15 |
+| `simulator/ollama_cache.py` | Model of Ollama's own prompt cache. Rule frozen as v2 from llama.cpp source (DECISIONS §19); held-out recall 81% / 80%, misses all in `issue_parser` (FINDINGS §22, OPEN_ISSUES §24) |
 | `probes/calibrate.py` | Calibration harness. Measures rather than assumes. **Calls the model** |
 | `probes/ollama_cache_probe.py` | Probes for slot count, capacity and prefix affinity. **Calls the model** |
 | `analysis/analyze_trace.py` | Token distributions, gap histogram, break-even band, figures |
