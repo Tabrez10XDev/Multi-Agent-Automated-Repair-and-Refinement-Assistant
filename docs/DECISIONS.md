@@ -602,3 +602,48 @@ same block key can be created by a different node under a different eviction
 order, and each node carries its own per-block gap. That is a structural
 property of replay, not randomness, and it is why the end-to-end figure is 89%
 rather than 100% while the unit-level noise is exactly reproducible.
+
+## 25. Every experiment writes a run manifest, and a calibration mismatch blocks the run
+
+FINDINGS §23 was retracted because an arrival rate calibrated at `batch=16`
+was used by a table run at `batch=8`, about 2.2x the intended load, and nothing
+in the output said so. `experiments/manifest.py` makes that class of error
+fail rather than be remembered.
+
+**The convention.**
+
+- Each driver builds a `Manifest` at startup: git hash, dirty flag and dirty
+  paths, and every parameter the run used.
+- Every calibrated value is recorded as a `Calibration` **with the
+  configuration it was calibrated under**, read from the bound call with
+  defaults applied (`bound_args`), not from what the driver believes it
+  passed. The §23 rate came from a default nobody passed.
+- The achieved value is stored next to the target (e.g. the busy fraction the
+  calibrated rate actually produced), not only the requested one.
+- Before any engine time is spent, and again immediately before the
+  measurement loop, the run config is checked against each calibration on
+  `trace_set, scale, kv_mb, max_batch, cache_mode`, plus `util` for the
+  arrival rate and `arrival_rate` for anything calibrated at a given rate. A
+  mismatch, or a key missing on either side, raises `CalibrationMismatch` and
+  no results are written. It is deliberately not a `RuntimeError`, because
+  both drivers swallow those around engine runs.
+- The manifest is written into the results JSON under `"manifest"`.
+
+Wired into `run_scheduler_table` (arrival rate, slack factor) and
+`run_retention_grid` (per cell: arrival rate and the hindsight denominator,
+which is equally a measured value valid only at its rate and config).
+
+**FINDINGS entries must cite a manifest.** A number quoted in FINDINGS names
+the results file it came from, and that file must carry a manifest whose
+`verified_runs` covers the configuration being claimed. A number without one
+is provisional.
+
+**The guard found a live instance on its first run.** `run_scheduler_table`
+calls `calibrate_rate` without `batch` or `trace_set`, so the rate is always
+calibrated at `batch=8` on `holdout_qwen`, whatever the table runs at.
+`--batch 16` and `--trace-set holdout_llama` now both fail before any engine
+run. The calibration logic was deliberately not changed here; passing those
+arguments through is a separate, owner-approved fix. Consequence for the
+record: FINDINGS §27's batch-16 rows used a rate calibrated at batch 8, so its
+statement that the rate was calibrated at the batch the table runs at holds
+only for the batch-8 rows.

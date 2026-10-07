@@ -29,6 +29,13 @@ HINDSIGHT AS A SHARED DENOMINATOR
     it per-policy would make the denominator move with the numerator: evict-now
     holds nothing, accrues no rent, and would score against a denominator of
     zero.
+
+RUN MANIFEST
+    Each cell's arrival rate and hindsight denominator are recorded with the
+    configuration they were measured under and checked against the cell's run
+    config before any policy runs; the manifest is written under "manifest" in
+    the results JSON. FINDINGS 23 was a rate calibrated at one batch size and
+    measured at another.
 """
 
 from __future__ import annotations
@@ -40,6 +47,8 @@ import hashlib
 import os
 import statistics as st
 
+from experiments.manifest import (Calibration, Manifest, bound_args,
+                                  check_consistent, default_of)
 from simulator.engine import Engine, EngineConfig
 from simulator.policies import (RETENTIONS, SCHEDULERS, ExecutionEstimator,
                           FCFSScheduler, HintBuilder, KeepAllRetention,
@@ -108,10 +117,13 @@ def run_one(policy, sched, scale, seed, kv_mb, arrival_rate, cost, tok, cpu,
 
 def calibrate_rate(target_util, scale, seed, kv_mb, cost, tok, cpu,
                    lo=0.005, hi=8.0, iters=12, trace_set="holdout_qwen",
-                   batch=8):
+                   batch=8, return_achieved=False):
     """Binary-search the arrival rate giving `target_util` GPU busy under
-    FCFS/keep-all. Monotone in rate, so bisection is safe."""
-    best = hi
+    FCFS/keep-all. Monotone in rate, so bisection is safe.
+
+    With return_achieved, returns (rate, busy fraction measured at that rate)
+    for the run manifest; None if no probe reached the target."""
+    best, best_busy = hi, None
     for _ in range(iters):
         mid = (lo + hi) / 2
         try:
@@ -124,8 +136,8 @@ def calibrate_rate(target_util, scale, seed, kv_mb, cost, tok, cpu,
             lo = mid
         else:
             hi = mid
-            best = mid
-    return best
+            best, best_busy = mid, busy
+    return (best, best_busy) if return_achieved else best
 
 
 def hindsight_denominator(scale, seed, kv_mb, arrival_rate, cost, tok, cpu,
@@ -176,22 +188,79 @@ def main():
           f"batch={args.batch}  kv={args.kv_mb:.0f}MB@1x  "
           f"seeds={n_seeds} ({args.seeds_16x} at 16x)", flush=True)
 
+    # Neither driver sets cache_mode, so every run here uses the engine default.
+    cache_mode = EngineConfig().cache_mode
+    chunk = default_of(run_one, "chunk")
+    manifest = Manifest.start("retention_grid", params={
+        "trace_set": args.trace_set, "scales": scales, "utils": utils,
+        "kv_mb_at_1x": args.kv_mb, "kv_mb_rule": "kv_mb_at_1x * max(1, scale // 2)",
+        "max_batch": args.batch, "cache_mode": cache_mode,
+        "retentions": POLICIES, "schedulers": ["fcfs", "lsf"],
+        "estimator": "online", "seeds": n_seeds, "seeds_16x": args.seeds_16x,
+        "prefill_chunk_tokens": chunk, "sigma": default_of(run_one, "sigma"),
+        "lam": default_of(run_one, "lam"),
+        "cost_model": "CostModel() defaults; StageTokens/CpuStageSeconds "
+                      ".from_measured()"})
+
     for scale in scales:
         # Bigger contexts need a bigger budget simply to admit one request.
         kv = args.kv_mb * max(1, scale // 2)
         seeds = list(range(1, (args.seeds_16x if scale >= 16 else n_seeds) + 1))
         for util in utils:
+            # What this cell's measurement loop runs at.
+            run_config = {"trace_set": args.trace_set, "scale": scale,
+                          "util": util, "kv_mb": kv, "max_batch": args.batch,
+                          "cache_mode": cache_mode}
+            # Read from the bound call, defaults included, so an unpassed
+            # default is recorded as what it is (the FINDINGS 23 failure).
+            rate_call = (util, scale, seeds[0], kv, cost, tok, cpu)
+            rate_kw = {"trace_set": args.trace_set, "batch": args.batch}
+            rb = bound_args(calibrate_rate, *rate_call, **rate_kw)
+            rate_under = {"trace_set": rb["trace_set"], "scale": rb["scale"],
+                          "util": rb["target_util"], "kv_mb": rb["kv_mb"],
+                          "max_batch": rb["batch"], "cache_mode": cache_mode,
+                          "seed": rb["seed"], "scheduler": "fcfs",
+                          "retention": "keep-all",
+                          "prefill_chunk_tokens": chunk}
+            check_consistent("arrival_rate", rate_under, run_config, ("util",))
+
             el = time.time() - t0
             print(f"[{el:6.0f}s] [{scale}x util {util:.0%}] calibrating "
                   f"arrival rate...", flush=True)
-            rate = calibrate_rate(util, scale, seeds[0], kv, cost, tok, cpu,
-                                  trace_set=args.trace_set, batch=args.batch)
+            rate, busy = calibrate_rate(*rate_call, **rate_kw,
+                                        return_achieved=True)
+            rate_cal = manifest.record(Calibration(
+                "arrival_rate", rate, rate_under,
+                target=f"GPU busy fraction {util} under FCFS/keep-all",
+                achieved=busy, also_check=("util",)))
+            run_config["arrival_rate"] = rate
             print(f"[{time.time()-t0:6.0f}s] [{scale}x util {util:.0%}] "
                   f"rate={rate:.4f}/s; measuring hindsight...", flush=True)
+
+            # The denominator every policy in this cell is scored against is a
+            # measured value too, valid only at the rate and config it ran at.
+            hb = bound_args(hindsight_denominator, scale, seeds[0], kv, rate,
+                            cost, tok, cpu, trace_set=args.trace_set,
+                            batch=args.batch)
+            hind_under = {"trace_set": hb["trace_set"], "scale": hb["scale"],
+                          "kv_mb": hb["kv_mb"], "max_batch": hb["batch"],
+                          "cache_mode": cache_mode,
+                          "arrival_rate": hb["arrival_rate"], "seeds": seeds,
+                          "scheduler": "fcfs", "retention": "keep-all",
+                          "prefill_chunk_tokens": chunk}
+            check_consistent("hindsight_denominator", hind_under, run_config,
+                             ("arrival_rate",))
             hind = st.fmean([hindsight_denominator(scale, s, kv, rate, cost, tok,
                                                    cpu, trace_set=args.trace_set,
                                                    batch=args.batch)
                              for s in seeds]) or float("nan")
+            hind_cal = manifest.record(Calibration(
+                "hindsight_denominator", hind, hind_under,
+                target="mean over seeds of min(rebuild, rent) per block key "
+                       "under keep-all",
+                achieved=None, also_check=("arrival_rate",)))
+            manifest.assert_consistent(run_config,
+                                       calibrations=[rate_cal, hind_cal])
             print(f"=== context {scale}x | target util {util:.0%} "
                   f"(arrival {rate:.3f}/s) | KV {kv:.0f}MB | B={args.batch} | "
                   f"{len(seeds)} seeds | chunked prefill 512 ===")
@@ -254,7 +323,7 @@ def main():
     out = {"trace_set": args.trace_set, "scales": scales, "utils": utils,
            "max_batch": args.batch, "kv_mb_at_1x": args.kv_mb,
            "engine_runs": total_runs, "elapsed_s": round(time.time() - t0, 1),
-           "cells": cells}
+           "cells": cells, "manifest": manifest.to_dict()}
     path = args.out or os.path.join(
         _REPO, "results", f"retention_grid_{args.trace_set}.json")
     os.makedirs(os.path.dirname(path), exist_ok=True)

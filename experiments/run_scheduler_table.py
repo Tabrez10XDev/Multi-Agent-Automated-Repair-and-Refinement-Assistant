@@ -21,7 +21,10 @@ HOW IT IS MADE COMPARABLE
        output lengths. It is an upper bound, not a deployable policy, and the
        gap between it and the online row is the estimator's cost.
 
-Averaged over --seeds seeds (default 20). Writes results/scheduler_table.json.
+Averaged over --seeds seeds (default 20). Writes results/scheduler_table.json,
+with a run manifest under "manifest". Both calibrations are checked against
+the run's config before any engine run (FINDINGS 23 was a rate calibrated at
+one batch size and measured at another).
 """
 
 import argparse
@@ -30,6 +33,9 @@ import os
 import statistics as st
 import time
 
+from experiments import run_retention_grid
+from experiments.manifest import (Calibration, Manifest, bound_args,
+                                  check_consistent, default_of)
 from experiments.run_retention_grid import build, calibrate_rate
 from simulator.engine import Engine, EngineConfig
 from simulator.policies import (ESTIMATORS, RETENTIONS, SCHEDULERS, HintBuilder)
@@ -40,7 +46,7 @@ ORDER = ["fcfs", "sjf", "edf", "lsf", "static-priority"]
 
 
 def run_one(sched, estimator_name, scale, seed, kv_mb, rate, slack, retention,
-            cost, tok, cpu, trace_set, batch=16, chunk=512):
+            cost, tok, cpu, trace_set, batch=16, chunk=512, sigma=0.5):
     tasks = build(scale, seed, rate, cost, tok, cpu, trace_set=trace_set)
     est = ESTIMATORS[estimator_name](cost, tok, cpu)
     eng = Engine(tasks, cost,
@@ -49,7 +55,7 @@ def run_one(sched, estimator_name, scale, seed, kv_mb, rate, slack, retention,
                  retention=RETENTIONS[retention](),
                  scheduler=SCHEDULERS[sched](),
                  estimator=est,
-                 hints=HintBuilder(sigma=0.5, seed=seed))
+                 hints=HintBuilder(sigma=sigma, seed=seed))
     return eng.run()
 
 
@@ -116,15 +122,62 @@ def main():
           f"kv={args.kv_mb:.0f}MB  batch={args.batch}  "
           f"retention={args.retention} (fixed)  seeds={len(seeds)}", flush=True)
 
+    # Neither driver sets cache_mode, so every run here uses the engine default.
+    cache_mode = EngineConfig().cache_mode
+    chunk = default_of(run_one, "chunk")
+    manifest = Manifest.start("scheduler_table", params={
+        "trace_set": args.trace_set, "scale": args.scale, "util": args.util,
+        "kv_mb": args.kv_mb, "max_batch": args.batch, "cache_mode": cache_mode,
+        "schedulers": ORDER, "oracle_row": "lsf",
+        "retention": args.retention, "estimators": ["online", "oracle"],
+        "seeds": seeds, "prefill_chunk_tokens": chunk,
+        "sigma": default_of(run_one, "sigma"),
+        "slack_factor": "calibrated",
+        "cost_model": "CostModel() defaults; StageTokens(), CpuStageSeconds()"})
+    # What the measurement loop below actually runs at.
+    run_config = {"trace_set": args.trace_set, "scale": args.scale,
+                  "util": args.util, "kv_mb": args.kv_mb,
+                  "max_batch": args.batch, "cache_mode": cache_mode,
+                  "retention": args.retention}
+
+    # Calibration configs are read from the bound call, defaults included,
+    # not from what this driver believes it passes: calibrate_rate is called
+    # without trace_set or batch, so it runs at its own defaults.
+    rate_call = (args.util, args.scale, seeds[0], args.kv_mb, cost, tok, cpu)
+    rb = bound_args(calibrate_rate, *rate_call)
+    rate_under = {"trace_set": rb["trace_set"], "scale": rb["scale"],
+                  "util": rb["target_util"], "kv_mb": rb["kv_mb"],
+                  "max_batch": rb["batch"], "cache_mode": cache_mode,
+                  "seed": rb["seed"], "scheduler": "fcfs",
+                  "retention": "keep-all",
+                  "prefill_chunk_tokens":
+                      default_of(run_retention_grid.run_one, "chunk")}
+    # Before spending any engine time: a mismatch here is already knowable.
+    check_consistent("arrival_rate", rate_under, run_config, ("util",))
+
     print("calibrating arrival rate...", flush=True)
-    rate = calibrate_rate(args.util, args.scale, seeds[0], args.kv_mb,
-                          cost, tok, cpu)
+    rate, busy = calibrate_rate(*rate_call, return_achieved=True)
     print(f"  rate={rate:.4f}/s", flush=True)
+    manifest.record(Calibration(
+        "arrival_rate", rate, rate_under,
+        target=f"GPU busy fraction {args.util} under FCFS/keep-all",
+        achieved=busy, also_check=("util",)))
+    run_config["arrival_rate"] = rate
+
+    slack_call = (args.scale, seeds[:3], args.kv_mb, rate, args.retention,
+                  cost, tok, cpu, args.trace_set)
+    sb = bound_args(calibrate_slack, *slack_call, batch=args.batch)
+    slack_under = {"trace_set": sb["trace_set"], "scale": sb["scale"],
+                   "kv_mb": sb["kv_mb"], "max_batch": sb["batch"],
+                   "cache_mode": cache_mode, "arrival_rate": sb["rate"],
+                   "retention": sb["retention"], "seeds": sb["seeds"],
+                   "scheduler": "fcfs", "estimator": "online",
+                   "prefill_chunk_tokens": chunk}
+    slack_checks = ("arrival_rate", "retention")
+    check_consistent("slack_factor", slack_under, run_config, slack_checks)
 
     print("calibrating slack_factor for 20-30% FCFS deadline misses...", flush=True)
-    slack, achieved = calibrate_slack(args.scale, seeds[:3], args.kv_mb, rate,
-                                      args.retention, cost, tok, cpu,
-                                      args.trace_set, batch=args.batch)
+    slack, achieved = calibrate_slack(*slack_call, batch=args.batch)
     if achieved is None:
         print("  FAILED to measure a miss rate; aborting rather than guessing.")
         return 1
@@ -132,6 +185,12 @@ def main():
     print(f"  slack_factor={slack:.3f}  FCFS miss rate={achieved:.1%}"
           f"{'' if in_band else '   *** OUTSIDE the 20-30% target band ***'}",
           flush=True)
+    manifest.record(Calibration(
+        "slack_factor", slack, slack_under,
+        target="FCFS deadline-miss rate in [0.20, 0.30]",
+        achieved=achieved, also_check=slack_checks))
+
+    manifest.assert_consistent(run_config)
 
     rows, results = [], []
     for sched in ORDER:
@@ -179,6 +238,7 @@ def main():
         "slack_in_target_band": in_band,
         "rows": results,
         "elapsed_s": round(time.time() - t_start, 1),
+        "manifest": manifest.to_dict(),
     }
     os.makedirs(os.path.join(_REPO, "results"), exist_ok=True)
     path = os.path.join(_REPO, "results",
