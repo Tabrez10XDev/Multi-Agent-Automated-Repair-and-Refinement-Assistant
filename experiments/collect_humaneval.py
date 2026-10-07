@@ -19,10 +19,13 @@ from maara.orchestrator import results_path, run
 #   MAARA_TASK_SET=original   HumanEval/1-15   (default; the fit set)
 #   MAARA_TASK_SET=original30 HumanEval/1-30
 #   MAARA_TASK_SET=new        the 54 validated held-out problems
+#   MAARA_TASK_SET=final      every remaining problem, untouched by any earlier
+#                             trace; the sealed test set for frozen policies
 _TASK_SETS = {
     "original": ("humaneval_original30.json", 15),
     "original30": ("humaneval_original30.json", None),
     "new": ("humaneval_new.json", None),
+    "final": ("humaneval_final.json", None),
 }
 
 

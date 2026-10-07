@@ -192,12 +192,32 @@ def select(cands, count):
     return out[:count]
 
 
+def held_out_ids(path):
+    """Every problem already used by a held-out task file, kept or dropped.
+
+    Dropped problems are excluded too: they were selected and looked at, so
+    reusing them would not be untouched. Only the kept ids are written to the
+    file, so the dropped ones are listed explicitly below."""
+    with open(path) as fh:
+        return {t["task_id"] for t in json.load(fh)["tasks"]}
+
+
+# Selected for humaneval_new.json and dropped by validation (DECISIONS 20).
+_NEW_DROPPED = {"HumanEval/32"}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--src", required=True)
     ap.add_argument("--count", type=int, default=55)
     ap.add_argument("--out", default=os.path.join(_REPO, "data", "tasks",
                                                   "humaneval_new.json"))
+    ap.add_argument("--exclude", action="append", default=[],
+                    help="task file whose problems must not be reused; "
+                         "repeatable. Use for a set that must be untouched by "
+                         "every earlier trace.")
+    ap.add_argument("--all", action="store_true",
+                    help="take every remaining candidate instead of --count")
     args = ap.parse_args()
 
     digest, cands = build(args.src, args.count)
@@ -205,7 +225,17 @@ def main():
     print(f"candidates after excluding the {len(FIT_SET)} fit-set problems "
           f"and unconvertible checks: {len(cands)}")
 
-    chosen = select(cands, args.count)
+    excluded = set()
+    for p in args.exclude:
+        excluded |= held_out_ids(p)
+        if os.path.basename(p) == "humaneval_new.json":
+            excluded |= _NEW_DROPPED
+    if excluded:
+        cands = [c for c in cands if c["task_id"] not in excluded]
+        print(f"after excluding {len(excluded)} problems from "
+              f"{len(args.exclude)} earlier task file(s): {len(cands)}")
+
+    chosen = cands if args.all else select(cands, args.count)
     print(f"selected {len(chosen)}; validating (tests must FAIL on the stub, "
           f"PASS on the canonical solution)...", flush=True)
 
@@ -232,8 +262,10 @@ def main():
         "source_url": SOURCE_URL,
         "source_sha256": digest,
         "excluded_fit_set": sorted(FIT_SET, key=lambda s: int(s.split("/")[1])),
-        "selection": "HumanEval/16-30 pinned, then round-robin over terciles of "
-                     "canonical-solution length",
+        "excluded_earlier": sorted(excluded, key=lambda s: int(s.split("/")[1])),
+        "selection": ("every remaining candidate" if args.all else
+                      "HumanEval/16-30 pinned, then round-robin over terciles "
+                      "of canonical-solution length"),
         "validated": "tests fail on buggy_code and pass on canonical_solution",
         "tasks": kept,
     }
