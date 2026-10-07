@@ -1,7 +1,33 @@
 # agents/evaluator.py
 
+import re
+
 from maara import tracing
 from maara import prompt_layout
+
+DEFAULT_SCORE = 5
+
+
+def _parse_score(raw: str) -> int:
+    """
+    The SCORE: line's integer, or DEFAULT_SCORE if there is none.
+
+    This used to index the first SCORE: line before checking one existed, so a
+    reply without it raised IndexError and killed the task before any fix
+    attempt -- 7 of 60 shared_first runs (FINDINGS 14b). Every reply the old
+    parse accepted is parsed exactly as before; the fallbacks only apply where
+    it would have crashed.
+    """
+    score_line = [l for l in raw.split("\n") if l.startswith("SCORE:")]
+    if not score_line:
+        return DEFAULT_SCORE
+    score_raw = score_line[0].split(":")[-1].strip()
+    try:
+        return int(score_raw.split("/")[0].strip())
+    except ValueError:
+        m = re.match(r"\s*(\d+)", score_raw)
+        return int(m.group(1)) if m else DEFAULT_SCORE
+
 
 def evaluate_plan(issue: dict, relevant_code: dict, test_files: dict) -> dict:
     """
@@ -87,9 +113,7 @@ FEEDBACK: <one paragraph explaining what is missing or looks good>
 
     # parse the structured response
     approved = "yes" in raw.lower().split("approved:")[-1].split("\n")[0].lower()
-    score_line = [l for l in raw.split("\n") if l.startswith("SCORE:")]
-    score_raw = score_line[0].split(":")[-1].strip()
-    score = int(score_raw.split("/")[0].strip()) if score_line else 5
+    score = _parse_score(raw)
     feedback_line = raw.split("FEEDBACK:")[-1].strip() if "FEEDBACK:" in raw else raw
 
     return {
