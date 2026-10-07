@@ -795,3 +795,21 @@ Consequences, in detail in `docs/GPU_TODO.md`:
 5. Both probes take `--backend`. Anything other than `mac-metal` writes to
    `data/calibration/<backend>/`, so a GPU calibration cannot overwrite the
    Mac's files or be labelled as Metal.
+
+## 30. llama3.2's KV bytes per token is measured: 114,688, as derived
+
+Confirmed 2026-10-07 from `~/.ollama/logs/server-3.log`, a Mac server log
+from the earlier collections (found by the brief-03 session, rechecked here).
+Two independent lines agree:
+
+- the KV buffer at load, for "Llama 3.2 3B Instruct":
+  `llama_kv_cache: size = 448.00 MiB (4096 cells, 28 layers, 1/1 seqs), K (f16): 224.00 MiB, V (f16): 224.00 MiB`,
+  i.e. 448 x 1048576 / 4096 = **114,688 B/token**, exactly the
+  architecture-derived value;
+- the prompt-cache size estimate, 8192 MiB for 74,845 tokens, about
+  114,770 B/token (the same estimate gives 57,358 for qwen, matching its
+  confirmed 57,344).
+
+`mac_ollama_measured` now lists both models in `kv_measured`, which revises
+§27 item 3. The value is unchanged, so no result moves. This closes
+OPEN_ISSUES §23; `gpu_5060ti` still says DERIVED until checked on that card.

@@ -67,8 +67,10 @@ class ModelRates:
     own server log. Ollama 0.33.3 reports each saved prompt-cache state as
     "3791 tokens, 207.364 MiB", i.e. 207.364 x 1048576 / 3791 = 57,356 B/token
     against the 57,344 derived below -- a 0.02% difference, which is rounding
-    in the logged MiB figure. llama3.2's value remains derived; it needs the
-    same check against a log line for one of its states.
+    in the logged MiB figure. llama3.2's is CONFIRMED the same way
+    (DECISIONS 30): its KV buffer logs as "448.00 MiB (4096 cells, 28
+    layers)", i.e. 448 x 1048576 / 4096 = 114,688 B/token, exactly the
+    derived value.
 
     Derived from published architecture configs:
         qwen2.5-coder:7b  28 layers, 4 KV heads (GQA), head_dim 128, fp16
@@ -168,7 +170,7 @@ PROFILES = {
         batch_decode_coeff=0.841,
         batch_decode_coeff_measured=True,
         iteration_overhead_s=0.001,
-        kv_measured=frozenset({CODER_MODEL}),
+        kv_measured=frozenset({CODER_MODEL, SENTINEL_MODEL}),
     ),
     "gpu_5060ti": HardwareProfile(
         name="gpu_5060ti",

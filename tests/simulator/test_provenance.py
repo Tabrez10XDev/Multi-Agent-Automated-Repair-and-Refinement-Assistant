@@ -32,14 +32,14 @@ def test_provenance_labels_every_model_rate():
             f"{model} kv_bytes_per_token has no provenance label: {line!r}"
 
 
-def test_kv_bytes_provenance_distinguishes_the_two_models():
-    """qwen's KV constant is confirmed against a log line; llama3.2's is not,
-    and conflating them would let an unverified number be quoted as measured."""
-    text = CostModel().provenance()
-    qwen = next(l for l in text.splitlines() if CODER_MODEL in l)
-    llama = next(l for l in text.splitlines() if SENTINEL_MODEL in l)
-    assert "kv MEASURED" in qwen
-    assert "kv DERIVED" in llama
+def test_kv_bytes_provenance_is_per_profile():
+    """Both KV constants are confirmed against Mac server logs (DECISIONS 30).
+    That confirmation is per machine: the GPU profile must still say DERIVED."""
+    for profile, label in (("mac_ollama_measured", "kv MEASURED"), ("gpu_5060ti", "kv DERIVED")):
+        text = CostModel.from_profile(profile).provenance()
+        for model in (CODER_MODEL, SENTINEL_MODEL):
+            line = next(l for l in text.splitlines() if model in l)
+            assert label in line, (profile, line)
 
 
 def test_batch_decode_coeff_provenance_follows_the_profile():
@@ -95,9 +95,8 @@ def test_default_profile_is_the_mac_and_its_measured_fields_say_so():
     assert cm.profile == "mac_ollama_measured"
     for model in (CODER_MODEL, SENTINEL_MODEL):
         assert cm.rates_for(model).measured is True
-    assert CODER_MODEL in cm.hardware_profile.kv_measured
-    # llama3.2's KV figure is DERIVED (OPEN_ISSUES 23); it must not be promoted.
-    assert SENTINEL_MODEL not in cm.hardware_profile.kv_measured
+    # Both confirmed against Ollama server logs on this Mac (DECISIONS 30).
+    assert cm.hardware_profile.kv_measured == {CODER_MODEL, SENTINEL_MODEL}
 
 
 def test_gpu_5060ti_exists_and_nothing_in_it_is_measured():
