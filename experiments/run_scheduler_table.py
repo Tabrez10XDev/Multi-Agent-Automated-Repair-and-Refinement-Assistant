@@ -59,6 +59,32 @@ def run_one(sched, estimator_name, scale, seed, kv_mb, rate, slack, retention,
     return eng.run()
 
 
+# Two-sided 95% Student t critical values by degrees of freedom. stdlib has no
+# t quantile and the sim extra is deliberately numpy/matplotlib only.
+_T975 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447,
+         7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228, 11: 2.201, 12: 2.179,
+         13: 2.160, 14: 2.145, 15: 2.131, 16: 2.120, 17: 2.110, 18: 2.101,
+         19: 2.093, 20: 2.086, 25: 2.060, 30: 2.042}
+
+
+def paired_ci(a, b):
+    """Mean of a[i] - b[i] with a two-sided 95% t interval. Paired because
+    every row runs the same seeds (DECISIONS 24)."""
+    d = [x - y for x, y in zip(a, b)]
+    n = len(d)
+    mean = st.fmean(d)
+    if n < 2:
+        return {"mean_diff_s": mean, "lo_s": float("nan"),
+                "hi_s": float("nan"), "n": n, "significant": False}
+    df = n - 1
+    t = _T975.get(df) or (_T975[max(k for k in _T975 if k <= df)]
+                          if df < 30 else 1.96)
+    half = t * st.stdev(d) / n ** 0.5
+    lo, hi = mean - half, mean + half
+    return {"mean_diff_s": mean, "lo_s": lo, "hi_s": hi, "n": n,
+            "significant": not (lo <= 0.0 <= hi)}
+
+
 def calibrate_slack(scale, seeds, kv_mb, rate, retention, cost, tok, cpu,
                     trace_set, batch=8, lo=0.5, hi=6.0, iters=10,
                     target=(0.20, 0.30)):
@@ -112,6 +138,8 @@ def main():
                          "row comes out identical to the online one. 8 yields "
                          "~42%% choice and lands FCFS in the 20-30%% miss band.")
     ap.add_argument("--quick", action="store_true", help="3 seeds")
+    ap.add_argument("--out", default=None,
+                    help="JSON path (default: results/scheduler_table_<trace>.json)")
     args = ap.parse_args()
 
     seeds = list(range(1, (3 if args.quick else args.seeds) + 1))
@@ -141,10 +169,12 @@ def main():
                   "retention": args.retention}
 
     # Calibration configs are read from the bound call, defaults included,
-    # not from what this driver believes it passes: calibrate_rate is called
-    # without trace_set or batch, so it runs at its own defaults.
+    # not from what this driver believes it passes. trace_set and batch used
+    # to be omitted here, so the rate was always calibrated at batch 8 on
+    # holdout_qwen whatever the table ran at (DECISIONS 25).
     rate_call = (args.util, args.scale, seeds[0], args.kv_mb, cost, tok, cpu)
-    rb = bound_args(calibrate_rate, *rate_call)
+    rate_kw = {"trace_set": args.trace_set, "batch": args.batch}
+    rb = bound_args(calibrate_rate, *rate_call, **rate_kw)
     rate_under = {"trace_set": rb["trace_set"], "scale": rb["scale"],
                   "util": rb["target_util"], "kv_mb": rb["kv_mb"],
                   "max_batch": rb["batch"], "cache_mode": cache_mode,
@@ -156,7 +186,7 @@ def main():
     check_consistent("arrival_rate", rate_under, run_config, ("util",))
 
     print("calibrating arrival rate...", flush=True)
-    rate, busy = calibrate_rate(*rate_call, return_achieved=True)
+    rate, busy = calibrate_rate(*rate_call, **rate_kw, return_achieved=True)
     print(f"  rate={rate:.4f}/s", flush=True)
     manifest.record(Calibration(
         "arrival_rate", rate, rate_under,
@@ -217,7 +247,13 @@ def main():
                "mean_slack_at_completion_s": m("mean_slack_at_completion_s"),
                "estimator_mape_pct": m("estimator_mape_pct"),
                "frac_decisions_with_choice": m("frac_decisions_with_choice"),
-               "seeds": len(seeds)}
+               "seeds": len(seeds),
+               # Per seed, in seed order, so rows can be compared paired.
+               "per_seed_p95_s": [r["p95_task_latency_s"] for r in reps]}
+        base = next((r for r in results if r["label"] == "fcfs"), None)
+        if base is not None and label != "fcfs":
+            row["p95_vs_fcfs"] = paired_ci(row["per_seed_p95_s"],
+                                           base["per_seed_p95_s"])
         results.append(row)
         print(f"  {label:<16}{row['p50_task_latency_s']:>8.1f}"
               f"{row['p95_task_latency_s']:>9.1f}"
@@ -225,6 +261,15 @@ def main():
               f"{row['mean_slack_at_completion_s']:>12.1f}"
               f"{row['estimator_mape_pct']:>7.1f}%"
               f"{row['frac_decisions_with_choice']:>7.1%}", flush=True)
+
+    print("\n  paired 95% CI on the p95 difference against fcfs (same seeds):")
+    for row in results:
+        ci = row.get("p95_vs_fcfs")
+        if ci:
+            print(f"  {row['label']:<16}{ci['mean_diff_s']:>+8.2f}s  "
+                  f"[{ci['lo_s']:+.2f}, {ci['hi_s']:+.2f}]  "
+                  f"{'significant' if ci['significant'] else 'not significant'}",
+                  flush=True)
 
     out = {
         "trace_set": args.trace_set, "scale": args.scale, "util": args.util,
@@ -240,9 +285,9 @@ def main():
         "elapsed_s": round(time.time() - t_start, 1),
         "manifest": manifest.to_dict(),
     }
-    os.makedirs(os.path.join(_REPO, "results"), exist_ok=True)
-    path = os.path.join(_REPO, "results",
-                        f"scheduler_table_{args.trace_set}.json")
+    path = args.out or os.path.join(_REPO, "results",
+                                    f"scheduler_table_{args.trace_set}.json")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
         json.dump(out, f, indent=2)
     print(f"\n  elapsed {out['elapsed_s']:.0f}s -> {path}")

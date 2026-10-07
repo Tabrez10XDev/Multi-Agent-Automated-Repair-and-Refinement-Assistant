@@ -647,3 +647,15 @@ arguments through is a separate, owner-approved fix. Consequence for the
 record: FINDINGS §27's batch-16 rows used a rate calibrated at batch 8, so its
 statement that the rate was calibrated at the batch the table runs at holds
 only for the batch-8 rows.
+
+**Fixed and re-measured 2026-10-07.** The driver now passes `batch` and
+`trace_set` to `calibrate_rate`. Recalibrated at batch 16 the rate is
+0.034278564453125/s, bit-identical to the batch-8 rate, so the bisection
+lands on the same grid point. The 20-seed batch-16 rerun
+(`results/scheduler_table_holdout_qwen_b16.json`, manifest verified at
+`max_batch=16`) gives FCFS p95 132.5s and paired p95 differences against FCFS
+of lsf +0.04s [-0.06, +0.14], edf +0.04s [-0.05, +0.14], oracle +0.08s
+[-0.78, +0.93], all not significant. **§27's batch-16 conclusion stands**; the
+process was wrong, the number was not. The driver now also writes per-seed
+p95 and these paired intervals itself, so §27-style tables are reproducible
+from its output.
