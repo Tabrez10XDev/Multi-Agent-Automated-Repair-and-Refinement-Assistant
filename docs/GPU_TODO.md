@@ -1,5 +1,10 @@
 # GPU TODO: what to do once the RTX 5060 Ti arrives
 
+> **TENTATIVE (2026-10-07).** The GPU is not confirmed, so no time goes into
+> preparing for it. The unchecked prep items below are built only once GPU
+> time is booked (about half a day). The minimum useful session, G0 to G3,
+> needs no new code: the probes already take `--backend`.
+
 **Target machine: one NVIDIA RTX 5060 Ti, 16 GB.** This is the ceiling for this
 repo (DECISIONS §29). Nothing here, and no future work, may need more VRAM, a
 second GPU, or a datacenter card. If a step does not fit in 16 GB, it gets
@@ -43,7 +48,7 @@ Rules that follow from this:
 
 ---
 
-## Prep work, doable now on the Mac (no GPU needed)
+## Prep work (build only once GPU time is booked)
 
 - [x] **Probes write per-backend files.** `--backend cuda-5060ti` writes to
       `data/calibration/cuda-5060ti/`, never over the Mac's files
@@ -100,7 +105,7 @@ Restart Ollama normally afterwards.
 - [ ] One server-log line per model ("N tokens, X MiB"). This also gives the
       first measured llama3.2 value (OPEN_ISSUES §23).
 
-### G4. vLLM batching coefficient (about 30 minutes)
+### G4. vLLM batching coefficient (about 30 minutes; only if time allows)
 ```bash
 vllm serve Qwen/Qwen2.5-Coder-7B-Instruct-AWQ --max-model-len 16384 \
   --gpu-memory-utilization 0.90 --enable-prefix-caching
@@ -122,7 +127,7 @@ not Q4_K_M.
 - [ ] Headline policy table on `final`, but only if the policy freeze rules
       allow it (DECISIONS §26: one run, no tuning).
 
-### G7. Optional: validate the block cache against real vLLM (about 1 hour)
+### G7. Optional, only if time allows: validate the block cache against real vLLM (about 1 hour)
 ```bash
 ./venv/bin/python -u -m probes.vllm_prefix_replay --trace holdout_qwen --backend cuda-5060ti
 ```
