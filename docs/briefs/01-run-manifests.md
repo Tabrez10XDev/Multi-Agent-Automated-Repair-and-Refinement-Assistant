@@ -1,5 +1,16 @@
 # Brief 01 — Run manifests, with a blocking calibration check
 
+> **STATUS: DONE (2026-10-07).** Commits `32fc907` (manifest + tests) and
+> `20efa69` (wired into both drivers, DECISIONS §25). Suite 250 passed,
+> 1 skipped at landing. `--quick` reproduces the committed numbers for both
+> drivers; a mismatched `--batch` or `--trace-set` fails before any engine run.
+>
+> **Open item for the owner:** the guard found that `run_scheduler_table`
+> never passes `batch`/`trace_set` to `calibrate_rate`, so it always
+> calibrates at batch 8 on `holdout_qwen`. Not changed here (the brief forbids
+> changing calibration logic). FINDINGS §27's batch-16 rows used that batch-8
+> rate; see DECISIONS §25.
+
 **Owns:** `experiments/manifest.py` (new), `experiments/run_scheduler_table.py`,
 `experiments/run_retention_grid.py`, `tests/simulator/test_manifest.py` (new).
 **Must not touch:** anything under `simulator/`, `docs/FINDINGS.md`.
