@@ -1,5 +1,12 @@
 # Brief 02 — Make the cost model a named hardware profile
 
+> **STATUS: DONE (2026-10-07).** Commit `ce47c4b`, DECISIONS §27. Suite 272
+> passed, 1 skipped at landing. The two fixed-seed engine runs below are
+> byte-identical to before apart from the new `hardware profile` provenance
+> line. Not done here, by file ownership: the engine CLI and the experiment
+> drivers still use the default profile and do not yet record it in their
+> manifests. The coefficient probe is `probes/batch_decode_probe.py`.
+
 **Owns:** `simulator/workload.py`, `tests/simulator/test_provenance.py`.
 **Must not touch:** anything under `experiments/`, `docs/FINDINGS.md`.
 
