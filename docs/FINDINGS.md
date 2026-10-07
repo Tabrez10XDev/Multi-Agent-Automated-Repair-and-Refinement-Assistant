@@ -8,6 +8,40 @@ What the measurements actually showed, including the results that went against t
 > resolve. They are not sequential within a file. The other parts live in
 > `ARCHITECTURE.md`, `DECISIONS.md`, `FINDINGS.md` and `OPEN_ISSUES.md`.
 
+## Status index
+
+Read this before quoting anything below. Retracted and superseded sections are
+kept in place on purpose; this table says which numbers are still live.
+
+**Every result here is a Mac + Ollama + Metal result** (the
+`mac_ollama_measured` profile, DECISIONS §27). The simulator sections (marked
+*sim*) were run with `batch_decode_coeff = 0.15`, a placeholder. The measured
+value is **0.841** (DECISIONS §28). The conclusions still hold at 0.841
+(OPEN_ISSUES §9.3), but absolute p95 roughly doubles, so quote their absolute
+latencies as 0.15-era numbers. The other sections are direct trace or probe
+measurements and are unaffected.
+
+| § | status | current result |
+|---|---|---|
+| 4. Measurements | current | qwen2.5-coder:7b prefill 267.9 tok/s, decode 28.09 tok/s. This repo's stable prefix is 480 tokens. The 15.6s RAG build, not pytest, dominates the CPU gap between retries. |
+| 5. Findings that affect MAARA | current | `get_test_file_contents` finds 0 test files on requests and flask (root-only `listdir`). Realistic stable prefixes are ~700–27,000 tokens, against 480 here. |
+| 7. The central result | current, *sim*; latency claim qualified by §24 | Retention's rent/recompute crossover is at ~2,000–4,000 tokens of stable context, so it is dead at 480. This is a cost result, not a latency one: at 1x §24 finds recompute is 0.8–1.1% of makespan. The RTX 4090 and A100 rows are simulated configs beyond this repo's 16 GB ceiling (DECISIONS §29). |
+| 14a. Reuse-figure corrections | current | Model-aware matching gives a reusable fraction of 13.7% (`original`) and 12.0% (`shared_first`). Reuse figures quoted before 2026-09-30 are wrong. |
+| 14b. Shared-first layout | current (negative result) | Reordering cut reuse from 13.7% to 12.0% and saved prefill from 49.6s to 35.2s; coder→coder reuse fell from 7,626 to 703 tokens. Rule: most-stable content first. |
+| 14c. Run-ID resume hazard | current | A resumed run under the same `MAARA_RUN_ID` appends a second `seq` sequence. Trace files now refuse to reopen without `MAARA_TRACE_APPEND=1`. |
+| 14d. Ollama does prefix caching | partly superseded by §19, §20, §22 | Still true: Ollama caches prefixes (an identical repeat is 335x faster) and `prompt_eval_count` cannot see it. Superseded: the 32.7%/36.4% hit rates (§22: about 1 in 6 on disjoint problems) and the parallel-slot account of the hits (§19–20: host prompt-cache restores). |
+| 17. 0.10 threshold | **retracted**, superseded by §19 | Overlap at or above 0.10 does not destroy the slot: A survives intact at 25% and 50% overlap (§19). |
+| 18. Degraded `shared_first` segment | current | The trace has two disjoint segments, not concurrent ones. Segment 0 ran at a median 1.20x calibration (p10 0.21x) and holds 19 of the cache model's 21 false positives. Cause unknown. |
+| 19. Exact prompt recurrence | data current; mechanism superseded by §20; hit-rate headline superseded by §22 | Every exact-prompt repeat is a measured hit (46/46, 47/47). Partial prefix hits run at 2.4–4.9x calibration against 14–15x for exact repeats. |
+| 20. Cache rule from llama.cpp source | current | Save and cache search fire when `f_keep < 0.5` (literal in the source). 0.10 only chooses between slots and is inert at `-np 1`. Byte budget 8192 MiB, oldest-first eviction. |
+| 21. Retry-loop state discard | current | With a llama coder, 19.5% of within-task same-model handoffs discard reusable state, 92% of them coder→coder retries. With a qwen coder it is 1.4%. That retry rate is the cause is unproven: it is confounded with the model. |
+| 22. Held-out validation | current | About **1 call in 6** hits Ollama's cache on disjoint problems (16.9%, 17.8%), almost all of it partial prefix reuse. Hit recall held out is 80–81% against 94–97% on the fit traces, and all of the shortfall is in `issue_parser`. |
+| 23. LSF buys tail latency | **retracted**, superseded by §27 | Measured at ~2.2x the intended load. The 14.8% p95 win and the "oracle is worse" result are void. |
+| 24. Retention cannot move latency | current, *sim* | Recompute is **0.8–1.1% of makespan**, so retention is a GPU-work mechanism, not a latency one. Keep-all recomputes 13.4s against evict-now's 127.4s (9.5x), yet p95 across deployable policies differs by under 1%. At 0.841 recompute is 0.6% (DECISIONS §28). Seed count not recorded; do not mix with the OPEN_ISSUES §9.3 sweep. |
+| 25. Ski-rental negative result | current, *sim* | Ski-rental holds 4.5 MB less than keep-all yet pays 20.2s more rent and 5.0s more recompute. Releasing shifts rent onto the remaining holders rather than removing it. |
+| 26. Belady loses to LRU | current, *sim* | Belady recomputes 29.4s against LRU's 13.4s, because eviction here is bulk and block sizes differ. `offline-belady` is not a valid minimum-recompute reference. |
+| 27. Scheduler table, corrected | current, *sim* | **No scheduling rule differs significantly** from arrival order on p95, at batch 8 or 16, nor does the oracle (paired CIs, 20 seeds). The scheduler has a choice on only 0.3–0.4% of admissions. Still tied at 0.841 (DECISIONS §28). |
+
 ---
 
 ## 4. Measurements
@@ -294,6 +328,10 @@ model's uncached rate, and hidden tokens are
 | original | **89 / 272 (32.7%)** | 20,402 | **60.8s** |
 | shared_first | **78 / 214 (36.4%)** | 15,831 | **49.5s** |
 
+> **Superseded hit rates.** These include the harness replaying tasks under
+> four configs. On disjoint problems the standing figure is about **1 call in
+> 6**, almost entirely partial prefix reuse (§22).
+
 By role, hits concentrate in `issue_parser` (45 of 89), which also explains the
 2881 tok/s anomaly the earlier analysis could not: consecutive `issue_parser`
 calls share a long fixed preamble and were hitting the cache. coder and
@@ -484,6 +522,10 @@ What remains after removing them is genuine but much smaller: partial prefix
 reuse, running at 2.4-4.9x the calibrated rate rather than 14-15x. The honest
 headline is therefore not "a third of calls hit the cache" but "a third of
 calls hit the cache, and most of that is the benchmark repeating itself."
+
+> **Superseded by §22.** Measured on disjoint problems, the standing figure is
+> about **1 call in 6**, almost entirely partial prefix reuse; the "1 in 3" was
+> about half replay artefact.
 
 This is the reason for the new trace design in OPEN_ISSUES §21: disjoint
 problems and an Ollama restart between configs, so the measured reuse is the
@@ -821,7 +863,7 @@ FCFS — inside the live-rent band (OPEN_ISSUES §27).
 | offline-ref | 29.4s | 424.8s | 878.8s | 286.6s | 1616.3s | 1.8% | 184.7 |
 
 Decode is 55% of makespan, prefill 25%, idle 18%. Avoided recompute is the
-*only* thing a retention policy can win, and it is **under 1%**. So the
+*only* thing a retention policy can win, and it is **0.8-1.1%**. So the
 latency spread across every deployable policy is 185.8-187.6s p95 — **within
 1%** — and the offline reference, the best achievable, beats keep-all's p95 by
 1.5%.
@@ -1006,6 +1048,13 @@ Supersedes the retracted §23. `holdout_qwen` 1x, util 80%, KV 1024MB,
 retention fixed at `lru`, **20 seeds**, `slack_factor` calibrated to 0.844 so
 FCFS misses 27.8%. Arrival rate 0.0343/s, calibrated **at the same batch the
 table runs at** — the error that invalidated §23.
+
+> **Correction (DECISIONS §25).** As first run, that held only for the batch-8
+> rows: the driver calibrated at batch 8 whatever batch it ran. Recalibrated at
+> batch 16 the rate is bit-identical (0.0343/s), and the 20-seed batch-16 rerun
+> (`results/scheduler_table_holdout_qwen_b16.json`) is still not significant
+> for every rule. The conclusion stands; its batch-16 CIs differ from the table
+> below by at most 0.01s.
 
 | batch | row | p50 | p95 | miss | missed tasks | already infeasible at first pick |
 |---|---|---|---|---|---|---|

@@ -1,5 +1,16 @@
 # Brief 03 — A status index at the top of FINDINGS
 
+> **STATUS: DONE (2026-10-07).** Status index added at the top of
+> `docs/FINDINGS.md`, one row per section, with a header note that every
+> result is a Mac/Ollama/Metal result and that the *sim* rows predate the
+> measured `batch_decode_coeff` (0.841, DECISIONS §28). Reconciled: the
+> superseded "1 in 3" hit rate in §14d and §19 now points to §22; §24's "under
+> 1%" now reads 0.8-1.1%. A fourth inconsistency was found and fixed: §27
+> claimed every row was calibrated at its own batch, which held only for batch
+> 8 (DECISIONS §25), so it now carries a correction note. No section body was
+> rewritten and nothing was renumbered. No DECISIONS section was added: the
+> brief does not need one.
+
 **Owns:** `docs/FINDINGS.md` only.
 **Must not touch:** anything else. No code.
 
