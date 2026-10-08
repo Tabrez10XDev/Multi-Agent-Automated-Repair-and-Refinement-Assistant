@@ -1,0 +1,1193 @@
+Wed Oct  7 19:48:52 EDT 2026
+NAME    ID    SIZE    PROCESSOR    CONTEXT    UNTIL 
+System-wide memory free percentage: 80%
+
+Wed Oct  7 19:49:52 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+System-wide memory free percentage: 17%
+
+Wed Oct  7 19:50:52 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 20%
+
+Wed Oct  7 19:51:52 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+System-wide memory free percentage: 20%
+
+Wed Oct  7 19:52:52 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+System-wide memory free percentage: 18%
+
+Wed Oct  7 19:53:52 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 18%
+
+Wed Oct  7 19:54:52 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 21%
+
+Wed Oct  7 19:55:52 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 20%
+
+Wed Oct  7 19:56:53 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+System-wide memory free percentage: 20%
+
+Wed Oct  7 19:57:53 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+System-wide memory free percentage: 20%
+
+Wed Oct  7 19:58:53 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 23%
+
+Wed Oct  7 19:59:53 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 23%
+
+Wed Oct  7 20:00:53 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 21%
+
+Wed Oct  7 20:01:53 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 17%
+
+Wed Oct  7 20:02:53 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       3 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       3 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       3 minutes from now    
+System-wide memory free percentage: 22%
+
+Wed Oct  7 20:03:53 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       2 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       2 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       2 minutes from now    
+System-wide memory free percentage: 20%
+
+Wed Oct  7 20:04:53 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL                   
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       About a minute from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       About a minute from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       About a minute from now    
+System-wide memory free percentage: 25%
+
+Wed Oct  7 20:05:53 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL               
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       41 seconds from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       38 seconds from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       38 seconds from now    
+System-wide memory free percentage: 40%
+
+Wed Oct  7 20:06:54 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 48%
+
+Wed Oct  7 20:07:54 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 50%
+
+Wed Oct  7 20:08:54 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 50%
+
+Wed Oct  7 20:09:54 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 51%
+
+Wed Oct  7 20:10:54 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 51%
+
+Wed Oct  7 20:11:54 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 51%
+
+Wed Oct  7 20:12:54 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 51%
+
+Wed Oct  7 20:13:54 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 49%
+
+Wed Oct  7 20:14:54 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 50%
+
+Wed Oct  7 20:15:54 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 50%
+
+Wed Oct  7 20:16:54 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+System-wide memory free percentage: 28%
+
+Wed Oct  7 20:17:54 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 27%
+
+Wed Oct  7 20:18:54 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+System-wide memory free percentage: 18%
+
+Wed Oct  7 20:19:54 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 18%
+
+Wed Oct  7 20:20:54 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+System-wide memory free percentage: 22%
+
+Wed Oct  7 20:21:54 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+System-wide memory free percentage: 22%
+
+Wed Oct  7 20:22:55 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+System-wide memory free percentage: 18%
+
+Wed Oct  7 20:23:55 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       3 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       3 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       3 minutes from now    
+System-wide memory free percentage: 19%
+
+Wed Oct  7 20:24:55 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       2 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       2 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       2 minutes from now    
+System-wide memory free percentage: 22%
+
+Wed Oct  7 20:25:55 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL                   
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       About a minute from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       About a minute from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       About a minute from now    
+System-wide memory free percentage: 23%
+
+Wed Oct  7 20:26:55 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       3 seconds from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       1 second from now     
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       1 second from now     
+System-wide memory free percentage: 39%
+
+Wed Oct  7 20:27:55 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 49%
+
+Wed Oct  7 20:28:55 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 49%
+
+Wed Oct  7 20:29:55 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 53%
+
+Wed Oct  7 20:30:55 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 54%
+
+Wed Oct  7 20:31:55 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 54%
+
+Wed Oct  7 20:32:55 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 54%
+
+Wed Oct  7 20:33:55 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 50%
+
+Wed Oct  7 20:34:55 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 49%
+
+Wed Oct  7 20:35:55 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 49%
+
+Wed Oct  7 20:36:56 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 50%
+
+Wed Oct  7 20:37:56 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 42%
+
+Wed Oct  7 20:38:56 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 41%
+
+Wed Oct  7 20:39:56 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 50%
+
+Wed Oct  7 20:40:56 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 42%
+
+Wed Oct  7 20:41:56 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 42%
+
+Wed Oct  7 20:42:56 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 42%
+
+Wed Oct  7 20:43:56 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 41%
+
+Wed Oct  7 20:44:56 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 39%
+
+Wed Oct  7 20:45:56 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 38%
+
+Wed Oct  7 20:46:56 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 38%
+
+Wed Oct  7 20:47:56 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL       
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       Stopping...    
+System-wide memory free percentage: 39%
+
+Wed Oct  7 20:48:56 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest     a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+System-wide memory free percentage: 21%
+
+Wed Oct  7 20:49:56 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest     a80c4f17acd5    2.5 GB    100% GPU     4096       3 minutes from now    
+System-wide memory free percentage: 18%
+
+Wed Oct  7 20:50:56 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 16%
+
+Wed Oct  7 20:51:57 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+System-wide memory free percentage: 18%
+
+Wed Oct  7 20:52:57 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 15%
+
+Wed Oct  7 20:53:57 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 23%
+
+Wed Oct  7 20:54:57 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 18%
+
+Wed Oct  7 20:55:57 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 17%
+
+Wed Oct  7 20:56:57 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+System-wide memory free percentage: 17%
+
+Wed Oct  7 20:57:57 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 15%
+
+Wed Oct  7 20:58:57 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 21%
+
+Wed Oct  7 20:59:57 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 14%
+
+Wed Oct  7 21:00:57 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 15%
+
+Wed Oct  7 21:01:58 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 14%
+
+Wed Oct  7 21:02:58 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 23%
+
+Wed Oct  7 21:03:58 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 23%
+
+Wed Oct  7 21:04:58 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 22%
+
+Wed Oct  7 21:05:58 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       3 minutes from now    
+System-wide memory free percentage: 19%
+
+Wed Oct  7 21:06:58 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 19%
+
+Wed Oct  7 21:07:58 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       3 minutes from now    
+System-wide memory free percentage: 17%
+
+Wed Oct  7 21:08:58 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 18%
+
+Wed Oct  7 21:09:58 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 18%
+
+Wed Oct  7 21:10:58 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 19%
+
+Wed Oct  7 21:11:58 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 19%
+
+Wed Oct  7 21:12:58 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 19%
+
+Wed Oct  7 21:13:58 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+System-wide memory free percentage: 18%
+
+Wed Oct  7 21:14:59 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 18%
+
+Wed Oct  7 21:15:59 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 19%
+
+Wed Oct  7 21:16:59 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 18%
+
+Wed Oct  7 21:17:59 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 19%
+
+Wed Oct  7 21:18:59 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+System-wide memory free percentage: 18%
+
+Wed Oct  7 21:19:59 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 18%
+
+Wed Oct  7 21:20:59 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+System-wide memory free percentage: 18%
+
+Wed Oct  7 21:21:59 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       3 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       3 minutes from now    
+System-wide memory free percentage: 19%
+
+Wed Oct  7 21:22:59 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 18%
+
+Wed Oct  7 21:23:59 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 17%
+
+Wed Oct  7 21:24:59 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       3 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       3 minutes from now    
+System-wide memory free percentage: 18%
+
+Wed Oct  7 21:25:59 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       3 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       2 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       2 minutes from now    
+System-wide memory free percentage: 18%
+
+Wed Oct  7 21:26:59 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL                   
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       2 minutes from now         
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       About a minute from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       About a minute from now    
+System-wide memory free percentage: 18%
+
+Wed Oct  7 21:27:59 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL                   
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       About a minute from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       19 seconds from now        
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       7 seconds from now         
+System-wide memory free percentage: 34%
+
+Wed Oct  7 21:29:00 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       7 seconds from now    
+System-wide memory free percentage: 67%
+
+Wed Oct  7 21:30:00 EDT 2026
+NAME    ID    SIZE    PROCESSOR    CONTEXT    UNTIL 
+System-wide memory free percentage: 83%
+
+Wed Oct  7 21:31:00 EDT 2026
+NAME    ID    SIZE    PROCESSOR    CONTEXT    UNTIL 
+System-wide memory free percentage: 83%
+
+Wed Oct  7 21:32:00 EDT 2026
+NAME    ID    SIZE    PROCESSOR    CONTEXT    UNTIL 
+System-wide memory free percentage: 83%
+
+Wed Oct  7 21:33:00 EDT 2026
+NAME    ID    SIZE    PROCESSOR    CONTEXT    UNTIL 
+System-wide memory free percentage: 83%
+
+Wed Oct  7 21:34:00 EDT 2026
+NAME    ID    SIZE    PROCESSOR    CONTEXT    UNTIL 
+System-wide memory free percentage: 76%
+
+Wed Oct  7 21:35:00 EDT 2026
+NAME    ID    SIZE    PROCESSOR    CONTEXT    UNTIL 
+System-wide memory free percentage: 76%
+
+Wed Oct  7 21:36:00 EDT 2026
+NAME    ID    SIZE    PROCESSOR    CONTEXT    UNTIL 
+System-wide memory free percentage: 76%
+
+Wed Oct  7 21:37:00 EDT 2026
+NAME    ID    SIZE    PROCESSOR    CONTEXT    UNTIL 
+System-wide memory free percentage: 76%
+
+Wed Oct  7 21:38:00 EDT 2026
+NAME    ID    SIZE    PROCESSOR    CONTEXT    UNTIL 
+System-wide memory free percentage: 76%
+
+Wed Oct  7 21:39:00 EDT 2026
+NAME    ID    SIZE    PROCESSOR    CONTEXT    UNTIL 
+System-wide memory free percentage: 78%
+
+Wed Oct  7 21:40:00 EDT 2026
+NAME    ID    SIZE    PROCESSOR    CONTEXT    UNTIL 
+System-wide memory free percentage: 84%
+
+Wed Oct  7 21:41:00 EDT 2026
+NAME    ID    SIZE    PROCESSOR    CONTEXT    UNTIL 
+System-wide memory free percentage: 83%
+
+Wed Oct  7 21:42:00 EDT 2026
+NAME    ID    SIZE    PROCESSOR    CONTEXT    UNTIL 
+System-wide memory free percentage: 84%
+
+Wed Oct  7 21:43:01 EDT 2026
+NAME    ID    SIZE    PROCESSOR    CONTEXT    UNTIL 
+System-wide memory free percentage: 84%
+
+Wed Oct  7 21:44:01 EDT 2026
+NAME    ID    SIZE    PROCESSOR    CONTEXT    UNTIL 
+System-wide memory free percentage: 84%
+
+Wed Oct  7 21:45:01 EDT 2026
+NAME    ID    SIZE    PROCESSOR    CONTEXT    UNTIL 
+System-wide memory free percentage: 84%
+
+Wed Oct  7 21:46:01 EDT 2026
+NAME    ID    SIZE    PROCESSOR    CONTEXT    UNTIL 
+System-wide memory free percentage: 80%
+
+Wed Oct  7 21:47:01 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+System-wide memory free percentage: 27%
+
+Wed Oct  7 21:48:01 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 28%
+
+Wed Oct  7 21:49:01 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 21%
+
+Wed Oct  7 21:50:01 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+System-wide memory free percentage: 18%
+
+Wed Oct  7 21:51:01 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 17%
+
+Wed Oct  7 21:52:01 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 16%
+
+Wed Oct  7 21:53:02 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 17%
+
+Wed Oct  7 21:54:02 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+System-wide memory free percentage: 20%
+
+Wed Oct  7 21:55:02 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 18%
+
+Wed Oct  7 21:56:02 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+System-wide memory free percentage: 20%
+
+Wed Oct  7 21:57:02 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 19%
+
+Wed Oct  7 21:58:02 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       3 minutes from now    
+System-wide memory free percentage: 31%
+
+Wed Oct  7 21:59:02 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 28%
+
+Wed Oct  7 22:00:02 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 21%
+
+Wed Oct  7 22:01:02 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 16%
+
+Wed Oct  7 22:02:03 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 17%
+
+Wed Oct  7 22:03:03 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+System-wide memory free percentage: 22%
+
+Wed Oct  7 22:04:03 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 21%
+
+Wed Oct  7 22:05:03 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 16%
+
+Wed Oct  7 22:06:03 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+System-wide memory free percentage: 16%
+
+Wed Oct  7 22:07:03 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 19%
+
+Wed Oct  7 22:08:04 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 20%
+
+Wed Oct  7 22:09:04 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 17%
+
+Wed Oct  7 22:10:04 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 17%
+
+Wed Oct  7 22:11:04 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 20%
+
+Wed Oct  7 22:12:04 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 20%
+
+Wed Oct  7 22:13:04 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 20%
+
+Wed Oct  7 22:14:04 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 15%
+
+Wed Oct  7 22:15:04 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 19%
+
+Wed Oct  7 22:16:04 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 20%
+
+Wed Oct  7 22:17:05 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+System-wide memory free percentage: 18%
+
+Wed Oct  7 22:18:05 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 19%
+
+Wed Oct  7 22:19:05 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 19%
+
+Wed Oct  7 22:20:05 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+System-wide memory free percentage: 17%
+
+Wed Oct  7 22:21:05 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 19%
+
+Wed Oct  7 22:22:06 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 16%
+
+Wed Oct  7 22:23:06 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 18%
+
+Wed Oct  7 22:24:06 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 22%
+
+Wed Oct  7 22:25:06 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 22%
+
+Wed Oct  7 22:26:06 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 20%
+
+Wed Oct  7 22:27:06 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 20%
+
+Wed Oct  7 22:28:06 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 21%
+
+Wed Oct  7 22:29:06 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 20%
+
+Wed Oct  7 22:30:07 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+System-wide memory free percentage: 19%
+
+Wed Oct  7 22:31:07 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 19%
+
+Wed Oct  7 22:32:07 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 14%
+
+Wed Oct  7 22:33:08 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 25%
+
+Wed Oct  7 22:34:08 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 29%
+
+Wed Oct  7 22:35:08 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 18%
+
+Wed Oct  7 22:36:08 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 18%
+
+Wed Oct  7 22:37:08 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       3 minutes from now    
+System-wide memory free percentage: 19%
+
+Wed Oct  7 22:38:09 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 19%
+
+Wed Oct  7 22:39:09 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 23%
+
+Wed Oct  7 22:40:09 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+System-wide memory free percentage: 25%
+
+Wed Oct  7 22:41:09 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 22%
+
+Wed Oct  7 22:42:09 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+System-wide memory free percentage: 20%
+
+Wed Oct  7 22:43:09 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 19%
+
+Wed Oct  7 22:44:09 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 18%
+
+Wed Oct  7 22:45:09 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 20%
+
+Wed Oct  7 22:46:09 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 20%
+
+Wed Oct  7 22:47:09 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 17%
+
+Wed Oct  7 22:48:10 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 20%
+
+Wed Oct  7 22:49:10 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       4 minutes from now    
+System-wide memory free percentage: 24%
+
+Wed Oct  7 22:50:10 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       4 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       4 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       3 minutes from now    
+System-wide memory free percentage: 23%
+
+Wed Oct  7 22:51:10 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL              
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       3 minutes from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       3 minutes from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       2 minutes from now    
+System-wide memory free percentage: 21%
+
+Wed Oct  7 22:52:10 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL                   
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       2 minutes from now         
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       2 minutes from now         
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       About a minute from now    
+System-wide memory free percentage: 21%
+
+Wed Oct  7 22:53:10 EDT 2026
+NAME                       ID              SIZE      PROCESSOR    CONTEXT    UNTIL                   
+qwen2.5-coder:7b           dae161e27b0e    4.7 GB    100% GPU     4096       About a minute from now    
+llama3.2:latest            a80c4f17acd5    2.5 GB    100% GPU     4096       About a minute from now    
+nomic-embed-text:latest    0a109f422b47    370 MB    100% GPU     2048       38 seconds from now        
+System-wide memory free percentage: 24%
+
+Wed Oct  7 22:54:10 EDT 2026
+NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL               
+qwen2.5-coder:7b    dae161e27b0e    4.7 GB    100% GPU     4096       38 seconds from now    
+llama3.2:latest     a80c4f17acd5    2.5 GB    100% GPU     4096       26 seconds from now    
+System-wide memory free percentage: 62%
+
+Wed Oct  7 22:57:21 EDT 2026
+NAME    ID    SIZE    PROCESSOR    CONTEXT    UNTIL 
+System-wide memory free percentage: 75%
+
+Wed Oct  7 22:58:21 EDT 2026
+NAME    ID    SIZE    PROCESSOR    CONTEXT    UNTIL 
+System-wide memory free percentage: 76%
+
+Wed Oct  7 22:59:21 EDT 2026
+NAME    ID    SIZE    PROCESSOR    CONTEXT    UNTIL 
+System-wide memory free percentage: 77%
+

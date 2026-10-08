@@ -53,7 +53,7 @@ from simulator.engine import Engine, EngineConfig
 from simulator.policies import (RETENTIONS, SCHEDULERS, ExecutionEstimator,
                           FCFSScheduler, HintBuilder, KeepAllRetention,
                           SkiRentalPredictionsRetention)
-from simulator.trace_loader import TRACE_SETS, load_trace
+from simulator.trace_loader import TRACE_SETS, load_trace, resolve_trace_set
 from simulator.workload import (CostModel, CpuStageSeconds, Kind, StageTokens,
                           DEFAULT_BLOCK_TOKENS)
 
@@ -96,7 +96,7 @@ def scale_context(tasks, factor: int):
 
 
 def build(scale, seed, arrival_rate, cost, tok, cpu, trace_set="original"):
-    paths = [os.path.join(_REPO, p) for p in TRACE_SETS[trace_set]]
+    paths = [os.path.join(_REPO, p) for p in resolve_trace_set(trace_set)]
     tasks = load_trace(paths, arrival_rate=arrival_rate, seed=seed).tasks
     return scale_context(tasks, scale)
 

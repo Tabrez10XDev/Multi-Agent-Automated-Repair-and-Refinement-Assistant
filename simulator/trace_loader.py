@@ -477,13 +477,43 @@ TRACE_SETS = {
 }
 DEFAULT_TRACES = TRACE_SETS["original"]
 
+# The sealed test set (DECISIONS 26), collected 2026-10-07 on the 92 `final`
+# problems, same two configs, one process each, Ollama restarted between.
+# Kept OUT of TRACE_SETS so no policy driver can reach it by name; the cache
+# model may be validated on it by path. The first 1-3 minutes of final_A_qwen
+# overlapped two pytest runs, so its earliest calls' timings are contended.
+SEALED_TRACE_SETS = {
+    "final_qwen": ["data/traces/final_A_qwen.jsonl.gz"],
+    "final_llama": ["data/traces/final_B_llama.jsonl.gz"],
+}
+
+
+class SealedTraceSet(KeyError):
+    pass
+
+
+def resolve_trace_set(name):
+    """
+    Relative paths for a named set. A sealed set is refused unless
+    MAARA_POLICIES_FROZEN names the freeze commit, which must precede the
+    first run on it so the ordering is checkable in git (DECISIONS 26).
+    """
+    import os as _os
+    if name in SEALED_TRACE_SETS:
+        if not _os.environ.get("MAARA_POLICIES_FROZEN"):
+            raise SealedTraceSet(
+                f"{name!r} is the sealed test set (DECISIONS 26). Freeze the "
+                f"policies in a commit first, then set MAARA_POLICIES_FROZEN=<that commit>.")
+        return SEALED_TRACE_SETS[name]
+    return TRACE_SETS[name]
+
 
 def trace_set(name):
     """Absolute paths for a named set. Missing files are dropped, so a set can
     be analysed before every part of it has been collected."""
     import os as _os
     repo = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
-    paths = [_os.path.join(repo, p) for p in TRACE_SETS[name]]
+    paths = [_os.path.join(repo, p) for p in resolve_trace_set(name)]
     return [p for p in paths if _os.path.exists(p)]
 
 
