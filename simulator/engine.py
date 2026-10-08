@@ -114,6 +114,12 @@ class EngineConfig:
     # Chunked is the DEFAULT here; --prefill-chunk 0 restores unchunked.
     prefill_chunk_tokens: int = 512
 
+    # Record every time a block is needed (built, rebuilt, or hit) in
+    # Engine._key_uses, for sizing a KV budget from the reusable working set
+    # offline (experiments/run_retention_grid.py --headrooms). Off by default:
+    # it is experimenter-side accounting, never a policy input.
+    record_key_uses: bool = False
+
     @property
     def kv_budget_bytes(self) -> int:
         return int(self.kv_budget_mb * 1024 * 1024)
@@ -290,6 +296,8 @@ class Engine:
         self.waiting = []
         self.running = []
         self.entries = {}           # key -> KVEntry
+        self._key_uses = {}         # key -> [times needed], when cfg.record_key_uses
+        self._key_nbytes = {}       # key -> block bytes, same condition
         self.pinned_bytes = 0       # private (non-shared) KV of running requests
         self.active_model = None
 
@@ -347,7 +355,7 @@ class Engine:
             # the cap binds; batch_time undercounts whenever both models have work.
             "resident_time": {},
             "w_kv": 0.0, "w_pinned": 0.0, "w_retained": 0.0,
-            "max_batch": 0, "max_resident": 0,
+            "max_batch": 0, "max_resident": 0, "peak_active_bytes": 0,
             # Splits blocking by whether retention could have done anything about
             # it. Blocked with nothing evictable means the budget was consumed by
             # ACTIVE requests -- a scheduling/admission problem, not a retention
@@ -710,6 +718,10 @@ class Engine:
 
         for k in chain[:matched]:
             self.entries[k].last_used = self.now
+        if self.cfg.record_key_uses:
+            for k in chain[:matched] + list(new_keys):
+                self._key_uses.setdefault(k, []).append(self.now)
+                self._key_nbytes[k] = block_bytes
         for k in new_keys:
             self.entries[k] = KVEntry(
                 key=k, model=r.model, tokens=bt, nbytes=block_bytes,
@@ -1224,6 +1236,11 @@ class Engine:
             self._decay_evict_rate(dt)
             self.m["w_evict_rate"] += self._evict_rate * dt
             self.m["peak_kv_bytes"] = max(self.m["peak_kv_bytes"], self.used_bytes)
+            # Bytes no retention policy could free: running requests' private KV
+            # plus the shared blocks they hold. The floor of any workable budget.
+            self.m["peak_active_bytes"] = max(
+                self.m["peak_active_bytes"],
+                self.pinned_bytes + self._entry_bytes - self._evictable_bytes)
             self._retire()
 
         return self.report()

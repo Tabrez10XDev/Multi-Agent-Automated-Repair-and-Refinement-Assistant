@@ -102,13 +102,15 @@ def build(scale, seed, arrival_rate, cost, tok, cpu, trace_set="original"):
 
 
 def run_one(policy, sched, scale, seed, kv_mb, arrival_rate, cost, tok, cpu,
-            batch=8, lam=0.5, sigma=0.5, chunk=512, trace_set="holdout_qwen"):
+            batch=8, lam=0.5, sigma=0.5, chunk=512, trace_set="holdout_qwen",
+            record_key_uses=False):
     tasks = build(scale, seed, arrival_rate, cost, tok, cpu, trace_set=trace_set)
     pol = (SkiRentalPredictionsRetention(lam) if policy == "ski-rental-pred"
            else RETENTIONS[policy]())
     eng = Engine(tasks, cost,
                  EngineConfig(kv_budget_mb=kv_mb, max_batch=batch,
-                              prefill_chunk_tokens=chunk),
+                              prefill_chunk_tokens=chunk,
+                              record_key_uses=record_key_uses),
                  retention=pol, scheduler=SCHEDULERS[sched](),
                  estimator=ExecutionEstimator(cost, tok, cpu),
                  hints=HintBuilder(sigma=sigma, seed=seed))
@@ -148,6 +150,205 @@ def hindsight_denominator(scale, seed, kv_mb, arrival_rate, cost, tok, cpu,
     return sum(min(eng._key_recompute.get(k, 0.0), rent)
                for k, rent in eng._key_rent.items())
 
+# -- headroom mode (OPEN_ISSUES 27) ------------------------------------------
+#
+# The fixed kv_mb rule above never put retention under a choice it could get
+# wrong. Headroom mode sizes the budget from what the workload actually wants to
+# keep: at each context scale, the reusable working set (WS) is the peak bytes
+# of blocks that will be needed again. A cell's budget is then
+#
+#     peak active bytes  +  headroom x WS
+#
+# where active bytes are those no policy can free (running requests' private
+# KV plus the blocks they hold). headroom 1.0 fits everything worth keeping at
+# its peak; 0.25 forces choices.
+#
+# Load: the arrival rate is calibrated under FCFS/keep-all at the fixed rule's
+# budget (kv_mb_at_1x * max(1, scale // 2), as in the main grid), and every
+# headroom at one scale runs at that rate: what varies is memory, not traffic.
+#
+# WS is measured under evict-now, where the engine records each time a block is
+# needed (built, rebuilt or hit). A block is live from one need to the next.
+# Not keep-all with unbounded memory: at 16x that holds ~10^5 blocks and the
+# per-iteration rent scan makes one run take many minutes. WS uses future need
+# times, which is fine: it is the experimenter sizing the cache, not a policy.
+
+HEADROOM_POLICIES = ["keep-all", "lru", "evict-now", "ski-rental",
+                     "ski-rental-pred", "offline-ref"]
+HEADROOM_METRICS = ("p50_task_latency_s", "p95_task_latency_s",
+                    "mean_task_latency_s", "recompute_seconds", "total_rent_s",
+                    "forced_evictions", "rent_active_tick_frac",
+                    "retention_controlled_decisions", "prefix_hit_rate",
+                    "gpu_busy_frac", "peak_kv_util")
+
+
+def reusable_working_set(scale, seed, arrival_rate, kv_mb, cost, tok, cpu,
+                         trace_set="holdout_qwen", batch=4):
+    """(WS bytes, peak active bytes), measured under evict-now.
+
+    A block is live from each time it is needed until the next; WS is the peak
+    total bytes of live blocks. A block's last need ends its liveness, so
+    blocks nothing will match again (tails, one-off prompts) never count."""
+    eng, _ = run_one("evict-now", "fcfs", scale, seed, kv_mb, arrival_rate,
+                     cost, tok, cpu, batch=batch, trace_set=trace_set,
+                     record_key_uses=True)
+    events = []
+    for k, uses in eng._key_uses.items():
+        nb = eng._key_nbytes[k]
+        for a, b in zip(uses, uses[1:]):
+            if b > a:
+                events.append((a, nb))
+                events.append((b, -nb))
+    events.sort(key=lambda e: (e[0], e[1]))   # releases before acquires at a tie
+    cur = peak = 0
+    for _, d in events:
+        cur += d
+        peak = max(peak, cur)
+    return peak, eng.m["peak_active_bytes"]
+
+
+def _headroom_job(args):
+    (pol, scale, seed, kv, rate, batch, trace_set) = args
+    cost = CostModel()
+    tok, cpu = StageTokens.from_measured(), CpuStageSeconds.from_measured()
+    try:
+        _, rep = run_one(pol, "fcfs", scale, seed, kv, rate, cost, tok, cpu,
+                         batch=batch, trace_set=trace_set)
+    except RuntimeError as e:
+        return {"error": str(e)[:200]}
+    return {k: rep[k] for k in HEADROOM_METRICS}
+
+
+def headroom_main(args):
+    from concurrent.futures import ProcessPoolExecutor
+    from experiments.run_scheduler_table import paired_ci
+
+    cost = CostModel()
+    tok, cpu = StageTokens.from_measured(), CpuStageSeconds.from_measured()
+    scales = [int(x) for x in (args.scales or "1,8,16").split(",")]
+    heads = [float(x) for x in args.headrooms.split(",")]
+    util = args.util
+    seeds = list(range(1, args.seeds + 1))
+    cache_mode = EngineConfig().cache_mode
+    chunk = default_of(run_one, "chunk")
+    manifest = Manifest.start("retention_headroom", params={
+        "trace_set": args.trace_set, "scales": scales, "headrooms": heads,
+        "util": util, "max_batch": args.batch, "cache_mode": cache_mode,
+        "retentions": HEADROOM_POLICIES, "scheduler": "fcfs", "seeds": seeds,
+        "prefill_chunk_tokens": chunk, "hardware_profile": cost.profile,
+        "cost_provenance": cost.provenance(),
+        "kv_budget_rule": "peak_active_bytes + headroom x reusable working set "
+                          "(both measured under evict-now at the calibrated rate)",
+        "load_reference": "arrival rate calibrated under keep-all at "
+                          "kv_mb_at_1x * max(1, scale // 2); every headroom at a "
+                          "scale runs at that rate",
+        "kv_mb_at_1x": args.kv_mb})
+    t0 = time.time()
+    print(f"headroom grid: trace={args.trace_set} scales={scales} "
+          f"headrooms={heads} util={util} batch={args.batch} "
+          f"profile={cost.profile} coeff={cost.batch_decode_coeff} "
+          f"seeds={len(seeds)}", flush=True)
+    cells = []
+    with ProcessPoolExecutor(max_workers=args.workers) as pool:
+        for scale in scales:
+            kv_ref = args.kv_mb * max(1, scale // 2)
+            ref = {"trace_set": args.trace_set, "scale": scale, "util": util,
+                   "kv_mb": kv_ref, "max_batch": args.batch,
+                   "cache_mode": cache_mode, "hardware_profile": cost.profile,
+                   "batch_decode_coeff": cost.batch_decode_coeff}
+            rate_call = (util, scale, 1, kv_ref, cost, tok, cpu)
+            rate_kw = {"trace_set": args.trace_set, "batch": args.batch}
+            rb = bound_args(calibrate_rate, *rate_call, **rate_kw)
+            under = {"trace_set": rb["trace_set"], "scale": rb["scale"],
+                     "util": rb["target_util"], "kv_mb": rb["kv_mb"],
+                     "max_batch": rb["batch"], "cache_mode": cache_mode,
+                     "hardware_profile": cost.profile,
+                     "batch_decode_coeff": cost.batch_decode_coeff,
+                     "seed": rb["seed"], "scheduler": "fcfs",
+                     "retention": "keep-all", "prefill_chunk_tokens": chunk}
+            checks = ("util", "hardware_profile", "batch_decode_coeff")
+            check_consistent("arrival_rate", under, ref, checks)
+            rate, busy = calibrate_rate(*rate_call, **rate_kw, return_achieved=True)
+            rate_cal = manifest.record(Calibration(
+                f"arrival_rate[{scale}x]", rate, under,
+                target=f"GPU busy fraction {util} under FCFS/keep-all at the "
+                       f"fixed-rule budget",
+                achieved=busy, also_check=checks))
+
+            ws_seeds = seeds[:3]
+            meas = [reusable_working_set(scale, s, rate, kv_ref, cost, tok, cpu,
+                                         trace_set=args.trace_set, batch=args.batch)
+                    for s in ws_seeds]
+            ws = max(m[0] for m in meas)
+            active = max(m[1] for m in meas)
+            ws_under = dict(under, arrival_rate=rate, seeds=ws_seeds)
+            ws_cal = manifest.record(Calibration(
+                f"reusable_working_set_bytes[{scale}x]", ws, ws_under,
+                target="max over seeds of peak live reusable bytes, measured "
+                       "under evict-now; achieved = peak active bytes", achieved=active,
+                also_check=checks + ("arrival_rate",)))
+            mb = 1024 * 1024
+            print(f"\n=== {scale}x  rate {rate:.4f}/s (busy {busy:.2f})  "
+                  f"WS {ws / mb:.0f} MB  active peak {active / mb:.0f} MB  "
+                  f"[{time.time() - t0:.0f}s] ===", flush=True)
+
+            for h in heads:
+                kv = (active + h * ws) / mb
+                manifest.assert_consistent(dict(ref, arrival_rate=rate),
+                                           calibrations=[rate_cal, ws_cal])
+                jobs = [(pol, scale, sd, kv, rate, args.batch, args.trace_set)
+                        for pol in HEADROOM_POLICIES for sd in seeds]
+                res = list(pool.map(_headroom_job, jobs))
+                by = {pol: res[i * len(seeds):(i + 1) * len(seeds)]
+                      for i, pol in enumerate(HEADROOM_POLICIES)}
+                cell = {"scale": scale, "headroom": h, "kv_budget_mb": kv,
+                        "ws_mb": ws / mb, "active_peak_mb": active / mb,
+                        "arrival_rate": rate, "util": util,
+                        "max_batch": args.batch, "policies": {}}
+                base = by["keep-all"]
+                base_ok = all("error" not in r for r in base)
+                print(f"  headroom {h:.2f}  KV {kv:7.0f} MB   "
+                      f"{'retention':<16}{'p95':>8}{'Δp95 vs keep-all':>26}"
+                      f"{'recomp':>9}{'Δrecomp vs keep-all':>28}{'rent-act':>9}",
+                      flush=True)
+                for pol, rs in by.items():
+                    ok = [r for r in rs if "error" not in r]
+                    if not ok:
+                        cell["policies"][pol] = {"errors": len(rs)}
+                        print(f"    {pol:<16} ERROR {rs[0].get('error', '')[:60]}")
+                        continue
+                    row = {k: st.fmean(r[k] for r in ok) for k in HEADROOM_METRICS}
+                    row["errors"] = len(rs) - len(ok)
+                    row["per_seed"] = {k: [r[k] for r in ok] for k in
+                                       ("p95_task_latency_s", "p50_task_latency_s",
+                                        "recompute_seconds")}
+                    fmt = lambda c: (f"{c['mean_diff_s']:+7.1f} [{c['lo_s']:+.1f}, "
+                                     f"{c['hi_s']:+.1f}]{'*' if c['significant'] else ' '}")
+                    d95 = drc = ""
+                    if pol != "keep-all" and base_ok and len(ok) == len(seeds):
+                        c95 = paired_ci([r["p95_task_latency_s"] for r in ok],
+                                        [r["p95_task_latency_s"] for r in base])
+                        crc = paired_ci([r["recompute_seconds"] for r in ok],
+                                        [r["recompute_seconds"] for r in base])
+                        row["p95_vs_keep_all"], row["recompute_vs_keep_all"] = c95, crc
+                        d95, drc = fmt(c95), fmt(crc)
+                    cell["policies"][pol] = row
+                    print(f"{'':30}{pol:<16}{row['p95_task_latency_s']:8.1f}{d95:>26}"
+                          f"{row['recompute_seconds']:9.1f}{drc:>28}"
+                          f"{row['rent_active_tick_frac']:8.1%}", flush=True)
+                cells.append(cell)
+                print(f"  [cell done at {time.time() - t0:.0f}s]", flush=True)
+
+    out = {"mode": "headroom", "cells": cells, "elapsed_s": round(time.time() - t0, 1),
+           "manifest": manifest.to_dict()}
+    path = args.out or os.path.join(_REPO, "results",
+                                    f"retention_headroom_{args.trace_set}.json")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(out, f, indent=2)
+    print(f"\nelapsed {out['elapsed_s']:.0f}s -> {path}")
+    return 0
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -169,7 +370,15 @@ def main():
                          "table's operating point; at 16 the scheduler has a "
                          "choice on under 9%% of decisions (FINDINGS 23).")
     ap.add_argument("--out", default=None, help="JSON path (default: results/)")
+    ap.add_argument("--headrooms", default=None,
+                    help="headroom mode: comma-separated fractions of the reusable "
+                         "working set added to the active peak, e.g. 0.25,0.5,1.0. "
+                         "Runs FCFS only, one util, paired CIs vs keep-all")
+    ap.add_argument("--util", type=float, default=0.8, help="headroom mode only")
+    ap.add_argument("--workers", type=int, default=4, help="headroom mode only")
     args = ap.parse_args()
+    if args.headrooms:
+        return headroom_main(args)
 
     cost = CostModel()
     tok = StageTokens.from_measured()
