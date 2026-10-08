@@ -67,7 +67,10 @@ _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 POLICIES = [("fcfs", "online", "fcfs"), ("sjf", "online", "sjf"),
             ("edf", "online", "edf"), ("lsf", "online", "lsf"),
-            ("lsf", "oracle", "lsf-oracle")]
+            ("lsf", "oracle", "lsf-oracle"),
+            ("program-fcfs", "online", "program-fcfs"),
+            ("hint-priority", "online", "hint-priority")]
+BASELINES = ("fcfs", "program-fcfs")
 CALIBRATED_UTILS = [0.6, 0.7, 0.8, 0.9]
 OVERLOAD_MULTIPLES = [1.1, 1.25, 1.5, 1.75, 2.2, 3.0]
 INACTIVE_CHOICE = 0.05
@@ -81,13 +84,27 @@ ACTIVITY = ("frac_decisions_with_choice", "rent_active_tick_frac",
 def _job(args):
     """One engine run; top level so a process pool can pickle it."""
     (sched, est, seed, rate, slack, batch, kv_mb, retention, trace_set,
-     cost, tok, cpu) = args
+     cost, tok, cpu, slo) = args
     try:
         rep = run_one(sched, est, 1, seed, kv_mb, rate, slack, retention,
-                      cost, tok, cpu, trace_set, batch=batch)
+                      cost, tok, cpu, trace_set, batch=batch, slo=slo)
     except RuntimeError as e:
         return {"error": str(e)[:200]}
-    return {k: rep[k] for k in METRICS + ACTIVITY}
+    out = {k: rep[k] for k in METRICS + ACTIVITY}
+    out["miss_by_class"] = {c: v["miss_rate"] for c, v in
+                            rep.get("miss_rate_by_slo_class", {}).items()}
+    return out
+
+
+def parse_slo(text):
+    """'tight:1.0:0.3,loose:4.0:0.7' -> (("tight", 1.0, 0.3), ("loose", 4.0, 0.7))."""
+    if not text:
+        return None
+    out = []
+    for part in text.split(","):
+        name, mult, weight = part.split(":")
+        out.append((name, float(mult), float(weight)))
+    return tuple(out)
 
 
 def calibrate_point(manifest, cost, tok, cpu, prof, util, batch, kv_mb,
@@ -123,11 +140,15 @@ def main():
     ap.add_argument("--kv-mb", type=float, default=1024.0)
     ap.add_argument("--retention", default="lru")
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--slo-mix", default=None,
+                    help="per-task deadline classes name:multiplier:weight,...; "
+                         "default: one common budget (FINDINGS 29)")
     ap.add_argument("--quick", action="store_true",
                     help="3 seeds, loads util 0.8 and 2.2x only, batch 8")
     ap.add_argument("--out", default=os.path.join(_REPO, "results", "scheduling_map.json"))
     args = ap.parse_args()
 
+    slo = parse_slo(args.slo_mix)
     utils, multiples, batches = CALIBRATED_UTILS, OVERLOAD_MULTIPLES, args.batches
     seeds = list(range(1, args.seeds + 1))
     if args.quick:
@@ -142,11 +163,14 @@ def main():
         "calibrated_utils": utils, "overload_multiples_of_util_0.8": multiples,
         "load_axis": "arrival rate / rate calibrated to util 0.8 at the same batch",
         "hardware_profile": prof, "cost_provenance": cost.provenance(),
-        "cache_mode": cache_mode, "inactive_if_fcfs_choice_below": INACTIVE_CHOICE})
+        "cache_mode": cache_mode, "inactive_if_fcfs_choice_below": INACTIVE_CHOICE,
+        "slo_classes": slo, "slo_seed": "= engine seed",
+        "deadline": ("arrival + slack_factor * multiplier * size_scale * isolated"
+                     if slo else "arrival + slack_factor * isolated")})
     t0 = time.time()
     print(f"trace={args.trace_set} kv={args.kv_mb:.0f}MB retention={args.retention} "
           f"profile={prof} coeff={cost.batch_decode_coeff} seeds={len(seeds)} "
-          f"batches={batches}", flush=True)
+          f"batches={batches} slo={slo}", flush=True)
 
     out_batches = []
     with ProcessPoolExecutor(max_workers=args.workers) as pool:
@@ -170,13 +194,14 @@ def main():
                            "cache_mode": cache_mode, "arrival_rate": sb["rate"],
                            "retention": sb["retention"], "seeds": sb["seeds"],
                            "hardware_profile": prof,
-                           "batch_decode_coeff": cost.batch_decode_coeff}
-            slack, miss = calibrate_slack(*slack_call, batch=batch)
+                           "batch_decode_coeff": cost.batch_decode_coeff,
+                           "slo_classes": slo}
+            slack, miss = calibrate_slack(*slack_call, batch=batch, slo=slo)
             slack_cal = manifest.record(Calibration(
                 f"slack_factor[b={batch}]", slack, slack_under,
                 target="FCFS deadline-miss rate in [0.20, 0.30] at util 0.8",
                 achieved=miss, also_check=("retention", "hardware_profile",
-                                           "batch_decode_coeff")))
+                                           "batch_decode_coeff", "slo_classes")))
             print(f"  slack_factor = {slack:.3f}  (FCFS miss {miss:.1%} at util 0.8)",
                   flush=True)
 
@@ -190,12 +215,13 @@ def main():
                               "kv_mb": args.kv_mb, "max_batch": batch,
                               "cache_mode": cache_mode, "retention": args.retention,
                               "hardware_profile": prof,
-                              "batch_decode_coeff": cost.batch_decode_coeff}
+                              "batch_decode_coeff": cost.batch_decode_coeff,
+                              "slo_classes": slo}
                 # A cell refuses to run on any calibration mismatch.
                 manifest.assert_consistent(run_config, calibrations=[ucal, slack_cal])
 
                 jobs = [(s, e, sd, rate, slack, batch, args.kv_mb, args.retention,
-                         args.trace_set, cost, tok, cpu)
+                         args.trace_set, cost, tok, cpu, slo)
                         for s, e, _ in POLICIES for sd in seeds]
                 res = list(pool.map(_job, jobs))
                 by_pol = {}
@@ -206,7 +232,7 @@ def main():
                 errors = {lab: sum("error" in r for r in rs) for lab, rs in by_pol.items()}
                 if any(errors.values()):
                     cell["errors"] = errors
-                fc = [r for r in by_pol["fcfs"] if "error" not in r]
+                base_ok = {bl: [r for r in by_pol[bl] if "error" not in r] for bl in BASELINES}
                 for label, rs in by_pol.items():
                     ok = [r for r in rs if "error" not in r]
                     if not ok:
@@ -215,11 +241,18 @@ def main():
                     row["max_batch_seen_max"] = max(r["max_batch_seen"] for r in ok)
                     row["per_seed"] = {k: [r[k] for r in rs if "error" not in r]
                                        for k in ("p95_task_latency_s", "deadline_miss_rate")}
-                    if label != "fcfs" and len(ok) == len(fc) == len(seeds):
-                        row["p95_vs_fcfs"] = paired_ci(
+                    if slo:
+                        row["miss_by_class"] = {c: st.fmean(r["miss_by_class"].get(c, 0.0) for r in ok)
+                                                for c, _, _ in slo}
+                    for bl in BASELINES:
+                        fc = base_ok[bl]
+                        if label == bl or not (len(ok) == len(fc) == len(seeds)):
+                            continue
+                        tag = "fcfs" if bl == "fcfs" else "program"
+                        row[f"p95_vs_{tag}"] = paired_ci(
                             [r["p95_task_latency_s"] for r in ok],
                             [r["p95_task_latency_s"] for r in fc])
-                        row["miss_vs_fcfs"] = paired_ci(
+                        row[f"miss_vs_{tag}"] = paired_ci(
                             [r["deadline_miss_rate"] for r in ok],
                             [r["deadline_miss_rate"] for r in fc])
                     cell["policies"][label] = row
@@ -242,6 +275,12 @@ def main():
                       f"{f.get('deadline_miss_rate', 0):5.1%} (infeasible "
                       f"{f.get('miss_rate_infeasible_at_admit', 0):5.1%})", flush=True)
                 for label, row in cell["policies"].items():
+                    if label in ("lsf", "edf", "hint-priority") and "p95_vs_program" in row:
+                        p, m = row["p95_vs_program"], row["miss_vs_program"]
+                        print(f"    {label:<13} vs program-fcfs: p95 {p['mean_diff_s']:+7.2f} "
+                              f"[{p['lo_s']:+.2f}, {p['hi_s']:+.2f}]{'*' if p['significant'] else ' '}"
+                              f"  miss {m['mean_diff_s']:+6.1%} [{m['lo_s']:+.1%}, "
+                              f"{m['hi_s']:+.1%}]{'*' if m['significant'] else ''}", flush=True)
                     if label == "fcfs" or "p95_vs_fcfs" not in row:
                         continue
                     p, m = row["p95_vs_fcfs"], row["miss_vs_fcfs"]
@@ -295,30 +334,36 @@ def summarise(batches):
             b["kv_bound"] = True
             lines.append(f"batch {mb}: cap never binds at any load (KV-bound: the "
                          f"KV budget, not max_batch, limits concurrency)")
-        for pol in ("lsf", "edf"):
-            first = None
-            for c in sorted(b["cells"], key=lambda c: c["load"]):
-                row = c["policies"].get(pol, {})
-                sig = [k for k in ("p95_vs_fcfs", "miss_vs_fcfs")
-                       if row.get(k, {}).get("significant")]
-                if sig:
-                    first = {"load": c["load"], "metrics": sig,
-                             "p95_diff_s": row["p95_vs_fcfs"]["mean_diff_s"],
-                             "p95_ci": [row["p95_vs_fcfs"]["lo_s"], row["p95_vs_fcfs"]["hi_s"]],
-                             "miss_diff": row["miss_vs_fcfs"]["mean_diff_s"],
-                             "miss_ci": [row["miss_vs_fcfs"]["lo_s"], row["miss_vs_fcfs"]["hi_s"]],
-                             "inactive": c["inactive"], "cap_never_binds": c["cap_never_binds"]}
-                    break
-            crossover[f"{pol}@b{mb}"] = first
-            if first is None:
-                lines.append(f"batch {mb}: {pol} never separates from fcfs at any load")
-            else:
-                lines.append(
-                    f"batch {mb}: {pol} first separates at load {first['load']:.2f} on "
-                    f"{', '.join(first['metrics'])}: p95 {first['p95_diff_s']:+.1f}s "
-                    f"[{first['p95_ci'][0]:+.1f}, {first['p95_ci'][1]:+.1f}], miss "
-                    f"{first['miss_diff']:+.1%} [{first['miss_ci'][0]:+.1%}, "
-                    f"{first['miss_ci'][1]:+.1%}]")
+        for tag in ("fcfs", "program"):
+            for pol in ("lsf", "edf", "hint-priority", "program-fcfs"):
+                if pol == "program-fcfs" and tag == "program":
+                    continue
+                first = None
+                for c in sorted(b["cells"], key=lambda c: c["load"]):
+                    row = c["policies"].get(pol, {})
+                    keys = (f"p95_vs_{tag}", f"miss_vs_{tag}")
+                    if keys[0] not in row:
+                        continue
+                    sig = [k for k in keys if row[k]["significant"]]
+                    if sig:
+                        p, m = row[keys[0]], row[keys[1]]
+                        first = {"load": c["load"], "metrics": sig,
+                                 "p95_diff_s": p["mean_diff_s"], "p95_ci": [p["lo_s"], p["hi_s"]],
+                                 "miss_diff": m["mean_diff_s"], "miss_ci": [m["lo_s"], m["hi_s"]],
+                                 "inactive": c["inactive"], "cap_never_binds": c["cap_never_binds"]}
+                        break
+                key = f"{pol}@b{mb}" if tag == "fcfs" else f"{pol}@b{mb}_vs_program"
+                crossover[key] = first
+                vs = "fcfs" if tag == "fcfs" else "program-fcfs"
+                if first is None:
+                    lines.append(f"batch {mb}: {pol} never separates from {vs} at any load")
+                else:
+                    lines.append(
+                        f"batch {mb}: {pol} first separates from {vs} at load {first['load']:.2f} on "
+                        f"{', '.join(first['metrics'])}: p95 {first['p95_diff_s']:+.1f}s "
+                        f"[{first['p95_ci'][0]:+.1f}, {first['p95_ci'][1]:+.1f}], miss "
+                        f"{first['miss_diff']:+.1%} [{first['miss_ci'][0]:+.1%}, "
+                        f"{first['miss_ci'][1]:+.1%}]")
     return {"crossover": crossover, "lines": lines}
 
 

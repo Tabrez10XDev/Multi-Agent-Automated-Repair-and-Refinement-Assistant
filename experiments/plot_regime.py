@@ -34,7 +34,7 @@ DIVERGING = LinearSegmentedColormap.from_list(
     "better_worse", ["#184f95", "#3987e5", "#9ec5f4", "#f0efec",
                      "#f2b0ae", "#e34948", "#a32a2a"])
 INK, MUTED, SURFACE = "#1f1f1e", "#6b6b67", "#fcfcfb"
-POLICY_ROWS = ["sjf", "edf", "lsf", "lsf-oracle"]
+ALL_ROWS = ["sjf", "edf", "lsf", "lsf-oracle", "program-fcfs", "hint-priority"]
 
 
 def _style(ax):
@@ -62,6 +62,9 @@ def _label(b, data):
 
 def scheduling_heatmap(data, metric, fname, title, unit, scale=1.0):
     panels = _panels(data)
+    POLICY_ROWS = [p for p in ALL_ROWS if any(metric in c["policies"].get(p, {})
+                                              for b in panels for c in b["cells"])]
+    base = "program-fcfs" if metric.endswith("_program") else "FCFS"
     fig, axes = plt.subplots(len(panels), 1, figsize=(9, 1.9 * len(panels) + 1.0),
                              squeeze=False, facecolor=SURFACE)
     vals = [abs(c["policies"][p][metric]["mean_diff_s"]) * scale
@@ -90,7 +93,8 @@ def scheduling_heatmap(data, metric, fname, title, unit, scale=1.0):
                         color="white" if dark else INK)
             if c["inactive"]:
                 ax.plot(j, -0.75, "o", ms=5, mfc="none", mec=MUTED, clip_on=False)
-        first = data["summary"]["crossover"].get(f"lsf@b{b['max_batch']}")
+        suffix = "_vs_program" if metric.endswith("_program") else ""
+        first = data["summary"]["crossover"].get(f"lsf@b{b['max_batch']}{suffix}")
         if first:
             j = next(k for k, c in enumerate(cells) if c["load"] == first["load"])
             ax.axvline(j - 0.5, color=INK, ls="--", lw=1.2)
@@ -100,11 +104,11 @@ def scheduling_heatmap(data, metric, fname, title, unit, scale=1.0):
         _style(ax)
     axes[-1, 0].set_xlabel("load = arrival rate / rate at util 0.8", color=INK, fontsize=9)
     fig.suptitle(title, color=INK, fontsize=11, x=0.02, ha="left")
-    fig.text(0.02, -0.03, "blue = better than FCFS, red = worse; hatched = 95% CI includes "
+    fig.text(0.02, -0.03, f"blue = better than {base}, red = worse; hatched = 95% CI includes "
              "zero; hollow dot = inactive (choice < 5%); dashed = first LSF separation",
              color=MUTED, fontsize=7)
     cb = fig.colorbar(im, ax=axes[:, 0].tolist(), shrink=0.8, pad=0.02)
-    cb.set_label(f"policy − FCFS ({unit})", color=INK, fontsize=8)
+    cb.set_label(f"policy − {base} ({unit})", color=INK, fontsize=8)
     cb.ax.tick_params(labelsize=7, colors=MUTED, labelcolor=INK)
     os.makedirs(FIG_DIR, exist_ok=True)
     path = os.path.join(FIG_DIR, fname)
@@ -156,16 +160,23 @@ def main():
                                                               "scheduling_map.json")
     with open(path) as fh:
         data = json.load(fh)
-    a = scheduling_heatmap(data, "p95_vs_fcfs", "scheduling_p95.png",
-                           "Scheduling map: p95 task latency, policy − FCFS", "s")
-    b = scheduling_heatmap(data, "miss_vs_fcfs", "scheduling_miss.png",
-                           "Scheduling map: deadline-miss rate, policy − FCFS",
-                           "percentage points", scale=100)
+    stem = os.path.basename(path).replace(".json", "").replace("scheduling_map", "scheduling")
+    figs = []
+    for tag, base in (("fcfs", "FCFS"), ("program", "program-fcfs")):
+        if not any(f"p95_vs_{tag}" in r for b in data["batches"] for c in b["cells"]
+                   for r in c["policies"].values()):
+            continue
+        sfx = "" if tag == "fcfs" else "_vs_program"
+        figs.append(scheduling_heatmap(data, f"p95_vs_{tag}", f"{stem}_p95{sfx}.png",
+                                       f"Scheduling map: p95 task latency, policy − {base}", "s"))
+        figs.append(scheduling_heatmap(data, f"miss_vs_{tag}", f"{stem}_miss{sfx}.png",
+                                       f"Scheduling map: deadline-miss rate, policy − {base}",
+                                       "percentage points", scale=100))
     table = scheduling_table(data, path)
     tpath = path.replace(".json", "_table.md")
     with open(tpath, "w") as fh:
         fh.write(table + "\n")
-    print(a, b, tpath, sep="\n")
+    print(*figs, tpath, sep="\n")
 
 
 if __name__ == "__main__":

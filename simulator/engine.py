@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import heapq
 import math
+import random
 import statistics
 from dataclasses import dataclass, field
 from enum import Enum
@@ -55,6 +56,18 @@ class EngineConfig:
     # finish in 1.5x what it would take on an idle server".
     # PLACEHOLDER: not derived from any SLO anyone actually stated. Sweep it.
     slack_factor: float = 1.5
+
+    # Per-task deadlines (FINDINGS 29 found one common budget makes EDF plain
+    # oldest-task-first). None keeps the single budget above, byte-identical.
+    # Otherwise a tuple of (class name, budget multiplier, weight): each task
+    # draws a class, keyed on (slo_seed, task_id) so every policy sees the same
+    # draw, and its budget is also scaled by its own size as visible at arrival
+    # (first LLM prompt / that stage's typical prompt, clamped to [0.25, 4]).
+    #   deadline = arrival + slack_factor * multiplier * size_scale * isolated
+    # Classes are declared by the client, so schedulers may read them; the
+    # tightest multiplier is priority 0.
+    slo_classes: Optional[tuple] = None
+    slo_seed: int = 0
 
     # KV is allocated in fixed-size blocks, as in vLLM's prefix cache. 16 is
     # vLLM's default. PLACEHOLDER: not measured, and it matters here because
@@ -371,11 +384,37 @@ class Engine:
         # different deadlines.
         self._isolated_task_s = (
             self.estimator.estimate_task_total(CODER_MODEL) if self.estimator else None)
+        self.task_arrival = {t.task_id: t.arrival_time for t in tasks}
+        self.task_slo = {}          # task_id -> (class name, priority rank)
         for t in tasks:
             if self._isolated_task_s is not None:
-                self.task_deadline[t.task_id] = (
-                    t.arrival_time + self.cfg.slack_factor * self._isolated_task_s)
+                budget = self.cfg.slack_factor * self._isolated_task_s
+                if self.cfg.slo_classes:
+                    name, mult, rank = self._draw_slo(t.task_id)
+                    budget *= mult * self._size_scale(t)
+                    self.task_slo[t.task_id] = (name, rank)
+                self.task_deadline[t.task_id] = t.arrival_time + budget
             self._push(t.arrival_time, "arrival", t)
+
+    def _draw_slo(self, task_id):
+        classes = self.cfg.slo_classes
+        ranks = {name: i for i, (name, _, _) in
+                 enumerate(sorted(classes, key=lambda c: c[1]))}
+        rng = random.Random(f"slo:{self.cfg.slo_seed}:{task_id}")
+        name, mult, _ = rng.choices(classes, weights=[c[2] for c in classes])[0]
+        return name, mult, ranks[name]
+
+    def _size_scale(self, task) -> float:
+        """The task's size as visible at arrival: its first LLM request's prompt
+        against the typical prompt for that stage. Not oracle: the first request
+        arrives with the task."""
+        first = next((n for n in task.nodes if n.kind is Kind.LLM), None)
+        if first is None or self.estimator is None:
+            return 1.0
+        typical = self.estimator._typical_prompt(first.stage)
+        if typical <= 0:
+            return 1.0
+        return min(4.0, max(0.25, first.prompt_tokens / typical))
 
     # -- plumbing ----------------------------------------------------------
 
@@ -737,6 +776,17 @@ class Engine:
                   f"held {self.now - entry.created:.1f}s, "
                   f"rent {entry.rent_accrued:.2f}s)")
 
+    def _miss_by_class(self) -> dict:
+        out = {}
+        for t in self.tasks:
+            done, dl = self.task_done_at.get(t.task_id), self.task_deadline.get(t.task_id)
+            if done is None or dl is None or t.task_id not in self.task_slo:
+                continue
+            c = out.setdefault(self.task_slo[t.task_id][0], [0, 0])
+            c[0] += done > dl
+            c[1] += 1
+        return {k: {"miss_rate": m / n, "tasks": n} for k, (m, n) in out.items()}
+
     def _view(self, r: Request) -> ReqView:
         """
         Build the restricted view a scheduler is allowed to see.
@@ -753,6 +803,9 @@ class Engine:
             enqueued_at=r.enqueued_at, prompt_tokens=n.prompt_tokens,
             attempt_index=n.attempt_index, replan_index=n.replan_index,
             priority=0, deadline=self.task_deadline.get(n.task_id),
+            task_arrival_s=self.task_arrival.get(n.task_id, 0.0),
+            slo_class=self.task_slo.get(n.task_id, (None, 0))[0],
+            slo_priority=self.task_slo.get(n.task_id, (None, 0))[1],
             # true_output and node are handed over so an ORACLE estimator can
             # use them; ExecutionEstimator ignores both by contract (there are
             # tests asserting it). Without them an oracle run produced
@@ -1257,6 +1310,7 @@ class Engine:
             # Only the second kind is one a scheduler could have prevented.
             "miss_rate_infeasible_at_admit": miss_infeasible / n_dl if n_dl else float("nan"),
             "miss_rate_feasible_at_admit": miss_feasible / n_dl if n_dl else float("nan"),
+            "miss_rate_by_slo_class": self._miss_by_class(),
             "mean_slack_at_completion_s": (statistics.fmean(slacks) if slacks
                                            else float("nan")),
             "estimator_mape_pct": statistics.fmean(all_ape) if all_ape else float("nan"),

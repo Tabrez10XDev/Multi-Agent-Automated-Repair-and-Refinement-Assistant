@@ -97,6 +97,11 @@ class ReqView:
     deadline: Optional[float]
     est_service_s: float
     est_remaining_s: float
+    # Observable, not oracle: when the task arrived, and the SLO class its
+    # client declared (None and 0 when the run has no classes).
+    task_arrival_s: float = 0.0
+    slo_class: Optional[str] = None
+    slo_priority: int = 0
 
     def __getattr__(self, name):
         # Only reached when normal dataclass lookup fails.
@@ -421,6 +426,36 @@ class LeastSlackFirstScheduler(Scheduler):
             views, key=lambda v: (slack(v), v.enqueued_at, v.req_id))]
 
 
+class ProgramFCFSScheduler(Scheduler):
+    """
+    Oldest TASK first: requests ordered by their task's arrival, not their own.
+
+    The honest baseline for workflow-aware scheduling. Program-level ordering
+    needs no estimates, and FINDINGS 29 found it is where every gain over
+    request-level FCFS came from. A slack-based rule has to beat this, not
+    FCFS, to claim value from its estimates.
+    """
+    name = "program-fcfs"
+
+    def order(self, views, now):
+        return [v.req_id for v in sorted(
+            views, key=lambda v: (v.task_arrival_s, v.enqueued_at, v.req_id))]
+
+
+class HintPriorityScheduler(Scheduler):
+    """
+    A client-declared priority, then oldest task first. Mimics NVIDIA Dynamo's
+    agent hints, where the harness sets a static `priority` per request and the
+    server computes no slack or remaining work. Priority here is the SLO class
+    rank (0 = tightest).
+    """
+    name = "hint-priority"
+
+    def order(self, views, now):
+        return [v.req_id for v in sorted(
+            views, key=lambda v: (v.slo_priority, v.task_arrival_s, v.enqueued_at, v.req_id))]
+
+
 class StaticPriorityScheduler(Scheduler):
     """
     Fixed per-stage rank, tie-broken by arrival.
@@ -445,7 +480,7 @@ class StaticPriorityScheduler(Scheduler):
 
 SCHEDULERS = {c.name: c for c in [
     FCFSScheduler, SJFScheduler, EDFScheduler, LeastSlackFirstScheduler,
-    StaticPriorityScheduler,
+    StaticPriorityScheduler, ProgramFCFSScheduler, HintPriorityScheduler,
 ]}
 
 

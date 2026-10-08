@@ -46,12 +46,13 @@ ORDER = ["fcfs", "sjf", "edf", "lsf", "static-priority"]
 
 
 def run_one(sched, estimator_name, scale, seed, kv_mb, rate, slack, retention,
-            cost, tok, cpu, trace_set, batch=16, chunk=512, sigma=0.5):
+            cost, tok, cpu, trace_set, batch=16, chunk=512, sigma=0.5, slo=None):
     tasks = build(scale, seed, rate, cost, tok, cpu, trace_set=trace_set)
     est = ESTIMATORS[estimator_name](cost, tok, cpu)
     eng = Engine(tasks, cost,
                  EngineConfig(kv_budget_mb=kv_mb, max_batch=batch,
-                              prefill_chunk_tokens=chunk, slack_factor=slack),
+                              prefill_chunk_tokens=chunk, slack_factor=slack,
+                              slo_classes=slo, slo_seed=seed),
                  retention=RETENTIONS[retention](),
                  scheduler=SCHEDULERS[sched](),
                  estimator=est,
@@ -87,7 +88,7 @@ def paired_ci(a, b):
 
 def calibrate_slack(scale, seeds, kv_mb, rate, retention, cost, tok, cpu,
                     trace_set, batch=8, lo=0.5, hi=6.0, iters=10,
-                    target=(0.20, 0.30)):
+                    target=(0.20, 0.30), slo=None):
     """
     Bisect slack_factor so FCFS lands in the target deadline-miss band.
 
@@ -106,7 +107,7 @@ def calibrate_slack(scale, seeds, kv_mb, rate, retention, cost, tok, cpu,
             # mismatch: 22.2% at calibration against 12.3% in the table.
             miss = st.fmean(
                 run_one("fcfs", "online", scale, sd, kv_mb, rate, mid,
-                        retention, cost, tok, cpu, trace_set, batch=batch
+                        retention, cost, tok, cpu, trace_set, batch=batch, slo=slo
                         )["deadline_miss_rate"] for sd in seeds)
         except RuntimeError:
             lo = mid
