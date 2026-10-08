@@ -43,6 +43,7 @@ measurements and are unaffected.
 | 27. Scheduler table, corrected | current, *sim*; holds at its point, bounded by §29 | **No scheduling rule differs significantly** from arrival order on p95, at batch 8 or 16, nor does the oracle (paired CIs, 20 seeds). The scheduler has a choice on only 0.3–0.4% of admissions. Still tied at 0.841 (DECISIONS §28). |
 | 28. Sealed `final` set | current | On 92 unseen problems pass@1 is 75.0% (qwen coder) against 48.9% (llama coder). Over all 146 unseen problems it is 78.1% against 54.1%, a paired gap of +24.0 points [+15.0, +33.0]; this is a coder-model comparison. The frozen cache rule recalls 77% and 97% of hits, 86% pooled over every unseen trace. Hit rate over the unseen traces is about 1 call in 8 (12.8%). The policy drivers are not yet run on it (sealed, DECISIONS §26). |
 | 29. Scheduling regime map | current, *sim*, 0.841 | Scheduling matters once requests queue: at batch 2-4, LSF and EDF cut p95 by 15-22% at §27's load and separate at the lowest load tested. At batch 8 they separate from load 1.10, and at batch 16 (KV-bound) from 1.5-1.75. The gain is task order: EDF here is oldest-task-first and matches LSF in 39 of 40 cells. The oracle estimator is slightly worse in overload. Miss rates do not improve (+1 to +5 points). |
+| 30. Per-task deadlines | current, *sim*, 0.841 | With heterogeneous deadlines (3 classes, size-scaled), LSF, EDF and Dynamo-style client priority never beat oldest-task-first (`program-fcfs`) on p95, in any of 40 cells. They are worse in about 70% of cells, and they only move misses from the tight class to the loose one. The supported scheduling claim is program-level ordering. |
 
 ---
 
@@ -1358,3 +1359,70 @@ Bold = paired 95% CI excludes zero. Seconds unless marked pts (percentage points
 - batch 16: cap never binds at any load (KV-bound: the KV budget, not max_batch, limits concurrency)
 - batch 16: lsf first separates at load 1.75 on p95_vs_fcfs: p95 -24.2s [-40.1, -8.3], miss +0.3% [-0.1%, +0.7%]
 - batch 16: edf first separates at load 1.50 on p95_vs_fcfs: p95 -5.7s [-10.9, -0.5], miss +0.2% [-0.1%, +0.5%]
+
+---
+
+## 30. With per-task deadlines, nothing beats oldest-task-first
+
+The test §29 called for: give tasks heterogeneous deadlines, so EDF and LSF
+are no longer just task age, and compare them with the program-level
+baseline instead of request-level FCFS.
+
+**Setup.** Same map as §29 (commit `92490cd`, clean tree, profile
+`mac_ollama_measured`, coefficient 0.841, `holdout_qwen` 1x, KV 1024 MB,
+LRU, 20 paired seeds), run with `--slo-mix
+tight:1.0:0.3,standard:2.0:0.4,loose:4.0:0.3`. Output
+`results/scheduling_map_slo.json`, figures
+`results/figures/regime/scheduling_slo_*.png`.
+
+- **Deadlines:** arrival + slack_factor × class multiplier × size scale ×
+  isolated time. The class is drawn per task, the same draw for every
+  policy. The size scale is the first prompt against its stage's typical
+  prompt, which is visible at arrival. slack_factor 1.875 was calibrated
+  so FCFS misses 22-27% at util 0.8.
+- **Two new rules:**
+  - `program-fcfs`: oldest task first, no estimates.
+  - `hint-priority`: the client-declared class first, then task age. This
+    mimics NVIDIA Dynamo's agent hints, where the client sets a static
+    priority and the server computes no slack.
+
+### Result: 40 cells, paired against `program-fcfs`
+
+| rule | p95 significantly better / worse | overall miss significantly better / worse | tight-class miss, mean change (range) |
+|---|---|---|---|
+| LSF | 0 / 28 | 0 / 22 | −2.8 pts (−12.7 to +0.3) |
+| EDF | 0 / 27 | 1 / 17 | −3.3 pts (−13.0 to +0.3) |
+| hint-priority | 0 / 28 | 3 / 13 | −5.9 pts (−28.5 to +0.3) |
+| LSF-oracle | 0 / 29 | 0 / 26 | −3.0 pts |
+
+1. **No deadline-aware rule beats oldest-task-first on p95, in any cell.**
+   They are significantly worse in about 70% of cells. Where the queue is
+   real (batch 2-4), LSF is +9 to +58s and hint-priority up to +304s.
+2. **They do not reduce total misses either.** What they do is move misses
+   between classes: tight-class misses fall a few points (hint-priority by
+   up to 28), and loose-class misses rise to pay for it. That is a
+   reallocation, not a gain.
+3. **A perfect output-length estimator does not help**: LSF-oracle is no
+   better than LSF.
+4. **Against request-level FCFS the §29 picture repeats:** every rule
+   separates at the lowest load tested at batch 2-4, at load 1.10 at
+   batch 8, and at 1.5-1.75 at batch 16. `program-fcfs` is the largest
+   single gain everywhere.
+
+### Why, and the caveat that limits it
+
+The tight class misses about 53% of its deadlines under every rule, even at
+load 1.0 (batch 4: FCFS 53%, program-fcfs 54%, LSF 53%). With nearly serial
+batching (DECISIONS §28), a tight task is close to infeasible once it shares
+the GPU at all, so there is little for a smarter rule to save. Meanwhile
+reordering for deadlines breaks up older workflows, and that is what the
+p95 pays for. The remaining-work estimate is still per stage, not per task
+(the open item from §29), so this tests heterogeneous deadlines, not better
+estimates. Mac-only: a GPU with efficient batching would leave tight tasks
+feasible more often, and that is the regime where this verdict could change.
+
+**Consequence for the writeup and the freeze.** The supported scheduling
+claim is **program-level ordering**: finish older workflows first. That
+gives a 15-22% p95 cut at the operating load whenever requests queue, and
+needs no estimates. On this hardware, neither slack (LSF) nor client
+priority hints (Dynamo-style) improve on it.
