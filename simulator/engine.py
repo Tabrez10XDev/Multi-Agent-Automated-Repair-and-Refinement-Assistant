@@ -263,6 +263,13 @@ class Engine:
         self.trace_log = []
         # task_id -> absolute deadline, set once when the task arrives.
         self.task_deadline = {}
+        # task_id -> whether the deadline was already out of reach when the
+        # task's first GPU request was admitted: now + the oracle critical path
+        # from that node > deadline. ACCOUNTING ONLY -- no policy reads it
+        # (ARCHITECTURE 10). The critical path is uncontended time, so
+        # "feasible" here is optimistic: a task can be feasible by this test
+        # and still be impossible under contention.
+        self.task_infeasible_at_first_admit = {}
 
         self.now = 0.0
         self.events = []            # heap of (time, seq, kind, payload)
@@ -319,6 +326,9 @@ class Engine:
             # each, so a plain mean reports whatever decode was doing and hides
             # the prefill entirely.
             "w_time": 0.0, "w_batch": 0.0, "w_resident": 0.0,
+            # Time spent at each active-batch size, for a time-weighted p95 and
+            # the fraction of time the max_batch cap was binding.
+            "batch_time": {},
             "w_kv": 0.0, "w_pinned": 0.0, "w_retained": 0.0,
             "max_batch": 0, "max_resident": 0,
             # Splits blocking by whether retention could have done anything about
@@ -697,6 +707,10 @@ class Engine:
         r.state = State.PREFILL
         r.started_at = self.now
         self.running.append(r)
+        dl = self.task_deadline.get(node.task_id)
+        if dl is not None and node.task_id not in self.task_infeasible_at_first_admit:
+            self.task_infeasible_at_first_admit[node.task_id] = (
+                self.now + node.critical_path_remaining > dl)
 
         self._log(f"  ADMIT req{r.req_id} t{node.task_id}/{node.stage} "
                   f"{matched}/{len(chain)} blocks hit  prefill={r.prefill_tokens}tok "
@@ -1141,6 +1155,8 @@ class Engine:
             self.now += dt
             self.m["w_time"] += dt
             self.m["w_batch"] += self._last_batch * dt
+            bt = self.m["batch_time"]
+            bt[self._last_batch] = bt.get(self._last_batch, 0.0) + dt
             self.m["w_resident"] += self._last_resident * dt
             self.m["w_kv"] += self.used_bytes * dt
             self.m["w_pinned"] += self.pinned_bytes * dt
@@ -1170,6 +1186,7 @@ class Engine:
         # Reporting the mean of the signed value rather than of |slack| keeps
         # "just barely late" distinguishable from "hours late".
         met, slacks = 0, []
+        miss_infeasible = miss_feasible = 0
         for t in self.tasks:
             done = self.task_done_at.get(t.task_id)
             dl = self.task_deadline.get(t.task_id)
@@ -1178,7 +1195,23 @@ class Engine:
             slacks.append(dl - done)
             if done <= dl:
                 met += 1
+            elif self.task_infeasible_at_first_admit.get(t.task_id, False):
+                miss_infeasible += 1
+            else:
+                miss_feasible += 1
         n_dl = len(slacks)
+
+        # Time-weighted percentile of the active batch (in-flight requests).
+        bt = self.m["batch_time"]
+        bt_total = sum(bt.values())
+
+        def batch_pct(q):
+            acc = 0.0
+            for b in sorted(bt):
+                acc += bt[b]
+                if acc >= q * bt_total:
+                    return b
+            return 0
 
         # Per-entry hindsight: for each block key, the cheaper of rebuilding it
         # and the rent it actually accrued. Summed, that is what a policy with
@@ -1219,6 +1252,11 @@ class Engine:
             "p95_task_latency_s": pct(0.95),
             "p99_task_latency_s": pct(0.99),
             "deadline_miss_rate": (n_dl - met) / n_dl if n_dl else float("nan"),
+            # The miss rate split by whether the deadline was already out of
+            # reach (uncontended critical path) at the task's first admission.
+            # Only the second kind is one a scheduler could have prevented.
+            "miss_rate_infeasible_at_admit": miss_infeasible / n_dl if n_dl else float("nan"),
+            "miss_rate_feasible_at_admit": miss_feasible / n_dl if n_dl else float("nan"),
             "mean_slack_at_completion_s": (statistics.fmean(slacks) if slacks
                                            else float("nan")),
             "estimator_mape_pct": statistics.fmean(all_ape) if all_ape else float("nan"),
@@ -1253,6 +1291,9 @@ class Engine:
             "gpu_busy_frac": busy / makespan if makespan else 0.0,
             "mean_batch": w("w_batch"),
             "max_batch_seen": self.m["max_batch"],
+            "p95_batch": batch_pct(0.95) if bt_total else 0,
+            "frac_time_at_batch_cap": (bt.get(self.cfg.max_batch, 0.0) / bt_total
+                                       if bt_total else 0.0),
             "mean_resident": w("w_resident"),
             "max_resident": self.m["max_resident"],
             "mean_kv_util": w("w_kv") / self.cfg.kv_budget_bytes,
