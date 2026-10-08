@@ -140,6 +140,9 @@ def main():
     ap.add_argument("--kv-mb", type=float, default=1024.0)
     ap.add_argument("--retention", default="lru")
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--batch-decode-coeff", type=float, default=None,
+                    help="override the profile's measured value, for a what-if run "
+                         "(reported as OVERRIDDEN in the manifest's cost provenance)")
     ap.add_argument("--slo-mix", default=None,
                     help="per-task deadline classes name:multiplier:weight,...; "
                          "default: one common budget (FINDINGS 29)")
@@ -154,7 +157,9 @@ def main():
     if args.quick:
         utils, multiples, batches, seeds = [0.8], [2.2], [8], [1, 2, 3]
 
-    cost, tok, cpu = CostModel(), StageTokens(), CpuStageSeconds()
+    cost = (CostModel() if args.batch_decode_coeff is None
+            else CostModel(batch_decode_coeff=args.batch_decode_coeff))
+    tok, cpu = StageTokens(), CpuStageSeconds()
     prof = cost.profile
     cache_mode = EngineConfig().cache_mode
     manifest = Manifest.start("scheduling_map", params={
