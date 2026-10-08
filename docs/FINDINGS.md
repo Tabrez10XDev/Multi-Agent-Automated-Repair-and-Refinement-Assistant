@@ -40,8 +40,9 @@ measurements and are unaffected.
 | 24. Retention cannot move latency | current, *sim* | Recompute is **under 1% of makespan** (keep-all 0.7% over 20 paired seeds at 0.841), so retention is a GPU-work mechanism, not a latency one. No deployable policy differs from keep-all on p95. Evict-now is significantly worse on both p95 (+36.9s) and recompute (+111.9s). Use the 20-seed table at the head of §24. The older table below it (0.8–1.1%, keep-all 13.4s) is **seed 1 only** at 0.15. The 0.6% in DECISIONS §28 is the separate 10-seed OPEN_ISSUES §9.3 sweep. |
 | 25. Ski-rental negative result | current, *sim*; numbers are seed 1 only | Ski-rental holds 4.5 MB less than keep-all yet pays 20.2s more rent and 5.0s more recompute. Releasing shifts rent onto the remaining holders rather than removing it. The figures are the same single run as §24's older table. Over 20 seeds at 0.841, ski-rental recomputes +10.2s [+4.8, +15.6] more than keep-all, ties it on p95, and the conclusion holds (§24). |
 | 26. Belady loses to LRU | current, *sim*; numbers are seed 1 only | Belady recomputes 29.4s against LRU's 13.4s, because eviction here is bulk and block sizes differ. `offline-belady` is not a valid minimum-recompute reference. Same single run as §24's older table, and not yet rerun over multiple seeds. |
-| 27. Scheduler table, corrected | current, *sim* | **No scheduling rule differs significantly** from arrival order on p95, at batch 8 or 16, nor does the oracle (paired CIs, 20 seeds). The scheduler has a choice on only 0.3–0.4% of admissions. Still tied at 0.841 (DECISIONS §28). |
+| 27. Scheduler table, corrected | current, *sim*; holds at its point, bounded by §29 | **No scheduling rule differs significantly** from arrival order on p95, at batch 8 or 16, nor does the oracle (paired CIs, 20 seeds). The scheduler has a choice on only 0.3–0.4% of admissions. Still tied at 0.841 (DECISIONS §28). |
 | 28. Sealed `final` set | current | On 92 unseen problems pass@1 is 75.0% (qwen coder) against 48.9% (llama coder). Over all 146 unseen problems it is 78.1% against 54.1%, a paired gap of +24.0 points [+15.0, +33.0]; this is a coder-model comparison. The frozen cache rule recalls 77% and 97% of hits, 86% pooled over every unseen trace. Hit rate over the unseen traces is about 1 call in 8 (12.8%). The policy drivers are not yet run on it (sealed, DECISIONS §26). |
+| 29. Scheduling regime map | current, *sim*, 0.841 | Scheduling matters once requests queue: at batch 2-4, LSF and EDF cut p95 by 15-22% at §27's load and separate at the lowest load tested. At batch 8 they separate from load 1.10, and at batch 16 (KV-bound) from 1.5-1.75. The gain is task order: EDF here is oldest-task-first and matches LSF in 39 of 40 cells. The oracle estimator is slightly worse in overload. Miss rates do not improve (+1 to +5 points). |
 
 ---
 
@@ -1195,3 +1196,165 @@ The hit rate is lower than §22's "about 1 call in 6": 8.5% of calls on qwen
 and 13.1% on llama, against 16.9% and 17.8% on the holdout. Treat "1 in 6"
 as a holdout figure. Across all four unseen traces the rate is 310/2424 =
 **12.8%, about 1 call in 8**.
+
+---
+
+## 29. Scheduling regime map: ordering matters once requests queue, and the gain is task order, not slack
+
+The question FINDINGS §27 could not answer from one operating point: is
+there **any** load and concurrency where a scheduling rule beats FCFS?
+
+**Setup.** `experiments/scheduling_map.py` at commit `36de19e`, output
+`results/scheduling_map.json` (manifest inside: profile
+`mac_ollama_measured`, `batch_decode_coeff` 0.841 MEASURED, every rate
+and slack calibration recorded and checked before each cell; the tree was
+dirty only in `data/traces/final_machine_state.log`, which no simulator
+code reads). `holdout_qwen` 1x, KV 1024 MB, retention fixed at LRU, 20
+paired seeds, five schedulers (FCFS, SJF, EDF, LSF, LSF with the oracle
+estimator). Figures: `results/figures/regime/scheduling_p95.png` and
+`scheduling_miss.png`.
+
+- **Load axis:** arrival rate / the rate calibrated to GPU busy 0.8 at the
+  same batch size, so 1.00 is §27's point. 0.78, 0.85, 1.22 are calibrated
+  directly at util 0.6, 0.7, 0.9; above that, multiples of the util-0.8
+  rate (busy fraction saturates and cannot be calibrated past 1). 2.20 is
+  §23's accidental overload; 3.00 is one point beyond.
+- **Deadlines:** slack_factor calibrated once per batch at util 0.8 (FCFS
+  misses 23-25%), then held fixed along the load axis.
+- **Miss split:** "infeasible" = the deadline was already out of reach,
+  on the uncontended critical path, when the task's first request was
+  admitted. No scheduler could have saved those.
+
+### The answer: where LSF and EDF first separate from FCFS
+
+| batch | LSF first separates (p95) | gap there | EDF first separates | p95 change at load 1.00 | at 2.20 |
+|---|---|---|---|---|---|
+| 2 | at or below 0.78 (lowest tested) | −35.7s [−54.6, −16.8] | ≤ 0.78, −37.6s | 296 → 232s (−22%) | 948 → 750s (−21%) |
+| 4 | at or below 0.78 | −17.2s [−26.7, −7.7] | ≤ 0.78, −19.7s | 265 → 226s (−15%) | 879 → 688s (−22%) |
+| 8 | 1.10 | −15.4s [−28.5, −2.2], miss +1.1 pts | 1.10, −12.6s | 251 → 246s (n.s.) | 834 → 686s (−18%) |
+| 16 (KV-bound) | 1.75 | −24.2s [−40.1, −8.3] | 1.50, −5.7s | no change | 808 → 756s (−6%) |
+
+Batch 8 and 16 are **not** identical and were not merged. Batch 16's cap
+never binds at any load (at most 12 in flight): the 1024 MB KV budget, not
+`max_batch`, limits concurrency there. Batch 8 reaches its cap only
+fleetingly (0.0% of time at cap everywhere), so it is effectively KV-bound
+too, with a lower ceiling than 16.
+
+### What this adds to §27
+
+1. **§27 holds at its own point.** At batch 8 or 16 and load ≤ 1.0 the
+   scheduler has a choice on ≤ 2.2% of decisions (flagged inactive) and no
+   rule separates, the same null.
+2. **Outside that point the null breaks, and by a lot.** Cap concurrency at
+   2 or 4, or push load past about 1.1 at batch 8, and a queue forms. Then
+   every rule beats FCFS on p95 at every load tested, by 15-22% at load 1.0
+   and up to about 200s in overload, every interval clear of zero.
+3. **The gain is task order, not slack.** Every task's deadline is its
+   arrival plus one common constant (`slack_factor` × the estimator's
+   isolated task time), so **EDF here is exactly oldest-task-first**, while
+   FCFS is oldest-*request*-first and interleaves the stages of different
+   tasks. EDF and LSF differ significantly in only 1 of 40 cells (batch 4,
+   load 3.00, EDF better by 11.7s [1.9, 21.4]; paired over the same seeds).
+   So what helps is finishing older workflows before starting newer ones,
+   and the critical-path slack term adds nothing measurable. SJF also helps,
+   by less.
+5. **A perfect estimator makes LSF slightly worse in overload.** LSF with
+   the oracle estimator is significantly *worse* than online LSF in 10 of
+   40 cells, by 3 to 20s, all at load ≥ 1.25 (largest: batch 4, load 3.00,
+   +20.4s [13.8, 27.0]), and never significantly better. This is the
+   "oracle is worse" pattern §23 reported and then retracted because §23 was
+   accidentally overloaded. Here the overload is deliberate and calibrated,
+   so the pattern is real, but only in overload. Not yet explained.
+6. **p95 wins do not buy deadlines.** Miss rates are unchanged or slightly
+   worse under LSF and EDF (+1 to +5 points, significant in many cells).
+   At low load nearly every FCFS miss was feasible at admission (infeasible
+   ≤ 1%), so the misses were in principle preventable, but none of the rules
+   prevents them. Prioritising old tasks rescues the tail, and newer tasks
+   slip past their deadlines in exchange.
+
+### Caveats
+
+- Mac profile. The util-0.8 rate is 0.0265/s at **every** batch size,
+  because measured batching is nearly serial (0.841, DECISIONS §28) and a
+  bigger cap adds almost no capacity. A GPU that batches efficiently would
+  move the KV-bound boundary and the load axis.
+- `holdout_qwen` is a fitting set for policy work (DECISIONS §26). These
+  numbers guide which policies to freeze. The headline run is the single
+  one on `final`, after the freeze.
+- Arrivals are a Poisson re-timing of a sequential trace (trace_loader).
+- Forced evictions are about 6,000-7,000 blocks per run in every cell
+  (LRU under 1024 MB) and do not depend on the scheduler.
+
+### The full table
+
+**batch 2**, slack_factor 1.188 (FCFS miss 24.7% at util 0.8)
+
+| load | choice | at cap | in-flight max/p95 | FCFS p95 | FCFS miss (infeasible) | LSF − FCFS p95 | EDF − FCFS p95 | LSF − FCFS miss | flags |
+|---|---|---|---|---|---|---|---|---|---|
+| 0.78 | 20.7% | 47% | 2/2.0 | 207s | 23% (0%) | **-35.7 [-54.6, -16.8]** | **-37.6 [-53.8, -21.3]** | +0.1 [-1.8, +2.0] pts |  |
+| 0.85 | 26.3% | 50% | 2/2.0 | 229s | 26% (0%) | **-40.8 [-61.7, -20.0]** | **-41.8 [-59.7, -23.8]** | +0.9 [-1.1, +3.0] pts |  |
+| 1.00 | 37.6% | 54% | 2/2.0 | 296s | 34% (1%) | **-63.8 [-88.6, -39.1]** | **-63.3 [-87.4, -39.1]** | +1.9 [-0.1, +4.0] pts |  |
+| 1.10 | 44.5% | 58% | 2/2.0 | 343s | 39% (2%) | **-81.9 [-111.6, -52.2]** | **-78.5 [-108.0, -49.1]** | +2.0 [-0.6, +4.6] pts |  |
+| 1.22 | 54.7% | 63% | 2/2.0 | 396s | 46% (3%) | **-95.8 [-129.6, -62.1]** | **-91.0 [-123.6, -58.5]** | +2.0 [-0.3, +4.4] pts |  |
+| 1.25 | 57.8% | 64% | 2/2.0 | 410s | 48% (3%) | **-96.7 [-130.3, -63.2]** | **-92.7 [-124.5, -60.9]** | **+2.4 [+0.4, +4.5]** pts |  |
+| 1.50 | 75.3% | 69% | 2/2.0 | 581s | 63% (10%) | **-147.7 [-187.4, -108.0]** | **-144.6 [-181.7, -107.5]** | **+4.4 [+2.8, +6.0]** pts |  |
+| 1.75 | 81.8% | 70% | 2/2.0 | 753s | 72% (20%) | **-189.8 [-220.4, -159.3]** | **-189.4 [-218.5, -160.3]** | -0.2 [-2.2, +1.8] pts |  |
+| 2.20 | 88.8% | 72% | 2/2.0 | 948s | 79% (34%) | **-197.7 [-221.0, -174.5]** | **-198.4 [-221.7, -175.1]** | **+1.5 [+0.2, +2.8]** pts |  |
+| 3.00 | 93.1% | 74% | 2/2.0 | 1161s | 84% (46%) | **-196.0 [-210.1, -182.0]** | **-198.5 [-213.3, -183.7]** | +0.6 [-0.7, +1.8] pts |  |
+
+**batch 4**, slack_factor 1.188 (FCFS miss 24.1% at util 0.8)
+
+| load | choice | at cap | in-flight max/p95 | FCFS p95 | FCFS miss (infeasible) | LSF − FCFS p95 | EDF − FCFS p95 | LSF − FCFS miss | flags |
+|---|---|---|---|---|---|---|---|---|---|
+| 0.78 | 4.8% | 0% | 4/3.0 | 191s | 22% (0%) | **-17.2 [-26.7, -7.7]** | **-19.7 [-29.7, -9.7]** | +0.8 [-0.5, +2.2] pts | inactive |
+| 0.85 | 7.0% | 1% | 4/3.0 | 209s | 26% (0%) | **-21.7 [-34.3, -9.1]** | **-21.5 [-35.1, -8.0]** | +0.7 [-0.5, +2.0] pts |  |
+| 1.00 | 14.7% | 1% | 4/3.0 | 265s | 33% (0%) | **-39.0 [-53.7, -24.2]** | **-40.5 [-55.8, -25.2]** | **+2.0 [+0.7, +3.4]** pts |  |
+| 1.10 | 20.0% | 1% | 4/3.0 | 311s | 38% (0%) | **-52.1 [-76.2, -27.9]** | **-55.1 [-79.6, -30.5]** | **+2.7 [+1.0, +4.4]** pts |  |
+| 1.22 | 27.4% | 1% | 4/3.0 | 352s | 46% (1%) | **-64.9 [-94.5, -35.2]** | **-64.1 [-91.8, -36.4]** | **+1.9 [+0.2, +3.5]** pts |  |
+| 1.25 | 29.7% | 1% | 4/3.0 | 364s | 47% (1%) | **-65.6 [-96.3, -35.0]** | **-64.1 [-95.2, -33.0]** | **+3.0 [+1.2, +4.7]** pts |  |
+| 1.50 | 52.5% | 1% | 4/3.0 | 509s | 60% (5%) | **-108.4 [-141.3, -75.5]** | **-113.9 [-149.5, -78.2]** | **+4.7 [+3.4, +6.0]** pts |  |
+| 1.75 | 66.8% | 0% | 4/3.0 | 678s | 70% (13%) | **-169.9 [-193.9, -145.9]** | **-174.5 [-203.7, -145.3]** | **+3.6 [+2.2, +5.0]** pts |  |
+| 2.20 | 77.9% | 1% | 4/3.0 | 879s | 78% (27%) | **-191.9 [-214.2, -169.5]** | **-199.2 [-222.5, -175.9]** | **+2.6 [+1.5, +3.7]** pts |  |
+| 3.00 | 86.0% | 0% | 4/3.0 | 1089s | 84% (40%) | **-196.1 [-213.2, -179.1]** | **-207.8 [-222.6, -193.1]** | **+1.9 [+1.0, +2.9]** pts |  |
+
+**batch 8**, slack_factor 1.188 (FCFS miss 22.8% at util 0.8)
+
+| load | choice | at cap | in-flight max/p95 | FCFS p95 | FCFS miss (infeasible) | LSF − FCFS p95 | EDF − FCFS p95 | LSF − FCFS miss | flags |
+|---|---|---|---|---|---|---|---|---|---|
+| 0.78 | 0.2% | 0% | 6/4.0 | 186s | 23% (0%) | -1.1 [-4.1, +1.8] | -1.1 [-4.0, +1.9] | +0.1 [-0.1, +0.3] pts | inactive, cap never binds |
+| 0.85 | 0.5% | 0% | 6/4.2 | 207s | 27% (0%) | -1.2 [-3.5, +1.1] | -0.3 [-1.7, +1.1] | -0.1 [-0.4, +0.2] pts | inactive, cap never binds |
+| 1.00 | 2.2% | 0% | 7/4.5 | 251s | 34% (0%) | -5.4 [-12.9, +2.1] | -4.9 [-11.7, +1.9] | +0.4 [-0.1, +0.8] pts | inactive, cap never binds |
+| 1.10 | 3.8% | 0% | 7/4.7 | 288s | 39% (0%) | **-15.4 [-28.5, -2.2]** | **-12.6 [-23.1, -2.0]** | **+1.1 [+0.3, +1.9]** pts | inactive, cap never binds |
+| 1.22 | 7.1% | 0% | 6/4.8 | 338s | 46% (0%) | **-29.7 [-46.3, -13.1]** | **-32.8 [-51.1, -14.6]** | +0.9 [-0.2, +2.0] pts | cap never binds |
+| 1.25 | 8.2% | 0% | 6/4.8 | 344s | 47% (0%) | **-28.3 [-45.1, -11.6]** | **-26.9 [-43.0, -10.8]** | +1.4 [-0.0, +2.8] pts | cap never binds |
+| 1.50 | 21.4% | 0% | 8/5.0 | 475s | 62% (3%) | **-56.0 [-76.1, -36.0]** | **-59.5 [-81.1, -37.9]** | **+2.5 [+0.9, +4.1]** pts |  |
+| 1.75 | 38.6% | 0% | 7/5.1 | 633s | 71% (6%) | **-102.6 [-122.9, -82.3]** | **-103.7 [-125.7, -81.7]** | **+1.7 [+0.7, +2.6]** pts | cap never binds |
+| 2.20 | 54.5% | 0% | 7/5.0 | 834s | 79% (17%) | **-148.5 [-167.1, -129.9]** | **-154.7 [-171.6, -137.8]** | **+1.9 [+1.0, +2.9]** pts | cap never binds |
+| 3.00 | 66.0% | 0% | 7/5.1 | 1024s | 85% (31%) | **-151.1 [-165.2, -137.0]** | **-157.1 [-173.6, -140.6]** | **+2.1 [+1.3, +3.0]** pts | cap never binds |
+
+**batch 16 (KV-bound)**, slack_factor 1.188 (FCFS miss 22.8% at util 0.8)
+
+| load | choice | at cap | in-flight max/p95 | FCFS p95 | FCFS miss (infeasible) | LSF − FCFS p95 | EDF − FCFS p95 | LSF − FCFS miss | flags |
+|---|---|---|---|---|---|---|---|---|---|
+| 0.78 | 0.1% | 0% | 8/4.0 | 185s | 23% (0%) | -0.0 [-0.0, +0.0] | +0.0 [+0.0, +0.0] | +0.0 [+0.0, +0.0] pts | inactive, cap never binds |
+| 0.85 | 0.1% | 0% | 8/4.2 | 205s | 27% (0%) | -0.0 [-0.1, +0.0] | -0.0 [-0.1, +0.0] | +0.0 [+0.0, +0.0] pts | inactive, cap never binds |
+| 1.00 | 0.1% | 0% | 10/5.0 | 253s | 34% (0%) | +0.0 [-0.0, +0.0] | +0.0 [-0.0, +0.0] | +0.0 [+0.0, +0.0] pts | inactive, cap never binds |
+| 1.10 | 0.2% | 0% | 10/5.4 | 287s | 39% (0%) | -1.1 [-3.3, +1.2] | -1.1 [-3.4, +1.2] | +0.0 [+0.0, +0.0] pts | inactive, cap never binds |
+| 1.22 | 0.4% | 0% | 10/6.1 | 334s | 47% (0%) | -1.2 [-3.8, +1.4] | -1.5 [-4.8, +1.8] | +0.0 [+0.0, +0.0] pts | inactive, cap never binds |
+| 1.25 | 0.5% | 0% | 10/6.2 | 342s | 48% (0%) | -0.8 [-3.7, +2.1] | -1.2 [-3.6, +1.1] | +0.2 [-0.2, +0.6] pts | inactive, cap never binds |
+| 1.50 | 2.7% | 0% | 11/7.7 | 467s | 64% (0%) | -4.9 [-10.7, +0.9] | **-5.7 [-10.9, -0.5]** | +0.2 [-0.1, +0.5] pts | inactive, cap never binds |
+| 1.75 | 8.0% | 0% | 11/8.7 | 618s | 72% (2%) | **-24.2 [-40.1, -8.3]** | **-24.5 [-40.3, -8.8]** | +0.3 [-0.1, +0.7] pts | cap never binds |
+| 2.20 | 19.7% | 0% | 12/9.1 | 808s | 82% (6%) | **-52.3 [-65.0, -39.6]** | **-53.8 [-68.2, -39.4]** | +0.2 [-0.1, +0.5] pts | cap never binds |
+| 3.00 | 34.0% | 0% | 11/9.1 | 1007s | 88% (15%) | **-87.4 [-99.9, -74.8]** | **-90.5 [-103.1, -77.9]** | +0.1 [-0.1, +0.3] pts | cap never binds |
+
+Bold = paired 95% CI excludes zero. Seconds unless marked pts (percentage points of deadline-miss rate).
+
+- batch 2: lsf first separates at load 0.78 on p95_vs_fcfs: p95 -35.7s [-54.6, -16.8], miss +0.1% [-1.8%, +2.0%]
+- batch 2: edf first separates at load 0.78 on p95_vs_fcfs: p95 -37.6s [-53.8, -21.3], miss -1.6% [-3.2%, +0.0%]
+- batch 4: lsf first separates at load 0.78 on p95_vs_fcfs: p95 -17.2s [-26.7, -7.7], miss +0.8% [-0.5%, +2.2%]
+- batch 4: edf first separates at load 0.78 on p95_vs_fcfs: p95 -19.7s [-29.7, -9.7], miss +0.5% [-0.5%, +1.4%]
+- batch 8: lsf first separates at load 1.10 on p95_vs_fcfs, miss_vs_fcfs: p95 -15.4s [-28.5, -2.2], miss +1.1% [+0.3%, +1.9%]
+- batch 8: edf first separates at load 1.10 on p95_vs_fcfs, miss_vs_fcfs: p95 -12.6s [-23.1, -2.0], miss +0.9% [+0.3%, +1.6%]
+- batch 16: cap never binds at any load (KV-bound: the KV budget, not max_batch, limits concurrency)
+- batch 16: lsf first separates at load 1.75 on p95_vs_fcfs: p95 -24.2s [-40.1, -8.3], miss +0.3% [-0.1%, +0.7%]
+- batch 16: edf first separates at load 1.50 on p95_vs_fcfs: p95 -5.7s [-10.9, -0.5], miss +0.2% [-0.1%, +0.5%]
