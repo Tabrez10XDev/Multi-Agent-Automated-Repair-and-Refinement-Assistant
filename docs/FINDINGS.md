@@ -35,12 +35,13 @@ measurements and are unaffected.
 | 19. Exact prompt recurrence | data current; mechanism superseded by §20; hit-rate headline superseded by §22 | Every exact-prompt repeat is a measured hit (46/46, 47/47). Partial prefix hits run at 2.4–4.9x calibration against 14–15x for exact repeats. |
 | 20. Cache rule from llama.cpp source | current | Save and cache search fire when `f_keep < 0.5` (literal in the source). 0.10 only chooses between slots and is inert at `-np 1`. Byte budget 8192 MiB, oldest-first eviction. |
 | 21. Retry-loop state discard | current | With a llama coder, 19.5% of within-task same-model handoffs discard reusable state, 92% of them coder→coder retries. With a qwen coder it is 1.4%. That retry rate is the cause is unproven: it is confounded with the model. |
-| 22. Held-out validation | current | About **1 call in 6** hits Ollama's cache on disjoint problems (16.9%, 17.8%), almost all of it partial prefix reuse. Hit recall held out is 80–81% against 94–97% on the fit traces, and all of the shortfall is in `issue_parser`. |
+| 22. Held-out validation | current; hit rate refined by §28 | About **1 call in 6** hits Ollama's cache on the 54 holdout problems (16.9%, 17.8%); over all unseen traces including `final` it is about 1 in 8 (§28), almost all of it partial prefix reuse. Hit recall held out is 80–81% against 94–97% on the fit traces, and all of the shortfall is in `issue_parser`. |
 | 23. LSF buys tail latency | **retracted**, superseded by §27 | Measured at ~2.2x the intended load. The 14.8% p95 win and the "oracle is worse" result are void. |
 | 24. Retention cannot move latency | current, *sim* | Recompute is **under 1% of makespan** (keep-all 0.7% over 20 paired seeds at 0.841), so retention is a GPU-work mechanism, not a latency one. No deployable policy differs from keep-all on p95. Evict-now is significantly worse on both p95 (+36.9s) and recompute (+111.9s). Use the 20-seed table at the head of §24. The older table below it (0.8–1.1%, keep-all 13.4s) is **seed 1 only** at 0.15. The 0.6% in DECISIONS §28 is the separate 10-seed OPEN_ISSUES §9.3 sweep. |
 | 25. Ski-rental negative result | current, *sim*; numbers are seed 1 only | Ski-rental holds 4.5 MB less than keep-all yet pays 20.2s more rent and 5.0s more recompute. Releasing shifts rent onto the remaining holders rather than removing it. The figures are the same single run as §24's older table. Over 20 seeds at 0.841, ski-rental recomputes +10.2s [+4.8, +15.6] more than keep-all, ties it on p95, and the conclusion holds (§24). |
 | 26. Belady loses to LRU | current, *sim*; numbers are seed 1 only | Belady recomputes 29.4s against LRU's 13.4s, because eviction here is bulk and block sizes differ. `offline-belady` is not a valid minimum-recompute reference. Same single run as §24's older table, and not yet rerun over multiple seeds. |
 | 27. Scheduler table, corrected | current, *sim* | **No scheduling rule differs significantly** from arrival order on p95, at batch 8 or 16, nor does the oracle (paired CIs, 20 seeds). The scheduler has a choice on only 0.3–0.4% of admissions. Still tied at 0.841 (DECISIONS §28). |
+| 28. Sealed `final` set | current | On 92 unseen problems pass@1 is 75.0% (qwen coder) against 48.9% (llama coder). Over all 146 unseen problems it is 78.1% against 54.1%, a paired gap of +24.0 points [+15.0, +33.0]; this is a coder-model comparison. The frozen cache rule recalls 77% and 97% of hits, 86% pooled over every unseen trace. Hit rate over the unseen traces is about 1 call in 8 (12.8%). The policy drivers are not yet run on it (sealed, DECISIONS §26). |
 
 ---
 
@@ -1127,3 +1128,70 @@ regime to study, but it has to be *chosen* and labelled, with the arrival rate
 calibrated at the concurrency the run actually uses. The methodological rule
 this cost us: **calibrate every parameter at the configuration the measurement
 runs at**, and check the activity line before believing any comparison.
+
+---
+
+## 28. The sealed `final` set: pass@1, and the cache rule on unseen problems
+
+Collected 2026-10-07 (commit `676ba59`) on the 92 `final` problems
+(DECISIONS §26), with the same two configs as the held-out traces, zero-shot,
+one process each and Ollama restarted between. Both traces pass
+`check_trace_clean`. Machine state was logged per minute in
+`data/traces/final_machine_state.log`. The first 1 to 3 minutes of
+`final_A_qwen` overlapped two pytest runs, so its earliest call timings are
+contended; pass/fail is unaffected.
+
+| trace | config | tasks | calls | wall clock |
+|---|---|---|---|---|
+| `final_A_qwen` | `single_agent` (qwen coder) | 92 | 810 | 95 min |
+| `final_B_llama` | `homo_llama3` (llama coder) | 92 | 924 | about 70 min |
+
+The policy drivers have **not** been run on these traces. They are kept out
+of `TRACE_SETS` and refuse to load until a freeze commit is named
+(`SEALED_TRACE_SETS`, `tests/simulator/test_sealed_traces.py`).
+
+### pass@1, with intervals
+
+Wilson 95% intervals per config. The difference is paired on the same
+problems: a 95% normal interval on per-task differences, and an exact
+McNemar test on the discordant tasks.
+
+| set | qwen coder | llama coder | qwen − llama | qwen-only / llama-only | McNemar p |
+|---|---|---|---|---|---|
+| `final` (92) | 69 = 75.0% [65.3, 82.7] | 45 = 48.9% [38.9, 59.0] | +26.1 pts [+14.8, +37.4] | 29 / 5 | 4e-5 |
+| holdout (54) | 45 = 83.3% [71.3, 91.0] | 34 = 63.0% [49.6, 74.6] | +20.4 pts [+5.4, +35.4] | 15 / 4 | 0.019 |
+| **both (146)** | 114 = **78.1%** [70.7, 84.0] | 79 = **54.1%** [46.0, 62.0] | **+24.0 pts** [+15.0, +33.0] | 44 / 9 | 1e-6 |
+
+The qwen coder beats the llama coder on unseen problems, by about 24 points
+with an interval well clear of zero. Both configs run the full multi-agent
+pipeline (OPEN_ISSUES §14), so this is a **coder-model comparison**, not
+multi-agent against single-agent. These are implement-from-stub rates over
+canonical HumanEval and carry DECISIONS §20's caveat.
+
+### The frozen cache rule, third test
+
+The v2 rule (DECISIONS §19) was run unchanged, as §26 rule 2 allows. The
+held-out traces were rerun beside it and reproduce §22 exactly.
+
+| trace | calls | measured hits | matched | FP | FN | **hit recall** | precision | agreement |
+|---|---|---|---|---|---|---|---|---|
+| `final_A_qwen` | 810 | 69 | 53 | 5 | 16 | **77%** (53/69) | 91% | 96.2% |
+| `final_B_llama` | 924 | 121 | 117 | 4 | 4 | **97%** (117/121) | 97% | 98.8% |
+| `holdout_A_qwen2` (§22) | 320 | 54 | 44 | 1 | 10 | 81% | 98% | 96.6% |
+| `holdout_B_llama` (§22) | 370 | 66 | 53 | 4 | 13 | 80% | 93% | 95.4% |
+
+Three things this adds to §22:
+
+1. **The rule generalises to a third, larger set.** Recall is 77% and 97%
+   with no tuning. Pooled over every unseen trace it is 267/310 = 86%.
+2. **`issue_parser` is still the weak role** (OPEN_ISSUES §24): recall 1/8
+   on qwen and 3/7 on llama, and it holds all 9 false positives. On llama it
+   accounts for every miss.
+3. **New: the qwen trace misses some coder and debugger hits** (6 and 3),
+   which never happened on the holdout. Not investigated yet. It is the next
+   thing to look at, by inspection only, with no change to the rule.
+
+The hit rate is lower than §22's "about 1 call in 6": 8.5% of calls on qwen
+and 13.1% on llama, against 16.9% and 17.8% on the holdout. Treat "1 in 6"
+as a holdout figure. Across all four unseen traces the rate is 310/2424 =
+**12.8%, about 1 call in 8**.
