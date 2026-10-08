@@ -55,3 +55,14 @@ def test_a_cap_that_binds_is_reported_as_binding():
     _, rep = run(batch=1, rate=0.5)
     assert rep["max_batch_seen"] == 1
     assert rep["frac_time_at_batch_cap"] > 0.9
+
+
+def test_resident_cap_metric_is_what_the_cap_is_enforced_on():
+    # OPEN_ISSUES §28: the cap limits resident requests across both models, but
+    # the active batch counts only the model served each iteration. The
+    # resident view must never read lower, and must sum to wall time.
+    eng, rep = run(batch=4, rate=0.5, n_tasks=20)
+    assert rep["max_batch_seen"] <= rep["max_resident"] <= 4
+    assert rep["frac_time_at_batch_cap"] <= rep["frac_time_at_resident_cap"] <= 1.0
+    assert math.isclose(sum(eng.m["resident_time"].values()), eng.m["w_time"], rel_tol=1e-9)
+    assert rep["max_resident"] == 4 and rep["frac_time_at_resident_cap"] > 0.0

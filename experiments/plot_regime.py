@@ -124,7 +124,7 @@ def scheduling_table(data, manifest_path):
     for b in _panels(data):
         lines += [f"**{_label(b, data)}**, slack_factor {b['slack_factor']:.3f} "
                   f"(FCFS miss {b['slack_fcfs_miss_at_util_0.8']:.1%} at util 0.8)", "",
-                  "| load | choice | at cap | in-flight max/p95 | FCFS p95 | FCFS miss (infeasible) "
+                  "| load | choice | at cap | resident max / active p95 | FCFS p95 | FCFS miss (infeasible) "
                   "| LSF − FCFS p95 | EDF − FCFS p95 | LSF − FCFS miss | flags |",
                   "|---|---|---|---|---|---|---|---|---|---|"]
         for c in sorted(b["cells"], key=lambda c: c["load"]):
@@ -141,7 +141,10 @@ def scheduling_table(data, manifest_path):
                                               ("cap never binds", c["cap_never_binds"])) if on)
             lines.append(
                 f"| {c['load']:.2f} | {f['frac_decisions_with_choice']:.1%} | "
-                f"{f['frac_time_at_batch_cap']:.0%} | {f['max_batch_seen_max']}/{f['p95_batch']:.1f} | "
+                # Resident counts where recorded; JSONs before OPEN_ISSUES §28 only
+                # have the active-model batch, which undercounts.
+                f"{f.get('frac_time_at_resident_cap', f['frac_time_at_batch_cap']):.0%} | "
+                f"{f.get('max_resident_max', f['max_batch_seen_max'])}/{f['p95_batch']:.1f} | "
                 f"{f['p95_task_latency_s']:.0f}s | {f['deadline_miss_rate']:.0%} "
                 f"({f['miss_rate_infeasible_at_admit']:.0%}) | {ci('lsf', 'p95_vs_fcfs')} | "
                 f"{ci('edf', 'p95_vs_fcfs')} | {ci('lsf', 'miss_vs_fcfs', True)} pts | {flags} |")

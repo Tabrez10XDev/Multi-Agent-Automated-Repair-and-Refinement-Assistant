@@ -342,6 +342,10 @@ class Engine:
             # Time spent at each active-batch size, for a time-weighted p95 and
             # the fraction of time the max_batch cap was binding.
             "batch_time": {},
+            # The same for resident requests (all models). This is what the
+            # max_batch cap is enforced on, so it is the one that says whether
+            # the cap binds; batch_time undercounts whenever both models have work.
+            "resident_time": {},
             "w_kv": 0.0, "w_pinned": 0.0, "w_retained": 0.0,
             "max_batch": 0, "max_resident": 0,
             # Splits blocking by whether retention could have done anything about
@@ -1211,6 +1215,8 @@ class Engine:
             bt = self.m["batch_time"]
             bt[self._last_batch] = bt.get(self._last_batch, 0.0) + dt
             self.m["w_resident"] += self._last_resident * dt
+            rt = self.m["resident_time"]
+            rt[self._last_resident] = rt.get(self._last_resident, 0.0) + dt
             self.m["w_kv"] += self.used_bytes * dt
             self.m["w_pinned"] += self.pinned_bytes * dt
             self.m["w_retained"] += (self.used_bytes - self.pinned_bytes) * dt
@@ -1257,6 +1263,7 @@ class Engine:
         # Time-weighted percentile of the active batch (in-flight requests).
         bt = self.m["batch_time"]
         bt_total = sum(bt.values())
+        rt_total = sum(self.m["resident_time"].values())
 
         def batch_pct(q):
             acc = 0.0
@@ -1350,6 +1357,9 @@ class Engine:
                                        if bt_total else 0.0),
             "mean_resident": w("w_resident"),
             "max_resident": self.m["max_resident"],
+            "frac_time_at_resident_cap": (
+                self.m["resident_time"].get(self.cfg.max_batch, 0.0) / rt_total
+                if rt_total else 0.0),
             "mean_kv_util": w("w_kv") / self.cfg.kv_budget_bytes,
             "peak_kv_util": self.m["peak_kv_bytes"] / self.cfg.kv_budget_bytes,
             "prefix_hit_rate": self.m["hits"] / lookups if lookups else 0.0,

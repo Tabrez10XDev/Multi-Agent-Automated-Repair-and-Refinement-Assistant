@@ -74,11 +74,16 @@ BASELINES = ("fcfs", "program-fcfs")
 CALIBRATED_UTILS = [0.6, 0.7, 0.8, 0.9]
 OVERLOAD_MULTIPLES = [1.1, 1.25, 1.5, 1.75, 2.2, 3.0]
 INACTIVE_CHOICE = 0.05
-METRICS = ("p50_task_latency_s", "p95_task_latency_s", "deadline_miss_rate",
-           "miss_rate_infeasible_at_admit", "miss_rate_feasible_at_admit")
+METRICS = ("p50_task_latency_s", "p95_task_latency_s", "mean_task_latency_s",
+           "deadline_miss_rate", "miss_rate_infeasible_at_admit",
+           "miss_rate_feasible_at_admit")
+# Kept per seed so any of them can be paired offline (experiments/reanalyze_slo.py).
+PER_SEED = ("p50_task_latency_s", "p95_task_latency_s", "mean_task_latency_s",
+            "deadline_miss_rate")
 ACTIVITY = ("frac_decisions_with_choice", "rent_active_tick_frac",
             "forced_evictions", "max_batch_seen", "p95_batch",
-            "frac_time_at_batch_cap", "gpu_busy_frac")
+            "frac_time_at_batch_cap", "max_resident", "frac_time_at_resident_cap",
+            "gpu_busy_frac")
 
 
 def _job(args):
@@ -244,8 +249,11 @@ def main():
                         continue
                     row = {k: st.fmean(r[k] for r in ok) for k in METRICS + ACTIVITY}
                     row["max_batch_seen_max"] = max(r["max_batch_seen"] for r in ok)
-                    row["per_seed"] = {k: [r[k] for r in rs if "error" not in r]
-                                       for k in ("p95_task_latency_s", "deadline_miss_rate")}
+                    row["max_resident_max"] = max(r["max_resident"] for r in ok)
+                    row["per_seed"] = {k: [r[k] for r in ok] for k in PER_SEED}
+                    if slo:
+                        row["per_seed"]["miss_by_class"] = {
+                            c: [r["miss_by_class"].get(c, 0.0) for r in ok] for c, _, _ in slo}
                     if slo:
                         row["miss_by_class"] = {c: st.fmean(r["miss_by_class"].get(c, 0.0) for r in ok)
                                                 for c, _, _ in slo}
@@ -263,7 +271,10 @@ def main():
                     cell["policies"][label] = row
                 f = cell["policies"].get("fcfs", {})
                 cell["inactive"] = f.get("frac_decisions_with_choice", 0) < INACTIVE_CHOICE
-                cell["cap_never_binds"] = f.get("max_batch_seen_max", 0) < batch
+                # The cap is enforced on resident requests (all models), so that
+                # is what decides whether it binds. max_batch_seen counts only the
+                # model served each iteration and undercounts (OPEN_ISSUES §28).
+                cell["cap_never_binds"] = f.get("max_resident_max", 0) < batch
                 cells.append(cell)
 
                 flag = (" INACTIVE" if cell["inactive"] else "") + \
@@ -272,9 +283,9 @@ def main():
                       f"choice {f.get('frac_decisions_with_choice', 0):5.1%}  "
                       f"rent>0 {f.get('rent_active_tick_frac', 0):5.1%}  "
                       f"forced {f.get('forced_evictions', 0):5.1f}  "
-                      f"in-flight max/p95 {f.get('max_batch_seen_max', 0)}/"
-                      f"{f.get('p95_batch', 0):.1f}  at-cap "
-                      f"{f.get('frac_time_at_batch_cap', 0):5.1%}{flag}", flush=True)
+                      f"resident max {f.get('max_resident_max', 0)}  active max/p95 "
+                      f"{f.get('max_batch_seen_max', 0)}/{f.get('p95_batch', 0):.1f}  "
+                      f"at-cap {f.get('frac_time_at_resident_cap', 0):5.1%}{flag}", flush=True)
                 print(f"    fcfs   p50 {f.get('p50_task_latency_s', 0):7.1f}  p95 "
                       f"{f.get('p95_task_latency_s', 0):7.1f}  miss "
                       f"{f.get('deadline_miss_rate', 0):5.1%} (infeasible "

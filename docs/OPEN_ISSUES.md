@@ -28,8 +28,9 @@ What is not settled, not validated, or known to be wrong. Read this before trust
 | 25 | Scoping reuse with a match-time guard | **not needed**: the holdout traces have 0% cross-run reuse | none |
 | 26 | "Ski-rental never fires" | **superseded** by §27 and FINDINGS §24–25 | none |
 | 27 | No operating point where ski-rental beats keep-all | **open, highest impact** | run the retention grid at 8x/16x context inside the live band |
+| 28 | Batch-cap labels counted the wrong thing | **fixed** in code; the §29–31 labels are **not yet re-derived** | rerun the maps, or qualify the labels in FINDINGS |
 
-**Still open and relevant: 6** — 9.4, 9.5, 14, 24, 27, and the `final`
+**Still open and relevant: 7** — 9.4, 9.5, 14, 24, 27, 28, and the `final`
 collection noted in 21.
 
 ---
@@ -626,3 +627,29 @@ target band of roughly 15-50% puts the run between batch 4 and batch 2. Note
 that batch 2-4 is a small-deployment regime — plausible for the single-GPU
 local server MAARA actually runs on, but it must be stated rather than
 presented as a general setting.
+
+## 28. Batch-cap labels counted the wrong thing
+
+> **Fixed in code (2026-10-08); old labels not yet re-derived.** FINDINGS
+> §29–31 report "CAP-NEVER-BINDS", "at cap" and "(KV-bound)" from the
+> wrong counter. Don't quote them until the maps are rerun.
+
+`max_batch` caps **resident** requests across both models (`len(self.running)`
+in `Engine._admit_loop`). The cell flags and the "at cap" column were built
+from `max_batch_seen` and `frac_time_at_batch_cap`, which count only the
+**active** batch: the requests of the one model served that iteration. The
+trace mixes qwen and llama calls, so the active count undercounts whenever both
+have work. In `test_resident_cap_metric_is_what_the_cap_is_enforced_on`
+(batch 4, two models) the cap binds 98% of the time by resident count against
+7% by the active count.
+
+The fix adds `frac_time_at_resident_cap` (engine), and bases the scheduling map's
+`cap_never_binds` on `max_resident_max`. The plot table prefers the resident
+metrics and falls back to the old ones for older JSONs. Latency and miss
+numbers are unaffected, because this was a diagnostic. What it changes is the
+interpretation: §31's "efficient batching removes the queue (the cap never
+binds at batch 16)" may be wrong, since at 0.15 the cap may bind on resident
+requests while the scheduler still has little choice.
+
+The engine's one-model-per-iteration rule (`_choose_active_model`) is also a
+hidden scheduler that no policy controls. Not changed; noted for the writeup.
