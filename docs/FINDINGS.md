@@ -44,7 +44,7 @@ measurements and are unaffected.
 | 28. Sealed `final` set | current | On 92 unseen problems pass@1 is 75.0% (qwen coder) against 48.9% (llama coder). Over all 146 unseen problems it is 78.1% against 54.1%, a paired gap of +24.0 points [+15.0, +33.0]; this is a coder-model comparison. The frozen cache rule recalls 77% and 97% of hits, 86% pooled over every unseen trace. Hit rate over the unseen traces is about 1 call in 8 (12.8%). The policy drivers are not yet run on it (sealed, DECISIONS §26). |
 | 29. Scheduling regime map | current, *sim*, 0.841 | Scheduling matters once requests queue: at batch 2-4, LSF and EDF cut p95 by 15-22% at §27's load and separate at the lowest load tested. At batch 8 they separate from load 1.10, and at batch 16 (KV-bound) from 1.5-1.75. The gain is task order: EDF here is oldest-task-first and matches LSF in 39 of 40 cells. The oracle estimator is slightly worse in overload. Miss rates do not improve (+1 to +5 points). |
 | 30. Per-task deadlines | current, *sim*, 0.841 | With heterogeneous deadlines (3 classes, size-scaled), LSF, EDF and Dynamo-style client priority never beat oldest-task-first (`program-fcfs`) on p95, in any of 40 cells. They are worse in about 70% of cells, and they only move misses from the tight class to the loose one. The supported scheduling claim is program-level ordering. |
-| 31. What-if: efficient batching | *sim*, what-if 0.15, not measured | HYPOTHETICAL coefficient 0.15. LSF still never beats `program-fcfs` on p95 (0 of 40 cells; worse in 22). Its tight-class gains (up to 14 points at batch 2) are paid for by the loose class. Efficient batching mostly removes the queue (the cap never binds at batch 16). Verdict: freeze `program-fcfs`. Deadlines were recalibrated to a fixed FCFS miss rate. |
+| 31. What-if: efficient batching | *sim*, what-if 0.15, not measured | HYPOTHETICAL coefficient 0.15. LSF still never beats `program-fcfs` on p95 (0 of 40 cells; worse in 22). Its tight-class gains (up to 14 points at batch 2) are paid for by the loose class. At batch 8–16 the scheduler rarely has a choice (cap-binding labels qualified by OPEN_ISSUES §28). Verdict: freeze `program-fcfs`. Deadlines were recalibrated to a fixed FCFS miss rate. |
 
 ---
 
@@ -1466,6 +1466,11 @@ figures `results/figures/regime/scheduling_slo_c015_{p95,miss}[_vs_program].png`
    Inactive cells (choice on under 3% of decisions) rise from 1/4/7 (§30,
    batch 4/8/16) to 2/6/9. At load 1.00, `program-fcfs` has a choice on 0.3%
    of decisions at batch 8 and 0.1% at batch 16.
+
+> **Qualified (2026-10-08, OPEN_ISSUES §28):** point 3's cap-binding counts
+> came from the active-model batch, which undercounts. The cap was enforced on
+> resident requests across both models. "The cap never binds" may be wrong; the
+> choice fractions are unaffected. Don't quote point 3 until the map is rerun.
 
 **Tight-class feasibility.** The tight class still misses 53-60% of its
 deadlines under `program-fcfs` at load 1.00 (batch 2/4/8/16: 53.5%, 60.2%,
