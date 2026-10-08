@@ -44,6 +44,7 @@ measurements and are unaffected.
 | 28. Sealed `final` set | current | On 92 unseen problems pass@1 is 75.0% (qwen coder) against 48.9% (llama coder). Over all 146 unseen problems it is 78.1% against 54.1%, a paired gap of +24.0 points [+15.0, +33.0]; this is a coder-model comparison. The frozen cache rule recalls 77% and 97% of hits, 86% pooled over every unseen trace. Hit rate over the unseen traces is about 1 call in 8 (12.8%). The policy drivers are not yet run on it (sealed, DECISIONS §26). |
 | 29. Scheduling regime map | current, *sim*, 0.841 | Scheduling matters once requests queue: at batch 2-4, LSF and EDF cut p95 by 15-22% at §27's load and separate at the lowest load tested. At batch 8 they separate from load 1.10, and at batch 16 (KV-bound) from 1.5-1.75. The gain is task order: EDF here is oldest-task-first and matches LSF in 39 of 40 cells. The oracle estimator is slightly worse in overload. Miss rates do not improve (+1 to +5 points). |
 | 30. Per-task deadlines | current, *sim*, 0.841 | With heterogeneous deadlines (3 classes, size-scaled), LSF, EDF and Dynamo-style client priority never beat oldest-task-first (`program-fcfs`) on p95, in any of 40 cells. They are worse in about 70% of cells, and they only move misses from the tight class to the loose one. The supported scheduling claim is program-level ordering. |
+| 31. What-if: efficient batching | *sim*, what-if 0.15, not measured | HYPOTHETICAL coefficient 0.15. LSF still never beats `program-fcfs` on p95 (0 of 40 cells; worse in 22). Its tight-class gains (up to 14 points at batch 2) are paid for by the loose class. Efficient batching mostly removes the queue (the cap never binds at batch 16). Verdict: freeze `program-fcfs`. Deadlines were recalibrated to a fixed FCFS miss rate. |
 
 ---
 
@@ -1426,3 +1427,53 @@ claim is **program-level ordering**: finish older workflows first. That
 gives a 15-22% p95 cut at the operating load whenever requests queue, and
 needs no estimates. On this hardware, neither slack (LSF) nor client
 priority hints (Dynamo-style) improve on it.
+
+## 31. What-if: efficient batching (0.15, HYPOTHETICAL)
+
+**This is not a GPU measurement.** The question: §30's verdict could be an
+artefact of the Mac's nearly serial batching (coefficient 0.841, DECISIONS
+§28). Under vLLM-class batching, does LSF start to beat `program-fcfs`? The
+answer decides whether GPU calibration time is worth spending on scheduling.
+
+**Setup.** Same map as §30 (commit `70ae06d`, clean tree, profile
+`mac_ollama_measured` with `--batch-decode-coeff 0.15`, recorded in the
+manifest's cost provenance as `OVERRIDDEN from profile value 0.841`, and
+every calibration at 0.15; `holdout_qwen` 1x, KV 1024 MB, LRU, 20 paired
+seeds, the same `--slo-mix`). Rates and slack were recalibrated: the
+util-0.8 rate is 0.0304/s at batch 2 and 0.0343/s at batch 4-16, against
+0.0265/s everywhere on the Mac. Output `results/scheduling_map_slo_c015.json`,
+figures `results/figures/regime/scheduling_slo_c015_{p95,miss}[_vs_program].png`.
+
+### Result: 40 cells, paired against `program-fcfs`
+
+| rule | p95 significantly better / worse | overall miss significantly better / worse | tight-class miss, mean change (range) |
+|---|---|---|---|
+| LSF | 0 / 22 | 0 / 17 | −3.1 pts (−13.7 to +0.5) |
+| EDF | 0 / 19 | 2 / 9 | −3.5 pts (−14.2 to +0.5) |
+| hint-priority | 0 / 22 | 5 / 5 | −5.9 pts (−29.5 to +0.5) |
+| LSF-oracle | 2 / 22 | 1 / 19 | −3.0 pts |
+
+1. **LSF still never beats oldest-task-first on p95.** It is significantly
+   worse in 22 of 40 cells, against 28 on the Mac; the drop comes from more
+   cells going inactive, not from LSF improving. The oracle's two wins (batch 8,
+   load 1.10 and 1.23) are 3-4s, with CIs that barely exclude zero.
+2. **The tight-class gain is the same reallocation as §30.** At batch 2, LSF
+   cuts tight-class misses by 9-14 points, but loose-class misses rise by 6-30
+   points and the overall miss rate rises in 8 of those 9 cells (−0.7 to
+   +5.1 points).
+3. **Efficient batching removes the queue rather than making room for slack.**
+   The cap never binds in 9 of 10 cells at batch 8 or in any cell at batch 16.
+   Inactive cells (choice on under 3% of decisions) rise from 1/4/7 (§30,
+   batch 4/8/16) to 2/6/9. At load 1.00, `program-fcfs` has a choice on 0.3%
+   of decisions at batch 8 and 0.1% at batch 16.
+
+**Tight-class feasibility.** The tight class still misses 53-60% of its
+deadlines under `program-fcfs` at load 1.00 (batch 2/4/8/16: 53.5%, 60.2%,
+57.0%, 56.5%), against about 53% on the Mac. Caveat: slack is recalibrated so
+that FCFS misses 22-27% at util 0.8, so the deadlines tighten along with the
+faster service (slack_factor 1.19 at batch 4-16 and 1.53 at batch 2, against
+1.875). This test therefore holds relative deadline pressure fixed, as §30
+did. It does not test "the same absolute deadlines on faster hardware".
+
+**Verdict:** program-level ordering holds under efficient batching too:
+freeze `program-fcfs`.
