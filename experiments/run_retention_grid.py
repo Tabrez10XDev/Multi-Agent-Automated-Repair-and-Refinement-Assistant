@@ -274,6 +274,11 @@ def headroom_main(args):
             # keep-all thrashes, and busy jumps past the target (it hit 0.98 at
             # 8x on the first attempt), so it cannot define the load itself.
             kv_rule = args.kv_mb * max(1, scale // 2)
+            # The bracket scales with context: work per task grows with it, so
+            # at 8x the util-0.8 rate (about 0.0033/s on holdout_qwen) is below
+            # the 1x floor of 0.005/s, and bisection pinned to the floor at
+            # busy 0.96-0.98. Same 1x bracket at scale 1.
+            rate_kw.update(lo=0.005 / scale, hi=8.0 / scale)
             rate0 = calibrate_rate(util, scale, 1, kv_rule, cost, tok, cpu,
                                    iters=6, **rate_kw)
             ws0, active0 = measure_ws(rate0, kv_rule)
@@ -295,7 +300,8 @@ def headroom_main(args):
                      "retention": "keep-all", "prefill_chunk_tokens": chunk,
                      "pass1_rate": rate0, "pass1_kv_mb": kv_rule}
             check_consistent("arrival_rate", under, ref, checks)
-            rate, busy = calibrate_rate(*rate_call, **rate_kw, return_achieved=True)
+            rate, busy = calibrate_rate(*rate_call, **rate_kw, iters=14,
+                                        return_achieved=True)
             rate_cal = manifest.record(Calibration(
                 f"arrival_rate[{scale}x]", rate, under,
                 target=f"GPU busy fraction {util} under FCFS/keep-all at the "
