@@ -862,3 +862,21 @@ correction, so about 1 in 20 cells is expected to separate by chance):
 
 A result against expectation is reported as such, and no policy is changed in
 response: HumanEval has no problems left for another test set (§26).
+
+**Amendment, same day, before any policy result.** The first attempt of run 1
+at `8a8b6c9` was stopped during batch 2's load calibration. It printed only
+rate calibration lines, all at the search floor (0.0070/s, busy 1.00), and no
+cell had run. Cause: one call in `final_qwen`, `issue_parser` on HumanEval/75,
+generated **40,960 tokens over 1,589 s** (a runaway with no stop), and needs
+2,253 MB of KV against the 1,024 MB budget, so every engine run raised, and
+`calibrate_rate` counts an error as busy 1.0. The owner chose to **drop that
+task** from the simulator runs on `final_qwen` (91 tasks), rather than cap its
+output or raise the budget, which would change the setup from FINDINGS §30.
+It is the only call over 1,000 output tokens in that trace. The exclusion is
+in code (`TRACE_SET_EXCLUSIONS`), recorded in every manifest, and tested. The
+runaway itself is a MAARA finding: `issue_parser` sets no output limit.
+`final_llama` needs no exclusion (its largest call is 2,286 tokens). The
+aborted log is kept as
+`results/sealed/ABORTED_8a8b6c9_scheduling_map_final_qwen.log`. The commit
+holding this amendment is the freeze commit for runs 1-3; nothing else
+changed.

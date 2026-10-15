@@ -53,7 +53,8 @@ from simulator.engine import Engine, EngineConfig
 from simulator.policies import (RETENTIONS, SCHEDULERS, ExecutionEstimator,
                           FCFSScheduler, HintBuilder, KeepAllRetention,
                           SkiRentalPredictionsRetention)
-from simulator.trace_loader import TRACE_SETS, load_trace, resolve_trace_set
+from simulator.trace_loader import (TRACE_SET_EXCLUSIONS, TRACE_SETS, load_trace,
+                                    resolve_trace_set)
 from simulator.workload import (CostModel, CpuStageSeconds, Kind, StageTokens,
                           DEFAULT_BLOCK_TOKENS)
 
@@ -97,7 +98,8 @@ def scale_context(tasks, factor: int):
 
 def build(scale, seed, arrival_rate, cost, tok, cpu, trace_set="original"):
     paths = [os.path.join(_REPO, p) for p in resolve_trace_set(trace_set)]
-    tasks = load_trace(paths, arrival_rate=arrival_rate, seed=seed).tasks
+    tasks = load_trace(paths, arrival_rate=arrival_rate, seed=seed,
+                       exclude_tasks=TRACE_SET_EXCLUSIONS.get(trace_set, {})).tasks
     return scale_context(tasks, scale)
 
 
@@ -236,6 +238,7 @@ def headroom_main(args):
     chunk = default_of(run_one, "chunk")
     manifest = Manifest.start("retention_headroom", params={
         "trace_set": args.trace_set, "scales": scales, "headrooms": heads,
+        "excluded_tasks": TRACE_SET_EXCLUSIONS.get(args.trace_set, {}),
         "util": util, "max_batch": args.batch, "cache_mode": cache_mode,
         "retentions": HEADROOM_POLICIES, "scheduler": "fcfs", "seeds": seeds,
         "prefill_chunk_tokens": chunk, "hardware_profile": cost.profile,

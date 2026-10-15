@@ -488,6 +488,17 @@ SEALED_TRACE_SETS = {
 }
 
 
+# Tasks a named set drops before the simulator sees them, with the reason. Only
+# for calls the engine cannot represent, never for performance; each entry is
+# recorded in DECISIONS before any policy result on that set exists.
+TRACE_SET_EXCLUSIONS = {
+    # issue_parser generated 40,960 tokens over 1,589 s (a runaway, no stop),
+    # which needs 2,253 MB of KV against the maps' 1,024 MB budget, so the
+    # engine refuses the run. DECISIONS 31, amended before the first result.
+    "final_qwen": {"HumanEval/75": "runaway issue_parser output, 40,960 tokens"},
+}
+
+
 class SealedTraceSet(KeyError):
     pass
 
@@ -519,7 +530,8 @@ def trace_set(name):
 
 def load_trace(main_path, prompts_path=None,
                arrival_rate: float = None, seed: int = 7,
-               use_sidecar_prompt_size: bool = True) -> LoadedTrace:
+               use_sidecar_prompt_size: bool = True,
+               exclude_tasks=()) -> LoadedTrace:
     """
     Build simulator Tasks from a recorded trace.
 
@@ -533,6 +545,9 @@ def load_trace(main_path, prompts_path=None,
     use_sidecar_prompt_size: prefer the sidecar text length over
     prompt_eval_count when the latter looks like an Ollama cache hit. See
     detect_cache_hits.
+
+    exclude_tasks: task ids whose rows are dropped before segmentation
+    (TRACE_SET_EXCLUSIONS).
     """
     # main_path may be one path or several. The committed dataset is split in
     # two: the 55 runs of full_zs_4cfg, plus the 5 single_agent runs the smoke
@@ -546,6 +561,8 @@ def load_trace(main_path, prompts_path=None,
     rows = []
     for p in paths:
         rows.extend(load_rows(p))
+    if exclude_tasks:
+        rows = [r for r in rows if r.get("task_id") not in exclude_tasks]
     prompts_by_call = {}
     for pp in prompt_paths:
         if os.path.exists(pp):

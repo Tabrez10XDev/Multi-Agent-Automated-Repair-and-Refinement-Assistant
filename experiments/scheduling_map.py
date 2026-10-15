@@ -61,6 +61,7 @@ from experiments.manifest import (Calibration, Manifest, bound_args, check_consi
 from experiments.run_retention_grid import calibrate_rate
 from experiments.run_scheduler_table import calibrate_slack, paired_ci, run_one
 from simulator.engine import EngineConfig
+from simulator.trace_loader import TRACE_SET_EXCLUSIONS
 from simulator.workload import CostModel, CpuStageSeconds, StageTokens
 
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -207,6 +208,7 @@ def main():
     cache_mode = EngineConfig().cache_mode
     manifest = Manifest.start("scheduling_map", params={
         "trace_set": args.trace_set, "kv_mb": args.kv_mb, "batches": batches,
+        "excluded_tasks": TRACE_SET_EXCLUSIONS.get(args.trace_set, {}),
         "retention": args.retention, "seeds": seeds, "policies": [p[2] for p in POLICIES],
         "calibrated_utils": utils, "overload_multiples_of_util_0.8": multiples,
         "load_axis": ("arrival rate / saturation throughput at the same batch "
