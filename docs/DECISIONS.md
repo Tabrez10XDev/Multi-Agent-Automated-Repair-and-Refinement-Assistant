@@ -813,3 +813,52 @@ Two independent lines agree:
 `mac_ollama_measured` now lists both models in `kv_measured`, which revises
 §27 item 3. The value is unchanged, so no result moves. This closes
 OPEN_ISSUES §23; `gpu_5060ti` still says DERIVED until checked on that card.
+
+## 31. Policies frozen for the sealed `final` run; the headline is program-level ordering
+
+Set by the owner 2026-10-15, the Milestone 2 deadline. **This commit is the
+freeze commit that §26 rule 3 requires**: every run on `final_qwen` or
+`final_llama` sets `MAARA_POLICIES_FROZEN` to it, and no policy, parameter or
+driver default changes between it and those runs.
+
+**Headline.** Scheduling under load, stated as **program-level ordering**:
+finishing older workflows first (`program-fcfs`) is the supported claim
+(FINDINGS §29–31). LSF is an analysed negative result against that baseline,
+and retention is a cost mechanism and an analysed negative result at 1x
+context (FINDINGS §24–26). Retention at 8x and above (OPEN_ISSUES §27) is run
+on the fitting set only and reported as preliminary, whatever it shows.
+
+**What is frozen.** The code at this commit: the schedulers, estimators and
+retention policies in `simulator/policies.py` with their defaults, including
+`program-fcfs-cap` with `EPS = 0.05`. That rule has been run only in a
+3-seed `--quick` smoke check on `holdout_qwen` (batch 8, two loads), to see
+that the driver runs it; nothing was tuned on it. Its first full map is the
+sealed one, so it is a pre-registered rule, not a tuned one. The measured profile `mac_ollama_measured`, coefficient
+0.841.
+
+**The runs, in order, each once, reported as they come out.**
+
+1. Scheduling, primary:
+   `scheduling_map --trace-set final_qwen --slo-mix
+   tight:1.0:0.3,standard:2.0:0.4,loose:4.0:0.3 --workers 6`
+   with every other flag at its default (20 seeds, batches 2 4 8 16, KV
+   1024 MB, LRU, `estimate` deadlines, `busy` load axis): the FINDINGS §30
+   setup on unseen tasks.
+2. Retention, primary:
+   `run_retention_grid --trace-set final_qwen --scales 1 --headrooms
+   0.25,0.5,1.0 --util 0.8 --batch 4 --seeds 20`: the 1x headroom grid.
+3. Secondary, if time allows: run 1 on `final_llama`.
+
+**Pre-registered comparisons** (paired 95% CIs, no multiple-comparison
+correction, so about 1 in 20 cells is expected to separate by chance):
+
+- S1: `program-fcfs` vs `fcfs` on p95. Expected: better at batch 2–4 from the
+  operating load up.
+- S2: `lsf` vs `program-fcfs` on p95. Expected: never significantly better.
+- S3: `program-fcfs-cap` vs `program-fcfs` on p95. No expectation; first
+  evaluation.
+- R1: `ski-rental` and `ski-rental-pred` vs `keep-all` on recompute and p95 at
+  1x. Expected: not better on either.
+
+A result against expectation is reported as such, and no policy is changed in
+response: HumanEval has no problems left for another test set (§26).
