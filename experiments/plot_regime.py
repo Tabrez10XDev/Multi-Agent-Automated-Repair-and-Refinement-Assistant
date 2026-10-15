@@ -34,7 +34,8 @@ DIVERGING = LinearSegmentedColormap.from_list(
     "better_worse", ["#184f95", "#3987e5", "#9ec5f4", "#f0efec",
                      "#f2b0ae", "#e34948", "#a32a2a"])
 INK, MUTED, SURFACE = "#1f1f1e", "#6b6b67", "#fcfcfb"
-ALL_ROWS = ["sjf", "edf", "lsf", "lsf-oracle", "program-fcfs", "hint-priority"]
+ALL_ROWS = ["sjf", "edf", "lsf", "lsf-oracle", "program-fcfs", "hint-priority",
+            "program-fcfs-cap"]
 
 
 def _style(ax):
@@ -102,7 +103,10 @@ def scheduling_heatmap(data, metric, fname, title, unit, scale=1.0):
         ax.set_xticks(range(len(cells)), [f"{c['load']:.2f}" for c in cells])
         ax.set_ylabel(_label(b, data), color=INK, fontsize=9)
         _style(ax)
-    axes[-1, 0].set_xlabel("load = arrival rate / rate at util 0.8", color=INK, fontsize=9)
+    xlabel = ("load = arrival rate / saturation throughput"
+              if data["manifest"]["params"].get("load_axis_mode") == "capacity"
+              else "load = arrival rate / rate at util 0.8")
+    axes[-1, 0].set_xlabel(xlabel, color=INK, fontsize=9)
     fig.suptitle(title, color=INK, fontsize=11, x=0.02, ha="left")
     fig.text(0.02, -0.03, f"blue = better than {base}, red = worse; hatched = 95% CI includes "
              "zero; hollow dot = inactive (choice < 5%); dashed = first LSF separation",

@@ -338,6 +338,11 @@ class Scheduler:
     def order(self, views, now: float):
         raise NotImplementedError
 
+    def admit_cap(self, now: float, views, cost: CostModel, max_batch: int):
+        """How many requests may run at once; None leaves it at max_batch.
+        `cost` is the hardware profile (public physics, not oracle)."""
+        return None
+
 
 class FCFSScheduler(Scheduler):
     """
@@ -442,6 +447,45 @@ class ProgramFCFSScheduler(Scheduler):
             views, key=lambda v: (v.task_arrival_s, v.enqueued_at, v.req_id))]
 
 
+class AdaptiveCapProgramFCFS(ProgramFCFSScheduler):
+    """
+    Oldest task first, plus a concurrency cap set from the hardware's batching
+    law (CONWIP from manufacturing; mentor review 2026-10-08, plan Phase B).
+
+    On a nearly serial batcher, every extra co-runner slows every running
+    request almost as much as it adds throughput, so running fewer at once
+    finishes older tasks sooner. The scheduling maps show it: with c = 0.841
+    the best fixed cap for program-fcfs is 2-4 at operating load and 4-8 in
+    deep overload, never 16. With c = 0.15 it is 8-16.
+
+    Relative throughput at k concurrent requests is mu(k) = k / (1 + (k-1)c),
+    from the cost model's decode law. The cap is the smallest k with
+
+        mu(k) >= (1 - EPS) * mu(max_batch)
+
+    i.e. stop adding co-runners once they buy less than EPS of the attainable
+    throughput: k = 3 at c = 0.841, 14 at c = 0.15 (max_batch 16). EPS fixed
+    before any run; not tuned.
+
+    A load-dependent term (enough throughput for the measured offered work) was
+    tried first and removed: measured from request arrivals, offered work is
+    endogenous, because a task's next request arrives only when its last one
+    finishes. A lower cap lowers the measured load, which lowers the cap; in a
+    synthetic overload test it collapsed to a mean of 1.5.
+
+    Reads nothing off the views; only the batching coefficient off the hardware
+    profile.
+    """
+    name = "program-fcfs-cap"
+    EPS = 0.05
+
+    def admit_cap(self, now, views, cost, max_batch):
+        c = cost.batch_decode_coeff
+        mu = lambda k: k / (1.0 + (k - 1) * c)  # noqa: E731
+        target = (1.0 - self.EPS) * mu(max_batch)
+        return next(k for k in range(1, max_batch + 1) if mu(k) >= target)
+
+
 class HintPriorityScheduler(Scheduler):
     """
     A client-declared priority, then oldest task first. Mimics NVIDIA Dynamo's
@@ -481,6 +525,7 @@ class StaticPriorityScheduler(Scheduler):
 SCHEDULERS = {c.name: c for c in [
     FCFSScheduler, SJFScheduler, EDFScheduler, LeastSlackFirstScheduler,
     StaticPriorityScheduler, ProgramFCFSScheduler, HintPriorityScheduler,
+    AdaptiveCapProgramFCFS,
 ]}
 
 

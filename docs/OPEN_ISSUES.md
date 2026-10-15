@@ -8,7 +8,7 @@ What is not settled, not validated, or known to be wrong. Read this before trust
 > resolve. They are not sequential within a file. The other parts live in
 > `ARCHITECTURE.md`, `DECISIONS.md`, `FINDINGS.md` and `OPEN_ISSUES.md`.
 
-## Status index (2026-10-07)
+## Status index (2026-10-15)
 
 | § | issue | status | next action |
 |---|---|---|---|
@@ -21,7 +21,7 @@ What is not settled, not validated, or known to be wrong. Read this before trust
 | 14 | MAARA writeup caveats | **open**, re-verified 2026-10-07 | state them in the writeup; fix the stale header comment |
 | 15 | Ollama cache model | **resolved** | none (the remainder is §24) |
 | 20 | 4-config repetition | **resolved** | none |
-| 21 | New trace design | **resolved**; the `final` collection is **running** (started 19:50 on 2026-10-07, config A) | let it finish; run nothing heavy alongside it |
+| 21 | New trace design | **resolved**; the `final` collection finished (`676ba59`, FINDINGS §28) | none |
 | 22 | `shared_first` slow segment | **not needed**: that trace no longer backs any claim | done: the `final` run logs machine state (`data/traces/final_machine_state.log`) |
 | 23 | llama3.2 KV bytes DERIVED | **resolved** (`6f4ce7c`, DECISIONS §30) | none |
 | 24 | `issue_parser` recall gap | **open**; the holdout logs are lost, but the `final` server log is being captured to `~/ollama_final_A.log` | copy that log somewhere durable, then compare per call |
@@ -29,9 +29,10 @@ What is not settled, not validated, or known to be wrong. Read this before trust
 | 26 | "Ski-rental never fires" | **superseded** by §27 and FINDINGS §24–25 | none |
 | 27 | No operating point where ski-rental beats keep-all | **open, highest impact** | run the retention grid at 8x/16x context inside the live band |
 | 28 | Batch-cap labels counted the wrong thing | **fixed** in code; the §29–31 labels are **not yet re-derived** | rerun the maps, or qualify the labels in FINDINGS |
+| 29 | Deadlines carry almost no per-task size | **open**; `task` basis added and tested, not run | one map with `--deadline-basis task` |
+| 30 | Busy load axis not comparable across batch sizes | **open**; `capacity` axis added and tested, not run | rerun the SLO map with `--load-axis capacity` |
 
-**Still open and relevant: 7** — 9.4, 9.5, 14, 24, 27, 28, and the `final`
-collection noted in 21.
+**Still open and relevant: 8** — 9.4, 9.5, 14, 24, 27, 28, 29, 30.
 
 ---
 
@@ -653,3 +654,48 @@ requests while the scheduler still has little choice.
 
 The engine's one-model-per-iteration rule (`_choose_active_model`) is also a
 hidden scheduler that no policy controls. Not changed; noted for the writeup.
+
+## 29. Deadlines under the "estimate" basis carry almost no per-task information
+
+> **Open (2026-10-08); code added, not yet run.** FINDINGS §29–31 use the
+> default basis and stand as measured. The `task` basis exists and is tested
+> (`tests/simulator/test_deadline_basis.py`) but no map has been run with it.
+
+The default deadline is `arrival + slack_factor × multiplier × size_scale ×
+isolated`, where `isolated` is the estimator's one isolated-task constant. On
+`holdout_qwen` that is 90.2 s × a size scale of 0.35–0.41 for every task, while
+the tasks' own isolated critical paths span 5.6–88.8 s. So a deadline-driven
+rule (EDF, LSF) is ordering by arrival plus class, with no real size signal,
+which is part of why EDF behaves as oldest-task-first (FINDINGS §29).
+
+`EngineConfig.deadline_basis = "task"` sizes each budget to the task's own
+critical path times seeded lognormal noise (σ = `deadline_noise_sigma`, 0.3),
+drawn per `(slo_seed, task_id)` so every scheduler sees the same deadlines.
+This is a deliberate size signal handed to schedulers through the deadline, as
+a client that sizes its SLO to its job would; no policy reads the critical
+path directly. `scheduling_map --deadline-basis task` selects it.
+
+Next: one map with `--deadline-basis task` on a fitting set. Whether LSF can
+beat `program-fcfs` when deadlines carry size is the open question.
+
+## 30. The "busy" load axis is not comparable across batch sizes or coefficients
+
+> **Open (2026-10-08); code added, not yet run.** FINDINGS §29–31 use the
+> default axis and stand as measured, read per batch size.
+
+The map's load axis is `arrival rate / rate(util 0.8)` at the same batch size.
+GPU busy fraction saturates near 1, and how much work the server completes at
+a given busy fraction depends on the batch cap and on `batch_decode_coeff`. So
+"load 1.0" at batch 2 and at batch 16, or at 0.841 and at 0.15, are different
+amounts of offered work relative to what the server can finish. Comparing
+boundaries across rows of the map, or between FINDINGS §30 and §31, mixes this
+in.
+
+`scheduling_map --load-axis capacity` defines load as arrival rate over the
+**saturation throughput** at the same batch cap (FCFS, every task arriving at
+once, mean of three seeds), so 1.0 means arrivals match the most the server
+can complete, at every batch and coefficient. The burst drain slightly
+understates steady-state capacity, with the same bias at every batch.
+
+Next: rerun the SLO map on the capacity axis before comparing boundaries
+across batch sizes or coefficients.

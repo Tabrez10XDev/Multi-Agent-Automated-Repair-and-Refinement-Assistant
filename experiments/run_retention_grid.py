@@ -163,9 +163,12 @@ def hindsight_denominator(scale, seed, kv_mb, arrival_rate, cost, tok, cpu,
 # KV plus the blocks they hold). headroom 1.0 fits everything worth keeping at
 # its peak; 0.25 forces choices.
 #
-# Load: the arrival rate is calibrated under FCFS/keep-all at the fixed rule's
-# budget (kv_mb_at_1x * max(1, scale // 2), as in the main grid), and every
-# headroom at one scale runs at that rate: what varies is memory, not traffic.
+# Load: the arrival rate is calibrated to the target util under FCFS/keep-all
+# at the full-headroom budget (active + WS), so "util 0.8" means 80% busy when
+# memory is not the constraint. Every headroom at one scale runs at that rate:
+# what varies is memory, not traffic. (The fixed rule's budget cannot define
+# the load: at 8x it is below active + WS, keep-all thrashes, and calibration
+# landed at 0.98 busy instead of 0.8. It is kept only as pass 1's start.)
 #
 # WS is measured under evict-now, where the engine records each time a block is
 # needed (built, rebuilt or hit). A block is live from one need to the next.
@@ -239,8 +242,9 @@ def headroom_main(args):
         "cost_provenance": cost.provenance(),
         "kv_budget_rule": "peak_active_bytes + headroom x reusable working set "
                           "(both measured under evict-now at the calibrated rate)",
-        "load_reference": "arrival rate calibrated under keep-all at "
-                          "kv_mb_at_1x * max(1, scale // 2); every headroom at a "
+        "load_reference": "arrival rate calibrated to util under keep-all at the "
+                          "full-headroom budget (active + WS, from a pass-1 rate at "
+                          "kv_mb_at_1x * max(1, scale // 2)); every headroom at a "
                           "scale runs at that rate",
         "kv_mb_at_1x": args.kv_mb})
     t0 = time.time()
@@ -251,13 +255,33 @@ def headroom_main(args):
     cells = []
     with ProcessPoolExecutor(max_workers=args.workers) as pool:
         for scale in scales:
-            kv_ref = args.kv_mb * max(1, scale // 2)
+            mb = 1024 * 1024
+            checks = ("util", "hardware_profile", "batch_decode_coeff")
+            rate_kw = {"trace_set": args.trace_set, "batch": args.batch}
+            ws_seeds = seeds[:3]
+
+            def measure_ws(r, kv_mb):
+                m = [reusable_working_set(scale, sd, r, kv_mb, cost, tok, cpu,
+                                          trace_set=args.trace_set, batch=args.batch)
+                     for sd in ws_seeds]
+                return max(x[0] for x in m), max(x[1] for x in m)
+
+            # Pass 1, a starting point only: a short bisection at the fixed
+            # rule's budget. At 8x and above that budget is below active + WS,
+            # keep-all thrashes, and busy jumps past the target (it hit 0.98 at
+            # 8x on the first attempt), so it cannot define the load itself.
+            kv_rule = args.kv_mb * max(1, scale // 2)
+            rate0 = calibrate_rate(util, scale, 1, kv_rule, cost, tok, cpu,
+                                   iters=6, **rate_kw)
+            ws0, active0 = measure_ws(rate0, kv_rule)
+            # Pass 2, the load: util at the full-headroom budget, where memory
+            # is not the constraint. Every headroom then runs at this rate.
+            kv_ref = (active0 + ws0) / mb
             ref = {"trace_set": args.trace_set, "scale": scale, "util": util,
                    "kv_mb": kv_ref, "max_batch": args.batch,
                    "cache_mode": cache_mode, "hardware_profile": cost.profile,
                    "batch_decode_coeff": cost.batch_decode_coeff}
             rate_call = (util, scale, 1, kv_ref, cost, tok, cpu)
-            rate_kw = {"trace_set": args.trace_set, "batch": args.batch}
             rb = bound_args(calibrate_rate, *rate_call, **rate_kw)
             under = {"trace_set": rb["trace_set"], "scale": rb["scale"],
                      "util": rb["target_util"], "kv_mb": rb["kv_mb"],
@@ -265,32 +289,30 @@ def headroom_main(args):
                      "hardware_profile": cost.profile,
                      "batch_decode_coeff": cost.batch_decode_coeff,
                      "seed": rb["seed"], "scheduler": "fcfs",
-                     "retention": "keep-all", "prefill_chunk_tokens": chunk}
-            checks = ("util", "hardware_profile", "batch_decode_coeff")
+                     "retention": "keep-all", "prefill_chunk_tokens": chunk,
+                     "pass1_rate": rate0, "pass1_kv_mb": kv_rule}
             check_consistent("arrival_rate", under, ref, checks)
             rate, busy = calibrate_rate(*rate_call, **rate_kw, return_achieved=True)
             rate_cal = manifest.record(Calibration(
                 f"arrival_rate[{scale}x]", rate, under,
                 target=f"GPU busy fraction {util} under FCFS/keep-all at the "
-                       f"fixed-rule budget",
+                       f"full-headroom budget (active + WS from pass 1)",
                 achieved=busy, also_check=checks))
+            if busy is None or abs(busy - util) > 0.05:
+                print(f"  WARNING: {scale}x calibration achieved busy {busy} "
+                      f"against target {util}", flush=True)
 
-            ws_seeds = seeds[:3]
-            meas = [reusable_working_set(scale, s, rate, kv_ref, cost, tok, cpu,
-                                         trace_set=args.trace_set, batch=args.batch)
-                    for s in ws_seeds]
-            ws = max(m[0] for m in meas)
-            active = max(m[1] for m in meas)
+            ws, active = measure_ws(rate, kv_ref)
             ws_under = dict(under, arrival_rate=rate, seeds=ws_seeds)
             ws_cal = manifest.record(Calibration(
                 f"reusable_working_set_bytes[{scale}x]", ws, ws_under,
                 target="max over seeds of peak live reusable bytes, measured "
                        "under evict-now; achieved = peak active bytes", achieved=active,
                 also_check=checks + ("arrival_rate",)))
-            mb = 1024 * 1024
-            print(f"\n=== {scale}x  rate {rate:.4f}/s (busy {busy:.2f})  "
-                  f"WS {ws / mb:.0f} MB  active peak {active / mb:.0f} MB  "
-                  f"[{time.time() - t0:.0f}s] ===", flush=True)
+            print(f"\n=== {scale}x  rate {rate:.4f}/s (busy {busy:.2f}; pass 1 "
+                  f"{rate0:.4f}/s at {kv_rule:.0f} MB)  WS {ws / mb:.0f} MB  "
+                  f"active peak {active / mb:.0f} MB  [{time.time() - t0:.0f}s] ===",
+                  flush=True)
 
             for h in heads:
                 kv = (active + h * ws) / mb

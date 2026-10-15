@@ -68,6 +68,21 @@ class EngineConfig:
     # tightest multiplier is priority 0.
     slo_classes: Optional[tuple] = None
     slo_seed: int = 0
+    # What a deadline budget is a multiple of (OPEN_ISSUES 29).
+    #   "estimate": the estimator's one isolated-task constant times the
+    #               first-prompt size scale. On holdout_qwen that is 90.2 s x
+    #               0.35-0.41 for every task, so deadlines carry almost no
+    #               per-task information. Default, so committed results hold.
+    #   "task":     the task's own isolated critical path (5.6-88.8 s there),
+    #               times lognormal noise of sigma deadline_noise_sigma drawn per
+    #               (slo_seed, task_id): the client's rough estimate of its own
+    #               job. This is a deliberate SIZE SIGNAL handed to schedulers
+    #               through the deadline, as a client that sizes its SLO to its
+    #               request would. Set by the experimenter, never read by a
+    #               policy except as the deadline itself.
+    #   deadline = arrival + slack_factor * multiplier * noisy critical path
+    deadline_basis: str = "estimate"
+    deadline_noise_sigma: float = 0.3
 
     # KV is allocated in fixed-size blocks, as in vLLM's prefix cache. 16 is
     # vLLM's default. PLACEHOLDER: not measured, and it matters here because
@@ -398,12 +413,20 @@ class Engine:
             self.estimator.estimate_task_total(CODER_MODEL) if self.estimator else None)
         self.task_arrival = {t.task_id: t.arrival_time for t in tasks}
         self.task_slo = {}          # task_id -> (class name, priority rank)
+        if self.cfg.deadline_basis not in ("estimate", "task"):
+            raise ValueError(f"deadline_basis {self.cfg.deadline_basis!r}")
+        by_task = self.cfg.deadline_basis == "task"
         for t in tasks:
-            if self._isolated_task_s is not None:
-                budget = self.cfg.slack_factor * self._isolated_task_s
+            if by_task or self._isolated_task_s is not None:
+                if by_task:
+                    rng = random.Random(f"size:{self.cfg.slo_seed}:{t.task_id}")
+                    noise = math.exp(rng.gauss(0.0, self.cfg.deadline_noise_sigma))
+                    budget = self.cfg.slack_factor * t.critical_path_total * noise
+                else:
+                    budget = self.cfg.slack_factor * self._isolated_task_s
                 if self.cfg.slo_classes:
                     name, mult, rank = self._draw_slo(t.task_id)
-                    budget *= mult * self._size_scale(t)
+                    budget *= mult * (1.0 if by_task else self._size_scale(t))
                     self.task_slo[t.task_id] = (name, rank)
                 self.task_deadline[t.task_id] = t.arrival_time + budget
             self._push(t.arrival_time, "arrival", t)
@@ -847,13 +870,24 @@ class Engine:
             return blocked
 
         by_id = {r.req_id: r for r in self.waiting}
-        order = self.scheduler.order([self._view(r) for r in self.waiting], self.now)
+        views = [self._view(r) for r in self.waiting]
+        order = self.scheduler.order(views, self.now)
+        # A scheduler may also set how many requests run at once, never above
+        # max_batch and never below 1 (so an idle engine always admits).
+        # Capping here rather than by dropping requests from order() keeps the
+        # run loop's termination logic intact.
+        cap = self.cfg.max_batch
+        want = self.scheduler.admit_cap(self.now, views, self.cost, self.cfg.max_batch)
+        if want is not None:
+            cap = max(1, min(cap, int(want)))
+        self.m["w_cap"] = self.m.get("w_cap", 0.0) + cap
+        self.m["cap_calls"] = self.m.get("cap_calls", 0) + 1
 
         for req_id in order:
             r = by_id.get(req_id)
             if r is None:
                 continue
-            if len(self.running) >= self.cfg.max_batch:
+            if len(self.running) >= cap:
                 break              # batch-slot limited, not memory limited
             if self._try_admit(r):
                 self.waiting.remove(r)
@@ -1374,6 +1408,10 @@ class Engine:
                                        if bt_total else 0.0),
             "mean_resident": w("w_resident"),
             "max_resident": self.m["max_resident"],
+            # Mean concurrency cap the scheduler asked for, per admission call
+            # (max_batch for schedulers that do not set one).
+            "mean_admit_cap": (self.m["w_cap"] / self.m["cap_calls"]
+                               if self.m.get("cap_calls") else float(self.cfg.max_batch)),
             "frac_time_at_resident_cap": (
                 self.m["resident_time"].get(self.cfg.max_batch, 0.0) / rt_total
                 if rt_total else 0.0),
