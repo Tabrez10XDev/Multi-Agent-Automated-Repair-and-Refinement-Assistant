@@ -2,7 +2,7 @@ PY := ./venv/bin/python
 
 # Targets that call a live model server are separated out and gated. Running
 # one by accident costs hours, so each requires CONFIRM=1.
-.PHONY: help test analyze pass-at-1 grid check-traces validate-cache calibrate probe-cache probe-batch collect figures
+.PHONY: help test analyze pass-at-1 grid check-traces validate-cache calibrate probe-cache probe-batch probe-vllm-batch collect figures
 
 help:
 	@echo "Offline (no model server, safe to run anytime):"
@@ -17,6 +17,7 @@ help:
 	@echo "  make calibrate     re-measure rates and prompt sizes -> data/calibration"
 	@echo "  make probe-cache   probe Ollama's prompt cache (slots, capacity, affinity)"
 	@echo "  make probe-batch   measure batch_decode_coeff (serve with OLLAMA_NUM_PARALLEL=8)"
+	@echo "  make probe-vllm-batch [BACKEND=cuda-5060ti]   the same fit on a vLLM server"
 	@echo "  make collect       run the HumanEval tasks and collect a trace"
 
 test:
@@ -70,6 +71,10 @@ probe-cache:
 probe-batch:
 	$(REQUIRE_CONFIRM)
 	$(PY) -u -m probes.batch_decode_probe
+
+probe-vllm-batch:
+	$(REQUIRE_CONFIRM)
+	$(PY) -u -m probes.vllm_batch_probe $(if $(BACKEND),--backend $(BACKEND))
 
 collect:
 	$(REQUIRE_CONFIRM)

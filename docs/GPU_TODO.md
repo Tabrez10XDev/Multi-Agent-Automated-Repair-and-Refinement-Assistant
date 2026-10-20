@@ -60,7 +60,7 @@ Rules that follow from this:
       when present; flip `measured` only for a field that file actually
       contains; refuse a file whose `backend` is not `cuda-5060ti`. Tests
       offline, as for the Mac profile.
-- [ ] **Write `probes/vllm_batch_probe.py`**: the same fit as
+- [x] **Write `probes/vllm_batch_probe.py`**: the same fit as
       `batch_decode_probe.py` (reuse `fit_coeff` and `overlap`), against
       vLLM's OpenAI-compatible endpoint, reading per-token times from
       streaming timestamps. Offline tests for the parsing, like the Ollama one.
