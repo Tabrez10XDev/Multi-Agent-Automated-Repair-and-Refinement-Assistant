@@ -55,8 +55,8 @@ from simulator.policies import (RETENTIONS, SCHEDULERS, ExecutionEstimator,
                           SkiRentalPredictionsRetention)
 from simulator.trace_loader import (TRACE_SET_EXCLUSIONS, TRACE_SETS, load_trace,
                                     resolve_trace_set)
-from simulator.workload import (CostModel, CpuStageSeconds, Kind, StageTokens,
-                          DEFAULT_BLOCK_TOKENS)
+from simulator.workload import (DEFAULT_PROFILE, PROFILES, CostModel, CpuStageSeconds,
+                                Kind, StageTokens, DEFAULT_BLOCK_TOKENS)
 
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 POLICIES = ["keep-all", "lru", "evict-now", "ski-rental", "ski-rental-pred",
@@ -213,8 +213,10 @@ def reusable_working_set(scale, seed, arrival_rate, kv_mb, cost, tok, cpu,
 
 
 def _headroom_job(args):
-    (pol, scale, seed, kv, rate, batch, trace_set) = args
-    cost = CostModel()
+    # The profile is optional so a run started before --profile existed keeps
+    # working if its pool spawns a worker from this file.
+    (pol, scale, seed, kv, rate, batch, trace_set, *rest) = args
+    cost = CostModel.from_profile(rest[0] if rest else DEFAULT_PROFILE)
     tok, cpu = StageTokens.from_measured(), CpuStageSeconds.from_measured()
     try:
         _, rep = run_one(pol, "fcfs", scale, seed, kv, rate, cost, tok, cpu,
@@ -228,9 +230,9 @@ def headroom_main(args):
     from concurrent.futures import ProcessPoolExecutor
     from experiments.run_scheduler_table import paired_ci
 
-    cost = CostModel()
+    cost = CostModel.from_profile(args.profile)
     tok, cpu = StageTokens.from_measured(), CpuStageSeconds.from_measured()
-    scales = [int(x) for x in (args.scales or "1,8,16").split(",")]
+    scales =[int(x) for x in (args.scales or "1,8,16").split(",")]
     heads = [float(x) for x in args.headrooms.split(",")]
     util = args.util
     seeds = list(range(1, args.seeds + 1))
@@ -327,7 +329,8 @@ def headroom_main(args):
                 kv = (active + h * ws) / mb
                 manifest.assert_consistent(dict(ref, arrival_rate=rate),
                                            calibrations=[rate_cal, ws_cal])
-                jobs = [(pol, scale, sd, kv, rate, args.batch, args.trace_set)
+                jobs = [(pol, scale, sd, kv, rate, args.batch, args.trace_set,
+                         args.profile)
                         for pol in HEADROOM_POLICIES for sd in seeds]
                 res = list(pool.map(_headroom_job, jobs))
                 by = {pol: res[i * len(seeds):(i + 1) * len(seeds)]
@@ -407,11 +410,14 @@ def main():
                          "Runs FCFS only, one util, paired CIs vs keep-all")
     ap.add_argument("--util", type=float, default=0.8, help="headroom mode only")
     ap.add_argument("--workers", type=int, default=4, help="headroom mode only")
+    ap.add_argument("--profile", default=DEFAULT_PROFILE, choices=sorted(PROFILES),
+                    help="hardware profile the cost model is built from "
+                         "(simulator/workload.py PROFILES)")
     args = ap.parse_args()
     if args.headrooms:
         return headroom_main(args)
 
-    cost = CostModel()
+    cost = CostModel.from_profile(args.profile)
     tok = StageTokens.from_measured()
     cpu = CpuStageSeconds.from_measured()
 
@@ -426,7 +432,8 @@ def main():
     cells, total_runs = [], 0
     print(f"trace={args.trace_set}  scales={scales}  utils={utils}  "
           f"batch={args.batch}  kv={args.kv_mb:.0f}MB@1x  "
-          f"seeds={n_seeds} ({args.seeds_16x} at 16x)", flush=True)
+          f"seeds={n_seeds} ({args.seeds_16x} at 16x)  profile={cost.profile}",
+          flush=True)
 
     # Neither driver sets cache_mode, so every run here uses the engine default.
     cache_mode = EngineConfig().cache_mode
@@ -439,8 +446,9 @@ def main():
         "estimator": "online", "seeds": n_seeds, "seeds_16x": args.seeds_16x,
         "prefill_chunk_tokens": chunk, "sigma": default_of(run_one, "sigma"),
         "lam": default_of(run_one, "lam"),
-        "cost_model": "CostModel() defaults; StageTokens/CpuStageSeconds "
-                      ".from_measured()"})
+        "hardware_profile": cost.profile, "cost_provenance": cost.provenance(),
+        "cost_model": f"CostModel.from_profile({cost.profile!r}); "
+                      "StageTokens/CpuStageSeconds .from_measured()"})
 
     for scale in scales:
         # Bigger contexts need a bigger budget simply to admit one request.

@@ -39,7 +39,8 @@ from experiments.manifest import (Calibration, Manifest, bound_args,
 from experiments.run_retention_grid import build, calibrate_rate
 from simulator.engine import Engine, EngineConfig
 from simulator.policies import (ESTIMATORS, RETENTIONS, SCHEDULERS, HintBuilder)
-from simulator.workload import CostModel, CpuStageSeconds, StageTokens
+from simulator.workload import (DEFAULT_PROFILE, PROFILES, CostModel, CpuStageSeconds,
+                                StageTokens)
 
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ORDER = ["fcfs", "sjf", "edf", "lsf", "static-priority"]
@@ -144,15 +145,19 @@ def main():
     ap.add_argument("--quick", action="store_true", help="3 seeds")
     ap.add_argument("--out", default=None,
                     help="JSON path (default: results/scheduler_table_<trace>.json)")
+    ap.add_argument("--profile", default=DEFAULT_PROFILE, choices=sorted(PROFILES),
+                    help="hardware profile the cost model is built from "
+                         "(simulator/workload.py PROFILES)")
     args = ap.parse_args()
 
     seeds = list(range(1, (3 if args.quick else args.seeds) + 1))
-    cost, tok, cpu = CostModel(), StageTokens(), CpuStageSeconds()
+    cost, tok, cpu = CostModel.from_profile(args.profile), StageTokens(), CpuStageSeconds()
     t_start = time.time()
 
     print(f"trace={args.trace_set}  scale={args.scale}x  util={args.util:.0%}  "
           f"kv={args.kv_mb:.0f}MB  batch={args.batch}  "
-          f"retention={args.retention} (fixed)  seeds={len(seeds)}", flush=True)
+          f"retention={args.retention} (fixed)  seeds={len(seeds)}  "
+          f"profile={cost.profile}", flush=True)
 
     # Neither driver sets cache_mode, so every run here uses the engine default.
     cache_mode = EngineConfig().cache_mode
@@ -165,7 +170,9 @@ def main():
         "seeds": seeds, "prefill_chunk_tokens": chunk,
         "sigma": default_of(run_one, "sigma"),
         "slack_factor": "calibrated",
-        "cost_model": "CostModel() defaults; StageTokens(), CpuStageSeconds()"})
+        "hardware_profile": cost.profile, "cost_provenance": cost.provenance(),
+        "cost_model": f"CostModel.from_profile({cost.profile!r}); "
+                      "StageTokens(), CpuStageSeconds()"})
     # What the measurement loop below actually runs at.
     run_config = {"trace_set": args.trace_set, "scale": args.scale,
                   "util": args.util, "kv_mb": args.kv_mb,

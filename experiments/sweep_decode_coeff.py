@@ -36,7 +36,8 @@ from experiments.manifest import Calibration, Manifest, bound_args, check_consis
 from experiments.run_retention_grid import calibrate_rate, run_one
 from experiments.run_scheduler_table import paired_ci
 from simulator.engine import EngineConfig
-from simulator.workload import CostModel, CpuStageSeconds, StageTokens
+from simulator.workload import (DEFAULT_PROFILE, PROFILES, CostModel, CpuStageSeconds,
+                                StageTokens)
 
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 COEFFS = [0.05, 0.15, 0.30, 0.50]
@@ -81,6 +82,9 @@ def main():
                          "and ski-rental are always included")
     ap.add_argument("--out", default=os.path.join(_REPO, "results",
                                                   "decode_coeff_sweep.json"))
+    ap.add_argument("--profile", default=DEFAULT_PROFILE, choices=sorted(PROFILES),
+                    help="hardware profile the cost model is built from "
+                         "(simulator/workload.py PROFILES)")
     args = ap.parse_args()
 
     tok, cpu = StageTokens.from_measured(), CpuStageSeconds.from_measured()
@@ -91,12 +95,14 @@ def main():
         "trace_set": TRACE, "util": UTIL, "coeffs": args.coeffs, "seeds": seeds,
         "retention_point": RETENTION_POINT, "sched_point": SCHED_POINT,
         "ret_policies": ret_policies,
+        "hardware_profile": args.profile,
+        "cost_provenance": CostModel.from_profile(args.profile).provenance(),
         "cache_mode": cache_mode})
     t0 = time.time()
     out_rows = []
 
     for coeff in args.coeffs:
-        cost = CostModel(batch_decode_coeff=coeff)
+        cost = CostModel.from_profile(args.profile, batch_decode_coeff=coeff)
         print(f"\n=== batch_decode_coeff {coeff} ===", flush=True)
 
         # Retention point.

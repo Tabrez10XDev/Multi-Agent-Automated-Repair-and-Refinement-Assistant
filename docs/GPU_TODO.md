@@ -68,7 +68,7 @@ Rules that follow from this:
       prompts from its sidecar in order, read vLLM's prefix-cache hit counters
       from `/metrics`, and output a hit rate comparable to the simulator's
       block cache on the same trace.
-- [ ] **Have the drivers record `hardware_profile` in the manifest** and take
+- [x] **Have the drivers record `hardware_profile` in the manifest** and take
       `--profile`, so a GPU rerun is one flag (still open from brief 02).
 
 ---

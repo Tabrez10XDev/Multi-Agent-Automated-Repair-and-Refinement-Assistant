@@ -62,7 +62,8 @@ from experiments.run_retention_grid import calibrate_rate
 from experiments.run_scheduler_table import calibrate_slack, paired_ci, run_one
 from simulator.engine import EngineConfig
 from simulator.trace_loader import TRACE_SET_EXCLUSIONS
-from simulator.workload import CostModel, CpuStageSeconds, StageTokens
+from simulator.workload import (DEFAULT_PROFILE, PROFILES, CostModel, CpuStageSeconds,
+                                StageTokens)
 
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -193,6 +194,9 @@ def main():
     ap.add_argument("--quick", action="store_true",
                     help="3 seeds, loads util 0.8 and 2.2x only, batch 8")
     ap.add_argument("--out", default=os.path.join(_REPO, "results", "scheduling_map.json"))
+    ap.add_argument("--profile", default=DEFAULT_PROFILE, choices=sorted(PROFILES),
+                    help="hardware profile the cost model is built from "
+                         "(simulator/workload.py PROFILES)")
     args = ap.parse_args()
 
     slo = parse_slo(args.slo_mix)
@@ -201,8 +205,9 @@ def main():
     if args.quick:
         utils, multiples, batches, seeds = [0.8], [2.2], [8], [1, 2, 3]
 
-    cost = (CostModel() if args.batch_decode_coeff is None
-            else CostModel(batch_decode_coeff=args.batch_decode_coeff))
+    cost = CostModel.from_profile(
+        args.profile, **({} if args.batch_decode_coeff is None
+                         else {"batch_decode_coeff": args.batch_decode_coeff}))
     tok, cpu = StageTokens(), CpuStageSeconds()
     prof = cost.profile
     cache_mode = EngineConfig().cache_mode
