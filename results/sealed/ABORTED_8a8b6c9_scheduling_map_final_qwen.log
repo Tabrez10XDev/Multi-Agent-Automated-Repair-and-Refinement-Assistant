@@ -1,0 +1,8 @@
+trace=final_qwen kv=1024MB retention=lru profile=mac_ollama_measured coeff=0.841 seeds=20 batches=[2, 4, 8, 16] slo=(('tight', 1.0, 0.3), ('standard', 2.0, 0.4), ('loose', 4.0, 0.3)) deadlines=estimate load-axis=busy
+
+=== batch 2 ===
+  rate(util 0.6) = 0.0070/s  busy 1.00
+  rate(util 0.7) = 0.0070/s  busy 1.00
+  rate(util 0.8) = 0.0070/s  busy 1.00
+/opt/homebrew/Cellar/python@3.13/3.13.3/Frameworks/Python.framework/Versions/3.13/lib/python3.13/multiprocessing/resource_tracker.py:301: UserWarning: resource_tracker: There appear to be 5 leaked semaphore objects to clean up at shutdown: {'/mp-jnudphij', '/mp-mxoq98l2', '/mp-51ins6oy', '/mp-fbf67og9', '/mp-fu3ev93m'}
+  warnings.warn(

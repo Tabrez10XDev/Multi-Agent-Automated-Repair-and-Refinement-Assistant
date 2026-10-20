@@ -45,6 +45,7 @@ measurements and are unaffected.
 | 29. Scheduling regime map | current, *sim*, 0.841 | Scheduling matters once requests queue: at batch 2-4, LSF and EDF cut p95 by 15-22% at §27's load and separate at the lowest load tested. At batch 8 they separate from load 1.10, and at batch 16 (KV-bound) from 1.5-1.75. The gain is task order: EDF here is oldest-task-first and matches LSF in 39 of 40 cells. The oracle estimator is slightly worse in overload. Miss rates do not improve (+1 to +5 points). |
 | 30. Per-task deadlines | current, *sim*, 0.841 | With heterogeneous deadlines (3 classes, size-scaled), LSF, EDF and Dynamo-style client priority never beat oldest-task-first (`program-fcfs`) on p95, in any of 40 cells. They are worse in about 70% of cells, and they only move misses from the tight class to the loose one. The supported scheduling claim is program-level ordering. |
 | 31. What-if: efficient batching | *sim*, what-if 0.15, not measured | HYPOTHETICAL coefficient 0.15. LSF still never beats `program-fcfs` on p95 (0 of 40 cells; worse in 22). Its tight-class gains (up to 14 points at batch 2) are paid for by the loose class. At batch 8–16 the scheduler rarely has a choice (cap-binding labels qualified by OPEN_ISSUES §28). Verdict: freeze `program-fcfs`. Deadlines were recalibrated to a fixed FCFS miss rate. |
+| 32. Sealed `final_qwen`, partial | current, *sim*, 0.841, **out of sample**, 5 of 40 cells | On 91 unseen tasks at batch 2, `program-fcfs` cuts p95 by 14-33% against FCFS in all 5 cells (loads 0.71-1.15), and LSF is significantly worse than `program-fcfs` in all 5 (+18 to +57 s). Pre-registered S1 and S2 hold; S3 untestable at batch 2. Batches 4-16 not yet run. |
 
 ---
 
@@ -1482,3 +1483,44 @@ did. It does not test "the same absolute deadlines on faster hardware".
 
 **Verdict:** program-level ordering holds under efficient batching too:
 freeze `program-fcfs`.
+
+## 32. Sealed `final_qwen`, partial: program-level ordering holds out of sample
+
+> **Partial (2026-10-15/16), current.** 5 of 40 cells, batch 2 only. The run
+> stopped when the laptop slept on battery and the session ended; it was not
+> stopped on a result. The sealed retention run and the `final_llama` map did
+> not start. Finishing reruns the same freeze commit on the remaining cells.
+
+**Setup.** Freeze commit `f4c889b` (DECISIONS §31 and its amendment), run 1 as
+pre-registered: `scheduling_map --trace-set final_qwen --slo-mix
+tight:1.0:0.3,standard:2.0:0.4,loose:4.0:0.3`, 20 paired seeds, KV 1024 MB,
+LRU, coefficient 0.841, 91 tasks (HumanEval/75 excluded, DECISIONS §31).
+Calibration was normal: util 0.6-0.9 landed at busy 0.60-0.92, slack_factor
+1.875 (FCFS miss 26.7% at util 0.8). Log, force-added because a sealed run is
+one-shot: `results/sealed/scheduling_map_final_qwen.log`. No JSON was written.
+
+Paired p95 differences, seconds [95% CI]; * excludes zero:
+
+| load | FCFS p95 | `program-fcfs` vs FCFS | LSF vs `program-fcfs` | EDF vs `program-fcfs` |
+|---|---|---|---|---|
+| 0.71 | 212.6 | −29.1 [−43.3, −14.9]* (−14%) | +18.5 [+7.0, +30.0]* | +12.2 [+2.0, +22.5]* |
+| 0.85 | 287.5 | −66.8 [−91.0, −42.6]* (−23%) | +38.5 [+27.1, +49.9]* | +27.8 [+16.0, +39.7]* |
+| 1.00 | 397.9 | −112.4 [−145.8, −79.0]* (−28%) | +48.7 [+36.9, +60.4]* | +47.0 [+35.7, +58.4]* |
+| 1.10 | 492.0 | −151.2 [−191.8, −110.6]* (−31%) | +52.3 [+37.8, +66.8]* | +46.5 [+31.6, +61.5]* |
+| 1.15 | 557.6 | −183.8 [−225.8, −141.8]* (−33%) | +56.5 [+43.9, +69.2]* | +49.9 [+35.0, +64.9]* |
+
+Against the pre-registered comparisons:
+
+- **S1 holds:** `program-fcfs` beats FCFS on p95 in all 5 cells, and its miss
+  rate is lower in all 5 (−1.5 to −3.0 points, each significant).
+- **S2 holds, more strongly than expected:** LSF is not merely never better
+  than `program-fcfs`; it is significantly worse in all 5 cells.
+- **S3 not testable at batch 2:** `program-fcfs-cap`'s cap is 3, above the
+  batch limit, so it equals `program-fcfs` exactly in every cell.
+- `hint-priority` is significantly worse than `program-fcfs` on p95 in all 5
+  cells (+33 to +267 s).
+
+At load 1.00, LSF and EDF cut p95 by 16% against FCFS, inside §29's 15-22%
+range on the fitting set, so nothing here suggests the holdout result was
+overfit. Batches 4-16 are
+untested out of sample.

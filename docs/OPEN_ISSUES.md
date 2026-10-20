@@ -27,7 +27,7 @@ What is not settled, not validated, or known to be wrong. Read this before trust
 | 24 | `issue_parser` recall gap | **open**; the holdout logs are lost, but the `final` server log is being captured to `~/ollama_final_A.log` | copy that log somewhere durable, then compare per call |
 | 25 | Scoping reuse with a match-time guard | **not needed**: the holdout traces have 0% cross-run reuse | none |
 | 26 | "Ski-rental never fires" | **superseded** by §27 and FINDINGS §24–25 | none |
-| 27 | No operating point where ski-rental beats keep-all | **open, highest impact** | run the retention grid at 8x/16x context inside the live band |
+| 27 | No operating point where ski-rental beats keep-all | **open, highest impact**; calibration fixed (`87d21da`), grid not yet complete | run the 8x headroom grid |
 | 28 | Batch-cap labels counted the wrong thing | **fixed** in code; the §29–31 labels are **not yet re-derived** | rerun the maps, or qualify the labels in FINDINGS |
 | 29 | Deadlines carry almost no per-task size | **open**; `task` basis added and tested, not run | one map with `--deadline-basis task` |
 | 30 | Busy load axis not comparable across batch sizes | **open**; `capacity` axis added and tested, not run | rerun the SLO map with `--load-axis capacity` |
@@ -576,6 +576,13 @@ coverage from 0% to 26.2% of blocks. Necessary, but as the table above shows,
 not enough to make the rule fire.
 
 ## 27. The live-rent band is set by concurrency, not by KV budget
+
+> **Update (2026-10-15).** Two 8x headroom runs failed in load calibration:
+> the arrival-rate bisection floor (0.005/s) is above the util-0.8 rate at 8x
+> (about 0.0033/s; busy 0.96 at 0.005, 0.75 at 0.003). `87d21da` scales the
+> bracket with context (unchanged at 1x). The 8x grid has not completed. The
+> 1x headroom grid (20 seeds) is the current retention evidence: ski-rental
+> recomputes +11.8 to +15.8 s more than keep-all at every headroom.
 
 > **Open, highest impact (2026-10-07).** At 1x context the negative result is
 > now established over 20 seeds (FINDINGS §24–25). What has never been run on

@@ -1,14 +1,19 @@
 # Milestone 2 roadmap
 
-Status as of 2026-10-04. One line per workstream; detail lives in the linked
+Status as of 2026-10-20. One line per workstream; detail lives in the linked
 sections of FINDINGS / OPEN_ISSUES / DECISIONS.
 
 | # | Workstream | Status |
 |---|---|---|
-| 1 | Ollama prompt-cache baseline | **finishing now** — rule being pinned |
-| 2 | Retention comparison | **ready to start** — trace collected |
-| 3 | Better output-length estimator | not started |
-| 4 | vLLM on an RTX 5060 Ti 16 GB | not started; plan in `docs/GPU_TODO.md` |
+| 1 | Ollama prompt-cache baseline | **done** (FINDINGS §20, §22, §28) |
+| 2 | Retention comparison | **1x done** (FINDINGS §24-25); 8x calibration fixed, grid not complete (OPEN_ISSUES §27) |
+| 3 | Better output-length estimator | **closed on evidence**: the oracle estimator does not help LSF, and LSF loses to `program-fcfs` (FINDINGS §29-30) |
+| 4 | vLLM on an RTX 5060 Ti 16 GB | deferred; plan in `docs/GPU_TODO.md` |
+| - | Sealed `final` evaluation | policies frozen (DECISIONS §31, `f4c889b`); `final_qwen` 5 of 40 cells done (FINDINGS §32) |
+
+Milestone 2 headline (DECISIONS §31): program-level ordering. Remaining, in
+order: finish the sealed runs from `f4c889b`, then the 8x retention grid.
+The sections below are the original plan, kept for the record.
 
 ## 1. Ollama prompt-cache baseline — DONE
 
