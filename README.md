@@ -160,9 +160,11 @@ See `docs/OPEN_ISSUES.md` for the full list. The two that bite soonest:
   (`docs/OPEN_ISSUES.md` §24). Quote accuracy per role.
 - **Every result is a Mac + Ollama + Metal result.** Nothing has been measured
   on the target RTX 5060 Ti 16 GB (`docs/DECISIONS.md` §29, `docs/GPU_TODO.md`).
-- **`issue_parser` sets no output limit.** One call in the sealed `final_qwen`
-  trace generated 40,960 tokens over 26 minutes; that task is excluded from the
-  simulator runs on that set (`docs/DECISIONS.md` §31).
+- **The committed traces were collected without an output limit.** One
+  `issue_parser` call in the sealed `final_qwen` trace generated 40,960 tokens
+  over 26 minutes; that task is excluded from the simulator runs on that set
+  (`docs/DECISIONS.md` §31). Future collections cap `issue_parser` at 4,608
+  tokens (`maara/output_limits.py`, `docs/DECISIONS.md` §32).
 
 ---
 

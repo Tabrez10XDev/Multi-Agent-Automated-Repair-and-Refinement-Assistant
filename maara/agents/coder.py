@@ -1,4 +1,5 @@
 from maara import tracing
+from maara import output_limits
 from maara import prompt_layout
 
 
@@ -170,6 +171,7 @@ Current code in {filename}:
         response = tracing.chat(
             model=model,
             role="coder",
+            options=output_limits.options("coder"),
             # Stable context comes from issue_parser and retrieval; on a retry
             # the prompt also carries the previous attempt's fix and the
             # diagnosis of why it failed (coder.py:97-131).

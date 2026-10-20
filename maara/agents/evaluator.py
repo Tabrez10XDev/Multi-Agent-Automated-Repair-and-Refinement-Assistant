@@ -3,6 +3,7 @@
 import re
 
 from maara import tracing
+from maara import output_limits
 from maara import prompt_layout
 
 DEFAULT_SCORE = 5
@@ -94,6 +95,7 @@ FEEDBACK: <one paragraph explaining what is missing or looks good>
     response = tracing.chat(
         model="llama3.2",
         role="evaluator",
+        options=output_limits.options("evaluator"),
         # Prompt carries issue.intent/affected_files from issue_parser and
         # relevant_code selected by retrieval (evaluator.py:11-22).
         parents=("issue_parser", "retriever"),

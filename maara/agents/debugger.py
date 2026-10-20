@@ -1,4 +1,5 @@
 from maara import tracing
+from maara import output_limits
 from maara import prompt_layout
 
 
@@ -76,6 +77,7 @@ Raw JSON only. No markdown. No explanation.""")
     response = tracing.chat(
         model="qwen2.5-coder:7b",
         role="debugger",
+        options=output_limits.options("debugger"),
         # fixed_code comes from THIS attempt's coder; previous_diagnoses come
         # from earlier attempts' debugger calls (debugger.py:15-36).
         parents=("coder",),

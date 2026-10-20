@@ -2,6 +2,7 @@ import json
 import re
 
 from maara import tracing
+from maara import output_limits
 from maara import prompt_layout
 
 
@@ -54,6 +55,7 @@ Return raw JSON only. No explanation. No markdown fences.""")
     response = tracing.chat(
         model="qwen2.5-coder:7b",
         role="issue_parser",
+        options=output_limits.options("issue_parser"),
         # Resolves to no parent on the first call, since no evaluator has run
         # yet, and to the rejecting evaluator on a replan (orchestrator.py:80).
         parents=("evaluator",),

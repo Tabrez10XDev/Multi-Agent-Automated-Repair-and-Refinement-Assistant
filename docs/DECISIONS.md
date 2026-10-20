@@ -880,3 +880,57 @@ aborted log is kept as
 `results/sealed/ABORTED_8a8b6c9_scheduling_map_final_qwen.log`. The commit
 holding this amendment is the freeze commit for runs 1-3; nothing else
 changed.
+
+## 32. `issue_parser` output is capped at 4,608 tokens; future collections only
+
+Set 2026-10-20. DECISIONS §31's amendment found that no MAARA agent sets an
+output limit: `issue_parser` on HumanEval/75 in `final_qwen` generated 40,960
+tokens over 1,590 s. Limits now live in `maara/output_limits.py`, and every
+agent passes `options=output_limits.options(<role>)` to `tracing.chat`.
+
+**Data.** `output_tokens` by `agent_role` over all seven committed traces
+(`data/traces/*.jsonl.gz`, chat rows), with the one runaway left out. Limit =
+2 x max, rounded up to a multiple of 256:
+
+| role | n | p99 | max | max / p99 | limit |
+|---|---|---|---|---|---|
+| `issue_parser` | 759 | 269 | 2,286 | 8.5x | **4,608, applied** |
+| `coder` | 683 | 358 | 553 | 1.5x | 1,280, proposed |
+| `debugger` | 392 | 247 | 373 | 1.5x | 768, proposed |
+| `evaluator` | 591 | 319 | 372 | 1.2x | 768, proposed |
+
+The 2,286 is `final_llama` HumanEval/63, 80 s, itself about 7x the next
+largest `issue_parser` output (307).
+
+**Only `issue_parser` is applied.** It is the only role with a heavy tail: a
+true runaway plus a 2,286-token reply to a prompt asking for a short JSON
+object. The other three have max/p99 at or below 1.55, and none of their
+1,666 calls exceeds 553 tokens. Capping `coder` would risk truncating code,
+which fails its tests and would move pass@1 against the committed traces with
+no measured gain. Their values stay in `PROPOSED_NUM_PREDICT`, and an
+unlimited role passes `options=None`, ollama's own default, so its request is
+unchanged. Applying one later is a dict edit plus a note here.
+
+**`num_ctx` is not changed.** `data/traces/final_machine_state.log` (`ollama
+ps`) shows CONTEXT 4096 for both models in all 304 rows, and 40,960 = 10 x
+4,096, which is Ollama's own cap when `num_predict` is unlimited. The traces
+show no truncation: the largest prompt is 4,043 tokens, none sits at the
+ceiling, and the largest prompts run 3.0-3.7 characters per token against a
+median of 3.97, so nothing was dropped from the front. Recorded but not acted
+on: `debugger` on HumanEval/69 in `final_qwen` (prompt 4,043, output 213) ran
+160 tokens past the window during generation. Changing `num_ctx` would also
+reload the model and change its KV allocation
+(`probes/batch_decode_probe.py`).
+
+**Caveat.** 4,608 plus an `issue_parser` prompt (at most 392) exceeds the
+4,096 window, so a runaway context-shifts before the cap stops it. The cap
+still bounds such a call at about 3 minutes at the measured ~26 tokens/s,
+against 26, and at about 275 MB of KV, against 2,253 MB. No observed output
+would have been truncated.
+
+**Scope: future trace collections only.** Committed traces are not
+recollected and `data/` is never regenerated, so every existing trace keeps
+its uncapped outputs. The HumanEval/75 exclusion (`TRACE_SET_EXCLUSIONS`,
+§31) stays. The §31 freeze and the sealed runs are unaffected: they replay
+committed traces, and `maara/` holds no simulator policy, parameter or
+driver default.
