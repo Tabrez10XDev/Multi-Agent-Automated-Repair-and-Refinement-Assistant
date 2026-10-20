@@ -125,13 +125,64 @@ def _rates_from_measured() -> dict:
     return rates
 
 
+# The GPU box's probes write here (probes/calibrate.py:calibration_path with
+# --backend cuda-5060ti); the same path rule is repeated rather than imported
+# so the simulator does not depend on the probes package.
+GPU_BACKEND = "cuda-5060ti"
+_GPU_CAL_DIR = os.path.join(_REPO, "data", "calibration", GPU_BACKEND)
+# Placeholder until G2/G4 of docs/GPU_TODO.md measure it.
+_GPU_COEFF_PLACEHOLDER = 0.15
+
+
+def _load_json(path: str) -> dict:
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def _check_gpu_backend(data: dict, path: str) -> None:
+    if data and data.get("backend") != GPU_BACKEND:
+        raise ValueError(
+            f"{path} was measured on backend {data.get('backend')!r}, but the "
+            f"gpu_5060ti profile only accepts {GPU_BACKEND!r}.")
+
+
+def gpu_rates_from(cal_dir: str) -> dict:
+    """
+    gpu_5060ti rates. Start from the Mac numbers copied verbatim, every one
+    marked unmeasured, so the profile runs end to end before any GPU probe has
+    run; they are NOT an estimate of an RTX 5060 Ti. Then overwrite, and mark
+    MEASURED, each model that <cal_dir>/measured.json actually contains. KV
+    bytes per token are fp16 architecture arithmetic and do not depend on the
+    GPU, but on this machine neither has been checked against a server log.
+    """
+    rates = {name: replace(r, measured=False) for name, r in _rates_from_measured().items()}
+    path = os.path.join(cal_dir, "measured.json")
+    data = _load_json(path)
+    _check_gpu_backend(data, path)
+    for name, m in data.get("rates", {}).items():
+        key = name if name in rates else (SENTINEL_MODEL if name.startswith("llama") else name)
+        if key in rates:
+            rates[key] = replace(rates[key], prefill_rate=m["prefill_rate"],
+                                 decode_rate=m["decode_rate"], measured=True)
+    return rates
+
+
+def gpu_coeff_from(cal_dir: str) -> tuple:
+    """(batch_decode_coeff, measured?) from <cal_dir>/batch_decode.json, the
+    Ollama-on-CUDA fit (G2). Which batcher's coefficient the profile should use
+    is a DECISIONS call once G4 has also run; until then it is this file's."""
+    path = os.path.join(cal_dir, "batch_decode.json")
+    data = _load_json(path)
+    _check_gpu_backend(data, path)
+    coeff = data.get("fit", {}).get("batch_decode_coeff")
+    return (coeff, True) if coeff is not None else (_GPU_COEFF_PLACEHOLDER, False)
+
+
 def _gpu_5060ti_rates() -> dict:
-    # PLACEHOLDER. The Mac numbers copied verbatim, every one marked
-    # unmeasured, so the profile runs end to end. They are NOT an estimate of
-    # an RTX 5060 Ti; docs/GPU_TODO.md replaces them with measurements. KV bytes per
-    # token are fp16 architecture arithmetic and so do not depend on the GPU,
-    # but on this machine neither has been checked against a server log.
-    return {name: replace(r, measured=False) for name, r in _rates_from_measured().items()}
+    return gpu_rates_from(_GPU_CAL_DIR)
 
 
 @dataclass(frozen=True)
@@ -156,6 +207,7 @@ class HardwareProfile:
 
 
 DEFAULT_PROFILE = "mac_ollama_measured"
+_GPU_COEFF = gpu_coeff_from(_GPU_CAL_DIR)
 
 PROFILES = {
     "mac_ollama_measured": HardwareProfile(
@@ -174,9 +226,12 @@ PROFILES = {
     ),
     "gpu_5060ti": HardwareProfile(
         name="gpu_5060ti",
-        description="PLACEHOLDER for RTX 5060 Ti 16 GB: Mac values copied, nothing measured",
+        description=("RTX 5060 Ti 16 GB: values in data/calibration/cuda-5060ti/ are "
+                     "MEASURED; anything missing there is the Mac value copied, "
+                     "PLACEHOLDER"),
         rates=_gpu_5060ti_rates,
-        batch_decode_coeff=0.15,
+        batch_decode_coeff=_GPU_COEFF[0],
+        batch_decode_coeff_measured=_GPU_COEFF[1],
         iteration_overhead_s=0.001,
     ),
 }

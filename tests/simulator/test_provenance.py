@@ -105,7 +105,9 @@ def test_gpu_5060ti_exists_and_nothing_in_it_is_measured():
     assert cm.hardware_profile.kv_measured == frozenset()
     assert cm.hardware_profile.batch_decode_coeff_measured is False
     text = cm.provenance()
-    assert "MEASURED" not in text.replace("PLACEHOLDER", "")
+    # The profile's description names both tags, so check the field lines only.
+    fields = [l for l in text.splitlines() if "hardware profile" not in l]
+    assert "MEASURED" not in "\n".join(fields).replace("PLACEHOLDER", "")
     assert "PLACEHOLDER" in next(l for l in text.splitlines() if "hardware profile" in l)
 
 

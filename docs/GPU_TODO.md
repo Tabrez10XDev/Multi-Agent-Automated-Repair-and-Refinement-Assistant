@@ -55,7 +55,7 @@ Rules that follow from this:
       (`tests/simulator/test_calibration_paths.py`).
 - [x] **Placeholder profile retargeted** from `gpu_4060` (8 GB) to
       `gpu_5060ti` (16 GB), every field still marked unmeasured.
-- [ ] **Load the GPU calibration into `gpu_5060ti`.** Read
+- [x] **Load the GPU calibration into `gpu_5060ti`.** Read
       `data/calibration/cuda-5060ti/measured.json` and `batch_decode.json`
       when present; flip `measured` only for a field that file actually
       contains; refuse a file whose `backend` is not `cuda-5060ti`. Tests
