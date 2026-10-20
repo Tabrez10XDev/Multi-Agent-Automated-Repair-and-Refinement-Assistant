@@ -57,7 +57,7 @@ three that call a live model require `CONFIRM=1`, because starting one by
 accident costs hours.
 
 ```bash
-make test          # full test suite (224 tests, ~77s)
+make test          # full test suite (333 tests, ~2-3 min)
 make analyze       # trace stats + figures for both trace sets
 make pass-at-1     # pass@1 per configuration from the committed outcomes
 make grid          # retention x scheduler grid (quick mode)
@@ -114,8 +114,8 @@ python3 -m venv venv
 ./venv/bin/pip install -e '.[sim,dev]'       # simulator + tests; no GPU needed
 ./venv/bin/pip install -e '.[agent]'         # adds the agent pipeline
 
-ollama pull qwen2.5-coder:7b                 # coder, debugger  (4.7GB)
-ollama pull llama3.2                         # issue parser, evaluator  (2.0GB)
+ollama pull qwen2.5-coder:7b                 # issue parser, debugger, coder  (4.7GB)
+ollama pull llama3.2                         # evaluator, coder in llama configs  (2.0GB)
 ollama pull nomic-embed-text                 # RAG embeddings  (274MB)
 ```
 
@@ -158,8 +158,11 @@ See `docs/OPEN_ISSUES.md` for the full list. The two that bite soonest:
   held-out testing (`docs/DECISIONS.md` §19). Held-out hit recall is 81% and
   80% (`docs/FINDINGS.md` §22), with every miss in `issue_parser`
   (`docs/OPEN_ISSUES.md` §24). Quote accuracy per role.
-- **`llama3.2`'s `kv_bytes_per_token` is DERIVED, not measured.** qwen's was
-  confirmed against the Ollama server log; llama3.2's still needs the same check.
+- **Every result is a Mac + Ollama + Metal result.** Nothing has been measured
+  on the target RTX 5060 Ti 16 GB (`docs/DECISIONS.md` §29, `docs/GPU_TODO.md`).
+- **`issue_parser` sets no output limit.** One call in the sealed `final_qwen`
+  trace generated 40,960 tokens over 26 minutes; that task is excluded from the
+  simulator runs on that set (`docs/DECISIONS.md` §31).
 
 ---
 

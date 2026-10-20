@@ -17,11 +17,16 @@ Structure of one iteration:
 
 RENT
 ----
-There is deliberately no memory-price knob. Rent is measured, not priced: while
-a request is blocked specifically because KV is full, the blocked time is
-divided among the retained-but-unreferenced entries in proportion to their size.
-An entry's accrued rent is therefore in seconds, directly comparable to
-CostModel.recompute_seconds() -- which is exactly the ski-rental comparison.
+There is deliberately no memory-price knob. Rent is derived, not priced
+(DECISIONS 13): while the KV pool is under pressure, each retained-but-
+unreferenced entry is charged in proportion to its bytes times the
+recompute-per-byte of what that pressure would evict, normalised by the
+evictable pool. Rent is therefore in seconds, comparable to
+CostModel.recompute_seconds() -- the ski-rental comparison. It is a shared
+pressure signal that releasing shifts rather than removes (DECISIONS 23), so
+report it as a diagnostic, not a cost to rank policies by. The Phase 1 model,
+which charged only while a request was hard-blocked, is kept as
+rent_model="blocking".
 """
 
 from __future__ import annotations
