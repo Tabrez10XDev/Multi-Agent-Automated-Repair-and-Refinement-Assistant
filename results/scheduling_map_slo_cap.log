@@ -1,0 +1,549 @@
+trace=holdout_qwen kv=1024MB retention=lru profile=mac_ollama_measured coeff=0.841 seeds=20 batches=[2, 4, 8, 16] slo=(('tight', 1.0, 0.3), ('standard', 2.0, 0.4), ('loose', 4.0, 0.3)) deadlines=estimate load-axis=busy
+
+=== batch 2 ===
+  rate(util 0.6) = 0.0206/s  busy 0.66
+  rate(util 0.7) = 0.0226/s  busy 0.72
+  rate(util 0.8) = 0.0265/s  busy 0.82
+  rate(util 0.9) = 0.0323/s  busy 0.91
+  slack_factor = 1.875  (FCFS miss 26.5% at util 0.8)
+  load 0.78 (util 0.6, x1.0)  choice 20.7%  rent>0 32.6%  forced 6187.6  resident max 2  active max/p95 2/2.0  at-cap 63.1%
+    fcfs   p50    53.0  p95   206.6  miss 20.1% (infeasible  2.0%)
+    sjf        p95  -22.44 [-35.59, -9.29]*  miss  -1.1% [-2.1%, -0.2%]*
+    edf           vs program-fcfs: p95  +14.03 [+5.57, +22.49]*  miss  -1.8% [-2.8%, -0.7%]*
+    edf        p95  -23.54 [-36.64, -10.45]*  miss  -3.4% [-4.5%, -2.3%]*
+    lsf           vs program-fcfs: p95  +22.15 [+12.10, +32.20]*  miss  -1.0% [-2.4%, +0.3%]
+    lsf        p95  -15.42 [-31.30, +0.45]   miss  -2.7% [-3.9%, -1.5%]*
+    lsf-oracle p95  -18.12 [-32.63, -3.61]*  miss  -2.4% [-3.9%, -0.9%]*
+    program-fcfs p95  -37.57 [-53.81, -21.34]*  miss  -1.7% [-2.9%, -0.5%]*
+    hint-priority vs program-fcfs: p95  +44.11 [+8.00, +80.23]*  miss  -1.8% [-3.5%, -0.1%]*
+    hint-priority p95   +6.54 [-26.33, +39.41]   miss  -3.4% [-5.3%, -1.6%]*
+    program-fcfs-cap p95  -37.57 [-53.81, -21.34]*  miss  -1.7% [-2.9%, -0.5%]*
+  load 0.85 (util 0.7, x1.0)  choice 26.3%  rent>0 38.6%  forced 6178.9  resident max 2  active max/p95 2/2.0  at-cap 67.5%
+    fcfs   p50    59.4  p95   228.8  miss 23.2% (infeasible  2.5%)
+    sjf        p95  -22.79 [-38.63, -6.96]*  miss  -1.4% [-2.5%, -0.3%]*
+    edf           vs program-fcfs: p95  +21.21 [+12.04, +30.37]*  miss  -1.2% [-2.7%, +0.3%]
+    edf        p95  -20.59 [-35.95, -5.23]*  miss  -3.8% [-5.6%, -2.0%]*
+    lsf           vs program-fcfs: p95  +25.45 [+15.12, +35.78]*  miss  +0.3% [-1.3%, +1.9%]
+    lsf        p95  -16.35 [-34.04, +1.35]   miss  -2.3% [-4.4%, -0.3%]*
+    lsf-oracle p95  -14.55 [-31.25, +2.15]   miss  -3.2% [-5.6%, -0.9%]*
+    program-fcfs p95  -41.79 [-59.74, -23.85]*  miss  -2.6% [-3.9%, -1.3%]*
+    hint-priority vs program-fcfs: p95  +52.34 [+16.95, +87.73]*  miss  -1.7% [-4.0%, +0.7%]
+    hint-priority p95  +10.55 [-18.32, +39.42]   miss  -4.3% [-6.9%, -1.6%]*
+    program-fcfs-cap p95  -41.79 [-59.74, -23.85]*  miss  -2.6% [-3.9%, -1.3%]*
+  load 1.00 (util 0.8, x1.0)  choice 37.6%  rent>0 47.6%  forced 6155.1  resident max 2  active max/p95 2/2.0  at-cap 74.2%
+    fcfs   p50    76.4  p95   296.0  miss 30.6% (infeasible  3.1%)
+    sjf        p95  -41.04 [-59.28, -22.81]*  miss  -1.9% [-3.6%, -0.3%]*
+    edf           vs program-fcfs: p95  +28.29 [+17.58, +39.00]*  miss  +0.6% [-1.6%, +2.9%]
+    edf        p95  -34.96 [-55.93, -13.98]*  miss  -3.3% [-6.1%, -0.6%]*
+    lsf           vs program-fcfs: p95  +33.21 [+21.40, +45.02]*  miss  +3.0% [+0.7%, +5.2%]*
+    lsf        p95  -30.04 [-52.48, -7.60]*  miss  -1.0% [-3.8%, +1.8%]
+    lsf-oracle p95  -33.05 [-55.52, -10.58]*  miss  -1.4% [-4.4%, +1.6%]
+    program-fcfs p95  -63.25 [-87.38, -39.12]*  miss  -4.0% [-5.6%, -2.4%]*
+    hint-priority vs program-fcfs: p95  +71.26 [+35.30, +107.22]*  miss  -0.4% [-2.3%, +1.5%]
+    hint-priority p95   +8.01 [-20.85, +36.87]   miss  -4.4% [-6.7%, -2.0%]*
+    program-fcfs-cap p95  -63.25 [-87.38, -39.12]*  miss  -4.0% [-5.6%, -2.4%]*
+  load 1.22 (util 0.9, x1.0)  choice 54.7%  rent>0 62.6%  forced 6098.1  resident max 2  active max/p95 2/2.0  at-cap 85.2%
+    fcfs   p50   109.0  p95   396.5  miss 41.1% (infeasible  6.2%)
+    sjf        p95  -67.28 [-95.06, -39.50]*  miss  -1.2% [-2.9%, +0.5%]
+    edf           vs program-fcfs: p95  +27.94 [+16.14, +39.74]*  miss  +0.8% [-2.4%, +4.1%]
+    edf        p95  -63.10 [-99.12, -27.08]*  miss  -0.6% [-4.8%, +3.6%]
+    lsf           vs program-fcfs: p95  +34.83 [+22.12, +47.54]*  miss  +3.1% [-0.0%, +6.2%]
+    lsf        p95  -56.21 [-91.16, -21.26]*  miss  +1.7% [-2.1%, +5.5%]
+    lsf-oracle p95  -57.99 [-89.45, -26.53]*  miss  +2.6% [-1.1%, +6.3%]
+    program-fcfs p95  -91.04 [-123.56, -58.53]*  miss  -1.4% [-3.6%, +0.8%]
+    hint-priority vs program-fcfs: p95  +98.69 [+59.89, +137.49]*  miss  -0.6% [-3.3%, +2.0%]
+    hint-priority p95   +7.65 [-26.46, +41.76]   miss  -2.0% [-5.2%, +1.1%]
+    program-fcfs-cap p95  -91.04 [-123.56, -58.53]*  miss  -1.4% [-3.6%, +0.8%]
+  load 1.10 (util 0.8, x1.1)  choice 44.5%  rent>0 53.5%  forced 6131.1  resident max 2  active max/p95 2/2.0  at-cap 78.5%
+    fcfs   p50    87.4  p95   343.0  miss 35.3% (infeasible  4.0%)
+    sjf        p95  -57.48 [-82.05, -32.91]*  miss  -1.6% [-3.0%, -0.2%]*
+    edf           vs program-fcfs: p95  +30.94 [+19.89, +42.00]*  miss  +0.6% [-1.6%, +2.9%]
+    edf        p95  -47.58 [-76.30, -18.86]*  miss  -1.5% [-4.2%, +1.2%]
+    lsf           vs program-fcfs: p95  +34.61 [+22.04, +47.18]*  miss  +2.8% [+0.4%, +5.2%]*
+    lsf        p95  -43.92 [-72.98, -14.85]*  miss  +0.6% [-2.0%, +3.3%]
+    lsf-oracle p95  -45.73 [-73.41, -18.05]*  miss  -0.1% [-3.2%, +3.1%]
+    program-fcfs p95  -78.52 [-107.97, -49.07]*  miss  -2.1% [-3.8%, -0.5%]*
+    hint-priority vs program-fcfs: p95  +85.47 [+47.74, +123.20]*  miss  -1.2% [-3.6%, +1.2%]
+    hint-priority p95   +6.95 [-22.91, +36.81]   miss  -3.3% [-5.8%, -0.8%]*
+    program-fcfs-cap p95  -78.52 [-107.97, -49.07]*  miss  -2.1% [-3.8%, -0.5%]*
+  load 1.25 (util 0.8, x1.25)  choice 57.8%  rent>0 64.4%  forced 6084.1  resident max 2  active max/p95 2/2.0  at-cap 86.3%
+    fcfs   p50   115.9  p95   409.5  miss 43.1% (infeasible  6.9%)
+    sjf        p95  -65.88 [-92.70, -39.05]*  miss  -1.4% [-2.8%, +0.0%]
+    edf           vs program-fcfs: p95  +29.91 [+15.71, +44.11]*  miss  +1.0% [-2.0%, +4.0%]
+    edf        p95  -62.77 [-97.64, -27.89]*  miss  -0.8% [-4.2%, +2.6%]
+    lsf           vs program-fcfs: p95  +34.08 [+19.51, +48.65]*  miss  +4.0% [+0.9%, +7.1%]*
+    lsf        p95  -58.60 [-92.07, -25.14]*  miss  +2.1% [-1.2%, +5.4%]
+    lsf-oracle p95  -55.85 [-87.84, -23.87]*  miss  +2.3% [-0.9%, +5.5%]
+    program-fcfs p95  -92.68 [-124.50, -60.86]*  miss  -1.9% [-3.7%, -0.1%]*
+    hint-priority vs program-fcfs: p95 +103.78 [+64.20, +143.36]*  miss  -0.8% [-3.7%, +2.1%]
+    hint-priority p95  +11.10 [-22.82, +45.02]   miss  -2.7% [-5.5%, +0.1%]
+    program-fcfs-cap p95  -92.68 [-124.50, -60.86]*  miss  -1.9% [-3.7%, -0.1%]*
+  load 1.50 (util 0.8, x1.5)  choice 75.3%  rent>0 76.3%  forced 6032.7  resident max 2  active max/p95 2/2.0  at-cap 92.9%
+    fcfs   p50   171.4  p95   580.7  miss 56.2% (infeasible 12.6%)
+    sjf        p95 -111.34 [-141.23, -81.46]*  miss  -2.4% [-4.3%, -0.5%]*
+    edf           vs program-fcfs: p95  +31.62 [+15.71, +47.53]*  miss  +1.3% [-1.2%, +3.8%]
+    edf        p95 -112.97 [-148.61, -77.33]*  miss  -0.2% [-3.8%, +3.5%]
+    lsf           vs program-fcfs: p95  +45.11 [+27.11, +63.11]*  miss  +4.4% [+1.9%, +7.0%]*
+    lsf        p95  -99.48 [-135.20, -63.76]*  miss  +3.0% [-0.2%, +6.2%]
+    lsf-oracle p95 -104.55 [-139.43, -69.66]*  miss  +4.4% [+0.9%, +8.0%]*
+    program-fcfs p95 -144.58 [-181.68, -107.49]*  miss  -1.5% [-3.8%, +0.8%]
+    hint-priority vs program-fcfs: p95 +220.00 [+138.40, +301.61]*  miss  -2.8% [-6.1%, +0.6%]
+    hint-priority p95  +75.42 [+4.38, +146.45]*  miss  -4.3% [-7.5%, -1.0%]*
+    program-fcfs-cap p95 -144.58 [-181.68, -107.49]*  miss  -1.5% [-3.8%, +0.8%]
+  load 1.75 (util 0.8, x1.75)  choice 81.8%  rent>0 79.5%  forced 6115.6  resident max 2  active max/p95 2/2.0  at-cap 94.6%
+    fcfs   p50   232.3  p95   752.9  miss 65.3% (infeasible 19.8%)
+    sjf        p95 -152.15 [-172.42, -131.88]*  miss  -2.0% [-3.6%, -0.5%]*
+    edf           vs program-fcfs: p95  +29.04 [+15.56, +42.52]*  miss  +1.6% [-0.7%, +3.8%]
+    edf        p95 -160.40 [-188.01, -132.78]*  miss  -0.2% [-2.7%, +2.4%]
+    lsf           vs program-fcfs: p95  +36.70 [+21.13, +52.28]*  miss  +4.0% [+1.6%, +6.4%]*
+    lsf        p95 -152.74 [-183.43, -122.05]*  miss  +2.2% [-0.3%, +4.8%]
+    lsf-oracle p95 -151.43 [-179.90, -122.96]*  miss  +3.8% [+1.2%, +6.4%]*
+    program-fcfs p95 -189.44 [-218.53, -160.35]*  miss  -1.8% [-3.5%, +0.0%]
+    hint-priority vs program-fcfs: p95 +304.22 [+226.62, +381.82]*  miss  -3.4% [-6.3%, -0.5%]*
+    hint-priority p95 +114.78 [+45.65, +183.90]*  miss  -5.2% [-8.3%, -2.1%]*
+    program-fcfs-cap p95 -189.44 [-218.53, -160.35]*  miss  -1.8% [-3.5%, +0.0%]
+  load 2.20 (util 0.8, x2.2)  choice 88.8%  rent>0 82.4%  forced 6441.1  resident max 2  active max/p95 2/2.0  at-cap 96.7%
+    fcfs   p50   330.9  p95   948.0  miss 74.3% (infeasible 27.7%)
+    sjf        p95 -165.85 [-183.13, -148.57]*  miss  -2.0% [-3.4%, -0.7%]*
+    edf           vs program-fcfs: p95  +20.61 [+1.03, +40.19]*  miss  +1.6% [-0.4%, +3.5%]
+    edf        p95 -177.78 [-209.08, -146.47]*  miss  -1.8% [-4.3%, +0.8%]
+    lsf           vs program-fcfs: p95  +34.63 [+17.45, +51.81]*  miss  +4.3% [+2.0%, +6.5%]*
+    lsf        p95 -163.76 [-191.51, -136.01]*  miss  +0.9% [-1.8%, +3.7%]
+    lsf-oracle p95 -162.65 [-189.73, -135.56]*  miss  +0.3% [-2.7%, +3.2%]
+    program-fcfs p95 -198.39 [-221.67, -175.11]*  miss  -3.3% [-4.6%, -2.0%]*
+    hint-priority vs program-fcfs: p95 +289.01 [+225.77, +352.25]*  miss  -3.3% [-5.7%, -1.0%]*
+    hint-priority p95  +90.63 [+23.26, +157.99]*  miss  -6.7% [-9.6%, -3.7%]*
+    program-fcfs-cap p95 -198.39 [-221.67, -175.11]*  miss  -3.3% [-4.6%, -2.0%]*
+  load 3.00 (util 0.8, x3.0)  choice 93.1%  rent>0 83.2%  forced 6837.8  resident max 2  active max/p95 2/2.0  at-cap 98.1%
+    fcfs   p50   500.4  p95  1160.9  miss 81.3% (infeasible 35.9%)
+    sjf        p95 -173.14 [-187.44, -158.84]*  miss  -1.9% [-3.0%, -0.9%]*
+    edf           vs program-fcfs: p95  +13.60 [-3.84, +31.04]   miss  +4.3% [+2.8%, +5.7%]*
+    edf        p95 -184.93 [-208.51, -161.35]*  miss  -0.7% [-2.2%, +0.8%]
+    lsf           vs program-fcfs: p95  +22.49 [+3.70, +41.28]*  miss  +7.8% [+6.2%, +9.3%]*
+    lsf        p95 -176.04 [-200.60, -151.48]*  miss  +2.8% [+1.2%, +4.3%]*
+    lsf-oracle p95 -160.57 [-182.17, -138.98]*  miss  +2.3% [+0.9%, +3.7%]*
+    program-fcfs p95 -198.53 [-213.33, -183.73]*  miss  -5.0% [-6.5%, -3.5%]*
+    hint-priority vs program-fcfs: p95 +150.74 [+99.03, +202.45]*  miss  +2.1% [-0.6%, +4.9%]
+    hint-priority p95  -47.79 [-95.90, +0.31]   miss  -2.9% [-5.5%, -0.3%]*
+    program-fcfs-cap p95 -198.53 [-213.33, -183.73]*  miss  -5.0% [-6.5%, -3.5%]*
+
+=== batch 4 ===
+  rate(util 0.6) = 0.0206/s  busy 0.65
+  rate(util 0.7) = 0.0226/s  busy 0.71
+  rate(util 0.8) = 0.0265/s  busy 0.81
+  rate(util 0.9) = 0.0323/s  busy 0.91
+  slack_factor = 1.875  (FCFS miss 22.2% at util 0.8)
+  load 0.78 (util 0.6, x1.0)  choice  4.8%  rent>0  9.4%  forced 6195.6  resident max 4  active max/p95 4/3.0  at-cap 25.6% INACTIVE
+    fcfs   p50    54.7  p95   190.7  miss 19.7% (infeasible  1.5%)
+    sjf        p95  -11.31 [-18.57, -4.04]*  miss  +0.0% [-0.8%, +0.8%]
+    edf           vs program-fcfs: p95   +6.92 [+0.08, +13.76]*  miss  -0.0% [-0.6%, +0.6%]
+    edf        p95  -12.78 [-22.16, -3.40]*  miss  -0.4% [-1.4%, +0.6%]
+    lsf           vs program-fcfs: p95   +9.42 [+1.38, +17.45]*  miss  +0.2% [-0.7%, +1.0%]
+    lsf        p95  -10.28 [-17.08, -3.48]*  miss  -0.2% [-1.3%, +0.9%]
+    lsf-oracle p95  -10.06 [-17.85, -2.27]*  miss  +0.3% [-0.7%, +1.3%]
+    program-fcfs p95  -19.70 [-29.68, -9.72]*  miss  -0.4% [-1.1%, +0.4%]
+    hint-priority vs program-fcfs: p95  +10.83 [+0.91, +20.75]*  miss  -0.2% [-0.7%, +0.4%]
+    hint-priority p95   -8.87 [-15.96, -1.78]*  miss  -0.6% [-1.5%, +0.4%]
+    program-fcfs-cap p95  -21.69 [-33.97, -9.41]*  miss  -1.3% [-2.8%, +0.2%]
+  load 0.85 (util 0.7, x1.0)  choice  7.0%  rent>0 12.4%  forced 6195.1  resident max 4  active max/p95 4/3.0  at-cap 31.6%
+    fcfs   p50    60.0  p95   209.0  miss 21.9% (infeasible  1.8%)
+    sjf        p95  -13.49 [-22.91, -4.07]*  miss  +0.7% [-0.1%, +1.6%]
+    edf           vs program-fcfs: p95  +12.81 [+1.45, +24.17]*  miss  +0.1% [-0.9%, +1.0%]
+    edf        p95   -8.74 [-18.73, +1.25]   miss  +0.7% [-0.4%, +1.9%]
+    lsf           vs program-fcfs: p95  +13.66 [+4.23, +23.09]*  miss  +0.6% [-0.5%, +1.7%]
+    lsf        p95   -7.89 [-16.48, +0.70]   miss  +1.3% [-0.1%, +2.6%]
+    lsf-oracle p95  -12.06 [-22.31, -1.82]*  miss  +1.8% [+0.4%, +3.1%]*
+    program-fcfs p95  -21.55 [-35.10, -7.99]*  miss  +0.6% [-0.2%, +1.5%]
+    hint-priority vs program-fcfs: p95  +26.93 [-3.83, +57.70]   miss  +0.3% [-0.4%, +0.9%]
+    hint-priority p95   +5.39 [-15.93, +26.71]   miss  +0.9% [-0.1%, +1.9%]
+    program-fcfs-cap p95  -21.96 [-36.47, -7.44]*  miss  -1.2% [-2.6%, +0.2%]
+  load 1.00 (util 0.8, x1.0)  choice 14.7%  rent>0 21.1%  forced 6168.8  resident max 4  active max/p95 4/3.0  at-cap 42.7%
+    fcfs   p50    76.7  p95   264.9  miss 28.7% (infeasible  2.1%)
+    sjf        p95  -24.90 [-36.54, -13.26]*  miss  +0.1% [-1.0%, +1.2%]
+    edf           vs program-fcfs: p95  +20.44 [+12.06, +28.82]*  miss  +1.2% [-0.3%, +2.7%]
+    edf        p95  -20.04 [-31.84, -8.23]*  miss  +0.7% [-0.9%, +2.4%]
+    lsf           vs program-fcfs: p95  +26.09 [+18.18, +33.99]*  miss  +1.9% [+0.2%, +3.5%]*
+    lsf        p95  -14.39 [-25.62, -3.16]*  miss  +1.4% [-0.6%, +3.4%]
+    lsf-oracle p95  -17.11 [-27.87, -6.34]*  miss  +1.4% [-0.1%, +2.9%]
+    program-fcfs p95  -40.47 [-55.78, -25.16]*  miss  -0.5% [-1.8%, +0.9%]
+    hint-priority vs program-fcfs: p95  +48.89 [+16.92, +80.86]*  miss  +1.9% [+0.6%, +3.1%]*
+    hint-priority p95   +8.42 [-15.76, +32.60]   miss  +1.4% [-0.2%, +3.0%]
+    program-fcfs-cap p95  -32.10 [-50.77, -13.43]*  miss  -2.1% [-4.3%, -0.0%]*
+  load 1.22 (util 0.9, x1.0)  choice 27.4%  rent>0 34.4%  forced 6119.6  resident max 4  active max/p95 4/3.0  at-cap 57.5%
+    fcfs   p50   105.3  p95   351.8  miss 39.9% (infeasible  3.4%)
+    sjf        p95  -42.94 [-61.53, -24.35]*  miss  -0.6% [-1.9%, +0.8%]
+    edf           vs program-fcfs: p95  +23.88 [+10.37, +37.39]*  miss  +2.9% [+1.1%, +4.7%]*
+    edf        p95  -40.21 [-63.42, -16.99]*  miss  +1.2% [-1.3%, +3.7%]
+    lsf           vs program-fcfs: p95  +37.72 [+24.32, +51.12]*  miss  +4.1% [+1.7%, +6.4%]*
+    lsf        p95  -26.37 [-49.00, -3.74]*  miss  +2.4% [-0.3%, +5.1%]
+    lsf-oracle p95  -24.37 [-48.70, -0.05]*  miss  +3.6% [+0.7%, +6.5%]*
+    program-fcfs p95  -64.09 [-91.80, -36.37]*  miss  -1.7% [-3.4%, +0.0%]
+    hint-priority vs program-fcfs: p95  +64.10 [+32.58, +95.62]*  miss  +2.5% [+0.0%, +5.0%]*
+    hint-priority p95   +0.01 [-22.88, +22.90]   miss  +0.8% [-2.0%, +3.6%]
+    program-fcfs-cap p95  -46.38 [-71.72, -21.03]*  miss  -0.2% [-1.8%, +1.5%]
+  load 1.10 (util 0.8, x1.1)  choice 20.0%  rent>0 26.4%  forced 6146.8  resident max 4  active max/p95 4/3.0  at-cap 49.0%
+    fcfs   p50    88.1  p95   311.0  miss 34.4% (infeasible  2.5%)
+    sjf        p95  -37.90 [-55.93, -19.86]*  miss  -0.4% [-1.2%, +0.5%]
+    edf           vs program-fcfs: p95  +23.41 [+8.31, +38.50]*  miss  +1.6% [+0.0%, +3.1%]*
+    edf        p95  -31.65 [-50.68, -12.63]*  miss  +0.8% [-1.0%, +2.6%]
+    lsf           vs program-fcfs: p95  +33.08 [+19.09, +47.06]*  miss  +2.6% [+0.9%, +4.2%]*
+    lsf        p95  -21.98 [-41.16, -2.81]*  miss  +1.9% [-0.4%, +4.1%]
+    lsf-oracle p95  -29.38 [-48.89, -9.86]*  miss  +3.1% [+0.7%, +5.6%]*
+    program-fcfs p95  -55.06 [-79.65, -30.47]*  miss  -0.7% [-2.1%, +0.6%]
+    hint-priority vs program-fcfs: p95  +50.49 [+18.56, +82.43]*  miss  +1.6% [+0.2%, +3.0%]*
+    hint-priority p95   -4.57 [-26.10, +16.97]   miss  +0.8% [-1.0%, +2.6%]
+    program-fcfs-cap p95  -46.51 [-69.38, -23.63]*  miss  -1.3% [-3.0%, +0.4%]
+  load 1.25 (util 0.8, x1.25)  choice 29.7%  rent>0 36.9%  forced 6123.4  resident max 4  active max/p95 4/3.0  at-cap 60.2%
+    fcfs   p50   110.3  p95   364.1  miss 41.3% (infeasible  4.1%)
+    sjf        p95  -43.87 [-67.12, -20.62]*  miss  +0.2% [-1.3%, +1.7%]
+    edf           vs program-fcfs: p95  +21.72 [+9.97, +33.48]*  miss  +2.0% [+0.4%, +3.7%]*
+    edf        p95  -42.41 [-66.14, -18.68]*  miss  +1.5% [-1.3%, +4.2%]
+    lsf           vs program-fcfs: p95  +42.21 [+29.71, +54.71]*  miss  +3.3% [+1.4%, +5.3%]*
+    lsf        p95  -21.92 [-47.78, +3.94]   miss  +2.8% [-0.4%, +5.9%]
+    lsf-oracle p95  -28.22 [-53.73, -2.70]*  miss  +3.7% [+0.5%, +6.9%]*
+    program-fcfs p95  -64.13 [-95.23, -33.03]*  miss  -0.6% [-2.2%, +1.1%]
+    hint-priority vs program-fcfs: p95  +72.49 [+38.47, +106.51]*  miss  +2.0% [+0.4%, +3.6%]*
+    hint-priority p95   +8.36 [-18.11, +34.83]   miss  +1.5% [-1.1%, +4.1%]
+    program-fcfs-cap p95  -47.27 [-73.42, -21.11]*  miss  +0.0% [-2.2%, +2.2%]
+  load 1.50 (util 0.8, x1.5)  choice 52.5%  rent>0 57.4%  forced 6079.3  resident max 4  active max/p95 4/3.0  at-cap 77.1%
+    fcfs   p50   160.7  p95   509.0  miss 55.5% (infeasible  7.7%)
+    sjf        p95  -72.88 [-100.97, -44.80]*  miss  -1.8% [-3.2%, -0.4%]*
+    edf           vs program-fcfs: p95  +47.79 [+34.67, +60.92]*  miss  +4.1% [+2.4%, +5.8%]*
+    edf        p95  -66.07 [-102.04, -30.09]*  miss  +3.3% [+1.1%, +5.5%]*
+    lsf           vs program-fcfs: p95  +52.81 [+38.83, +66.80]*  miss  +5.5% [+3.2%, +7.7%]*
+    lsf        p95  -61.05 [-90.40, -31.70]*  miss  +4.7% [+2.2%, +7.2%]*
+    lsf-oracle p95  -54.94 [-84.09, -25.80]*  miss  +5.0% [+2.9%, +7.1%]*
+    program-fcfs p95 -113.86 [-149.48, -78.24]*  miss  -0.7% [-2.7%, +1.2%]
+    hint-priority vs program-fcfs: p95 +156.70 [+107.31, +206.08]*  miss  +2.5% [+0.6%, +4.4%]*
+    hint-priority p95  +42.83 [+7.35, +78.32]*  miss  +1.8% [-0.4%, +3.9%]
+    program-fcfs-cap p95  -72.89 [-104.49, -41.29]*  miss  -0.7% [-2.6%, +1.2%]
+  load 1.75 (util 0.8, x1.75)  choice 66.8%  rent>0 68.1%  forced 6156.9  resident max 4  active max/p95 4/3.0  at-cap 84.5%
+    fcfs   p50   217.2  p95   678.4  miss 62.9% (infeasible 13.4%)
+    sjf        p95 -124.82 [-142.09, -107.54]*  miss  -0.2% [-1.6%, +1.2%]
+    edf           vs program-fcfs: p95  +57.90 [+39.40, +76.41]*  miss  +3.9% [+2.2%, +5.6%]*
+    edf        p95 -116.57 [-141.04, -92.10]*  miss  +4.5% [+2.6%, +6.5%]*
+    lsf           vs program-fcfs: p95  +58.22 [+40.46, +75.99]*  miss  +5.3% [+3.3%, +7.3%]*
+    lsf        p95 -116.25 [-140.56, -91.94]*  miss  +5.9% [+3.7%, +8.2%]*
+    lsf-oracle p95 -112.87 [-138.91, -86.83]*  miss  +6.0% [+4.1%, +8.0%]*
+    program-fcfs p95 -174.47 [-203.69, -145.25]*  miss  +0.6% [-1.2%, +2.5%]
+    hint-priority vs program-fcfs: p95 +265.38 [+197.34, +333.42]*  miss  +1.3% [-0.8%, +3.4%]
+    hint-priority p95  +90.91 [+34.58, +147.23]*  miss  +1.9% [-0.5%, +4.4%]
+    program-fcfs-cap p95 -114.99 [-141.37, -88.60]*  miss  +0.6% [-1.3%, +2.6%]
+  load 2.20 (util 0.8, x2.2)  choice 77.9%  rent>0 75.1%  forced 6532.5  resident max 4  active max/p95 4/3.0  at-cap 90.3%
+    fcfs   p50   306.8  p95   879.4  miss 72.7% (infeasible 23.2%)
+    sjf        p95 -141.83 [-155.24, -128.41]*  miss  -0.8% [-2.3%, +0.6%]
+    edf           vs program-fcfs: p95  +51.68 [+35.64, +67.72]*  miss  +4.4% [+2.8%, +6.1%]*
+    edf        p95 -147.52 [-171.47, -123.56]*  miss  +3.2% [+1.2%, +5.3%]*
+    lsf           vs program-fcfs: p95  +53.33 [+38.53, +68.14]*  miss  +5.5% [+3.8%, +7.2%]*
+    lsf        p95 -145.86 [-171.90, -119.82]*  miss  +4.3% [+2.0%, +6.5%]*
+    lsf-oracle p95 -139.59 [-164.81, -114.38]*  miss  +3.9% [+1.8%, +6.0%]*
+    program-fcfs p95 -199.20 [-222.54, -175.85]*  miss  -1.2% [-2.8%, +0.4%]
+    hint-priority vs program-fcfs: p95 +300.62 [+242.10, +359.14]*  miss  +1.9% [-0.0%, +3.9%]
+    hint-priority p95 +101.42 [+40.11, +162.73]*  miss  +0.7% [-1.6%, +3.1%]
+    program-fcfs-cap p95 -129.80 [-153.91, -105.69]*  miss  -1.8% [-3.5%, +0.0%]
+  load 3.00 (util 0.8, x3.0)  choice 86.0%  rent>0 79.6%  forced 6896.9  resident max 4  active max/p95 4/3.0  at-cap 93.8%
+    fcfs   p50   454.8  p95  1089.0  miss 80.8% (infeasible 31.1%)
+    sjf        p95 -166.05 [-176.62, -155.47]*  miss  -1.2% [-2.1%, -0.3%]*
+    edf           vs program-fcfs: p95  +53.89 [+39.00, +68.78]*  miss  +4.8% [+3.1%, +6.5%]*
+    edf        p95 -153.94 [-174.39, -133.50]*  miss  +1.6% [-0.0%, +3.2%]
+    lsf           vs program-fcfs: p95  +58.00 [+41.78, +74.22]*  miss  +6.8% [+5.3%, +8.3%]*
+    lsf        p95 -149.84 [-172.03, -127.64]*  miss  +3.5% [+2.1%, +4.9%]*
+    lsf-oracle p95 -145.02 [-166.04, -124.00]*  miss  +3.9% [+2.4%, +5.4%]*
+    program-fcfs p95 -207.83 [-222.60, -193.07]*  miss  -3.2% [-4.7%, -1.8%]*
+    hint-priority vs program-fcfs: p95 +202.84 [+151.55, +254.12]*  miss  +4.2% [+2.3%, +6.1%]*
+    hint-priority p95   -5.00 [-49.70, +39.70]   miss  +0.9% [-0.5%, +2.3%]
+    program-fcfs-cap p95 -126.56 [-142.40, -110.73]*  miss  -4.5% [-6.0%, -3.1%]*
+
+=== batch 8 ===
+  rate(util 0.6) = 0.0206/s  busy 0.65
+  rate(util 0.7) = 0.0226/s  busy 0.71
+  rate(util 0.8) = 0.0265/s  busy 0.81
+  rate(util 0.9) = 0.0323/s  busy 0.91
+  slack_factor = 1.875  (FCFS miss 23.5% at util 0.8)
+  load 0.78 (util 0.6, x1.0)  choice  0.2%  rent>0  1.2%  forced 6197.3  resident max 8  active max/p95 6/4.0  at-cap  2.8% INACTIVE
+    fcfs   p50    55.4  p95   186.2  miss 19.9% (infeasible  1.1%)
+    sjf        p95   -1.47 [-4.77, +1.82]   miss  +0.3% [-0.0%, +0.6%]
+    edf           vs program-fcfs: p95   -0.99 [-2.64, +0.66]   miss  +0.1% [-0.2%, +0.4%]
+    edf        p95   -2.05 [-4.54, +0.44]   miss  +0.2% [-0.1%, +0.5%]
+    lsf           vs program-fcfs: p95   -1.33 [-3.08, +0.42]   miss  +0.1% [-0.2%, +0.4%]
+    lsf        p95   -2.39 [-5.05, +0.27]   miss  +0.2% [-0.1%, +0.5%]
+    lsf-oracle p95   -1.41 [-4.82, +2.01]   miss  +0.3% [-0.0%, +0.6%]
+    program-fcfs p95   -1.06 [-4.04, +1.93]   miss  +0.1% [-0.1%, +0.3%]
+    hint-priority vs program-fcfs: p95   -1.42 [-3.16, +0.32]   miss  +0.1% [-0.2%, +0.4%]
+    hint-priority p95   -2.48 [-5.27, +0.31]   miss  +0.2% [-0.1%, +0.5%]
+    program-fcfs-cap p95  -16.22 [-25.34, -7.10]*  miss  -0.7% [-2.2%, +0.7%]
+  load 0.85 (util 0.7, x1.0)  choice  0.5%  rent>0  1.9%  forced 6201.9  resident max 8  active max/p95 6/4.2  at-cap  4.7% INACTIVE
+    fcfs   p50    62.0  p95   206.7  miss 23.0% (infeasible  1.2%)
+    sjf        p95   -1.21 [-2.71, +0.28]   miss  +0.3% [-0.2%, +0.8%]
+    edf           vs program-fcfs: p95   -0.16 [-2.66, +2.34]   miss  -0.3% [-0.7%, +0.1%]
+    edf        p95   -0.47 [-3.28, +2.35]   miss  -0.1% [-0.4%, +0.2%]
+    lsf           vs program-fcfs: p95   -0.34 [-2.32, +1.64]   miss  -0.3% [-0.9%, +0.3%]
+    lsf        p95   -0.64 [-2.99, +1.70]   miss  -0.1% [-0.4%, +0.2%]
+    lsf-oracle p95   +0.39 [-1.39, +2.16]   miss  +0.5% [-0.0%, +0.9%]
+    program-fcfs p95   -0.31 [-1.71, +1.10]   miss  +0.2% [-0.4%, +0.7%]
+    hint-priority vs program-fcfs: p95   +0.27 [-4.19, +4.73]   miss  -0.1% [-0.5%, +0.3%]
+    hint-priority p95   -0.04 [-4.04, +3.97]   miss  +0.1% [-0.2%, +0.4%]
+    program-fcfs-cap p95  -19.36 [-31.68, -7.04]*  miss  -0.9% [-1.9%, +0.0%]
+  load 1.00 (util 0.8, x1.0)  choice  2.2%  rent>0  4.1%  forced 6173.7  resident max 8  active max/p95 7/4.5  at-cap 10.1% INACTIVE
+    fcfs   p50    78.1  p95   251.0  miss 29.5% (infeasible  1.4%)
+    sjf        p95   -3.56 [-8.94, +1.83]   miss  -0.3% [-0.8%, +0.2%]
+    edf           vs program-fcfs: p95   -1.23 [-5.32, +2.85]   miss  +0.4% [+0.0%, +0.7%]*
+    edf        p95   -6.16 [-14.62, +2.30]   miss  +0.6% [-0.0%, +1.1%]
+    lsf           vs program-fcfs: p95   +3.27 [-0.33, +6.86]   miss  +0.6% [-0.1%, +1.2%]
+    lsf        p95   -1.66 [-7.35, +4.03]   miss  +0.7% [-0.2%, +1.7%]
+    lsf-oracle p95   -4.64 [-9.69, +0.40]   miss  +0.5% [-0.5%, +1.4%]
+    program-fcfs p95   -4.93 [-11.73, +1.88]   miss  +0.2% [-0.3%, +0.7%]
+    hint-priority vs program-fcfs: p95   +5.77 [+0.81, +10.73]*  miss  +0.3% [-0.0%, +0.6%]
+    hint-priority p95   +0.85 [-5.14, +6.83]   miss  +0.5% [-0.1%, +1.0%]
+    program-fcfs-cap p95  -25.50 [-43.15, -7.85]*  miss  -1.7% [-3.2%, -0.1%]*
+  load 1.22 (util 0.9, x1.0)  choice  7.1%  rent>0 10.8%  forced 6143.1  resident max 8  active max/p95 6/4.8  at-cap 22.7%
+    fcfs   p50   108.7  p95   337.8  miss 40.6% (infeasible  1.9%)
+    sjf        p95  -21.29 [-37.04, -5.53]*  miss  +0.3% [-0.6%, +1.1%]
+    edf           vs program-fcfs: p95   +9.39 [+0.90, +17.87]*  miss  +1.2% [+0.3%, +2.1%]*
+    edf        p95  -23.46 [-39.45, -7.48]*  miss  +1.4% [-0.0%, +2.8%]
+    lsf           vs program-fcfs: p95   +5.57 [-1.93, +13.07]   miss  +1.4% [+0.4%, +2.4%]*
+    lsf        p95  -27.28 [-45.42, -9.14]*  miss  +1.6% [+0.0%, +3.1%]*
+    lsf-oracle p95  -24.88 [-40.36, -9.41]*  miss  +1.9% [+0.3%, +3.6%]*
+    program-fcfs p95  -32.85 [-51.10, -14.60]*  miss  +0.2% [-1.0%, +1.4%]
+    hint-priority vs program-fcfs: p95  +16.21 [+2.01, +30.41]*  miss  +1.2% [+0.0%, +2.4%]*
+    hint-priority p95  -16.64 [-31.12, -2.15]*  miss  +1.4% [-0.1%, +2.8%]
+    program-fcfs-cap p95  -43.25 [-69.52, -16.98]*  miss  -1.7% [-3.5%, +0.2%]
+  load 1.10 (util 0.8, x1.1)  choice  3.8%  rent>0  6.5%  forced 6160.5  resident max 8  active max/p95 7/4.7  at-cap 16.1% INACTIVE
+    fcfs   p50    92.0  p95   288.0  miss 34.9% (infeasible  1.6%)
+    sjf        p95   -4.85 [-13.29, +3.60]   miss  -0.5% [-1.1%, +0.2%]
+    edf           vs program-fcfs: p95   -1.82 [-7.75, +4.11]   miss  +1.0% [+0.2%, +1.9%]*
+    edf        p95  -14.39 [-27.65, -1.12]*  miss  +0.7% [+0.1%, +1.4%]*
+    lsf           vs program-fcfs: p95   +2.11 [-2.90, +7.13]   miss  +0.6% [-0.1%, +1.2%]
+    lsf        p95  -10.46 [-19.84, -1.07]*  miss  +0.3% [-0.4%, +0.9%]
+    lsf-oracle p95  -13.74 [-25.41, -2.08]*  miss  +1.0% [+0.2%, +1.8%]*
+    program-fcfs p95  -12.57 [-23.10, -2.03]*  miss  -0.3% [-0.8%, +0.2%]
+    hint-priority vs program-fcfs: p95  +10.07 [-3.14, +23.27]   miss  +0.6% [-0.4%, +1.7%]
+    hint-priority p95   -2.50 [-8.56, +3.56]   miss  +0.4% [-0.5%, +1.2%]
+    program-fcfs-cap p95  -31.02 [-52.06, -9.98]*  miss  -2.3% [-4.2%, -0.5%]*
+  load 1.25 (util 0.8, x1.25)  choice  8.2%  rent>0 11.5%  forced 6146.4  resident max 8  active max/p95 6/4.8  at-cap 24.5%
+    fcfs   p50   112.6  p95   343.7  miss 42.0% (infeasible  1.9%)
+    sjf        p95  -13.72 [-23.54, -3.90]*  miss  +0.6% [-0.0%, +1.1%]
+    edf           vs program-fcfs: p95   +6.10 [-2.86, +15.06]   miss  +1.4% [+0.3%, +2.4%]*
+    edf        p95  -20.78 [-35.11, -6.45]*  miss  +1.9% [+0.7%, +3.0%]*
+    lsf           vs program-fcfs: p95   +8.69 [+1.71, +15.67]*  miss  +1.4% [+0.5%, +2.3%]*
+    lsf        p95  -18.19 [-35.43, -0.96]*  miss  +1.9% [+0.6%, +3.1%]*
+    lsf-oracle p95  -12.61 [-25.91, +0.68]   miss  +2.7% [+0.9%, +4.4%]*
+    program-fcfs p95  -26.88 [-43.00, -10.76]*  miss  +0.5% [-0.3%, +1.2%]
+    hint-priority vs program-fcfs: p95  +17.34 [-3.25, +37.92]   miss  +1.1% [-0.1%, +2.3%]
+    hint-priority p95   -9.54 [-24.11, +5.03]   miss  +1.6% [+0.2%, +3.0%]*
+    program-fcfs-cap p95  -40.50 [-64.57, -16.44]*  miss  -1.2% [-3.4%, +0.9%]
+  load 1.50 (util 0.8, x1.5)  choice 21.4%  rent>0 26.0%  forced 6158.5  resident max 8  active max/p95 8/5.0  at-cap 46.1%
+    fcfs   p50   165.8  p95   475.1  miss 55.6% (infeasible  3.8%)
+    sjf        p95  -33.25 [-48.84, -17.67]*  miss  -1.2% [-2.5%, +0.1%]
+    edf           vs program-fcfs: p95  +21.79 [+8.34, +35.25]*  miss  +2.3% [+1.0%, +3.6%]*
+    edf        p95  -37.71 [-56.97, -18.44]*  miss  +2.5% [+1.2%, +3.8%]*
+    lsf           vs program-fcfs: p95  +24.12 [+11.24, +36.99]*  miss  +3.2% [+2.0%, +4.5%]*
+    lsf        p95  -35.38 [-51.59, -19.18]*  miss  +3.4% [+2.1%, +4.8%]*
+    lsf-oracle p95  -30.89 [-48.25, -13.54]*  miss  +3.2% [+1.5%, +5.0%]*
+    program-fcfs p95  -59.50 [-81.07, -37.93]*  miss  +0.2% [-0.7%, +1.1%]
+    hint-priority vs program-fcfs: p95  +51.27 [+24.75, +77.80]*  miss  +2.7% [+1.4%, +4.0%]*
+    hint-priority p95   -8.23 [-26.29, +9.83]   miss  +2.9% [+1.5%, +4.2%]*
+    program-fcfs-cap p95  -56.58 [-81.07, -32.08]*  miss  -0.6% [-2.2%, +1.1%]
+  load 1.75 (util 0.8, x1.75)  choice 38.6%  rent>0 42.7%  forced 6286.1  resident max 8  active max/p95 7/5.1  at-cap 65.3%
+    fcfs   p50   221.1  p95   632.9  miss 63.8% (infeasible  8.3%)
+    sjf        p95  -70.30 [-85.52, -55.08]*  miss  +0.6% [+0.0%, +1.3%]*
+    edf           vs program-fcfs: p95  +31.98 [+20.14, +43.81]*  miss  +3.1% [+1.8%, +4.3%]*
+    edf        p95  -71.73 [-92.98, -50.48]*  miss  +4.3% [+2.6%, +5.9%]*
+    lsf           vs program-fcfs: p95  +27.35 [+16.48, +38.22]*  miss  +3.7% [+2.5%, +4.9%]*
+    lsf        p95  -76.36 [-96.89, -55.83]*  miss  +4.9% [+3.1%, +6.7%]*
+    lsf-oracle p95  -69.75 [-89.55, -49.95]*  miss  +5.6% [+4.2%, +7.1%]*
+    program-fcfs p95 -103.71 [-125.69, -81.73]*  miss  +1.2% [+0.0%, +2.4%]*
+    hint-priority vs program-fcfs: p95  +92.77 [+51.80, +133.75]*  miss  +2.9% [+1.6%, +4.1%]*
+    hint-priority p95  -10.94 [-39.04, +17.16]   miss  +4.1% [+2.5%, +5.7%]*
+    program-fcfs-cap p95  -92.67 [-121.92, -63.42]*  miss  +0.2% [-1.8%, +2.2%]
+  load 2.20 (util 0.8, x2.2)  choice 54.5%  rent>0 56.0%  forced 6684.9  resident max 8  active max/p95 7/5.0  at-cap 77.4%
+    fcfs   p50   318.6  p95   834.0  miss 73.7% (infeasible 16.6%)
+    sjf        p95 -100.32 [-116.72, -83.93]*  miss  +0.5% [-0.8%, +1.7%]
+    edf           vs program-fcfs: p95  +41.89 [+28.02, +55.77]*  miss  +3.6% [+2.3%, +4.9%]*
+    edf        p95 -112.80 [-131.10, -94.50]*  miss  +4.2% [+2.8%, +5.5%]*
+    lsf           vs program-fcfs: p95  +39.12 [+25.12, +53.12]*  miss  +4.1% [+2.8%, +5.4%]*
+    lsf        p95 -115.58 [-135.77, -95.39]*  miss  +4.6% [+3.2%, +6.0%]*
+    lsf-oracle p95 -110.84 [-133.18, -88.50]*  miss  +5.3% [+3.9%, +6.6%]*
+    program-fcfs p95 -154.70 [-171.56, -137.84]*  miss  +0.6% [-1.0%, +2.1%]
+    hint-priority vs program-fcfs: p95 +211.78 [+162.31, +261.24]*  miss  +3.3% [+1.9%, +4.8%]*
+    hint-priority p95  +57.08 [+9.95, +104.21]*  miss  +3.9% [+2.5%, +5.2%]*
+    program-fcfs-cap p95 -110.80 [-138.82, -82.79]*  miss  -3.4% [-4.8%, -2.0%]*
+  load 3.00 (util 0.8, x3.0)  choice 66.0%  rent>0 64.1%  forced 6956.1  resident max 8  active max/p95 7/5.1  at-cap 84.6%
+    fcfs   p50   460.5  p95  1024.2  miss 82.2% (infeasible 24.8%)
+    sjf        p95 -113.92 [-124.43, -103.40]*  miss  -1.3% [-2.3%, -0.3%]*
+    edf           vs program-fcfs: p95  +39.93 [+19.45, +60.41]*  miss  +4.2% [+2.6%, +5.8%]*
+    edf        p95 -117.16 [-140.62, -93.71]*  miss  +2.3% [+1.0%, +3.6%]*
+    lsf           vs program-fcfs: p95  +46.14 [+28.60, +63.68]*  miss  +5.2% [+3.5%, +6.9%]*
+    lsf        p95 -110.95 [-131.07, -90.84]*  miss  +3.3% [+2.3%, +4.4%]*
+    lsf-oracle p95 -113.49 [-138.06, -88.93]*  miss  +3.5% [+2.4%, +4.6%]*
+    program-fcfs p95 -157.09 [-173.56, -140.63]*  miss  -1.9% [-3.4%, -0.3%]*
+    hint-priority vs program-fcfs: p95 +196.26 [+155.50, +237.01]*  miss  +4.4% [+2.6%, +6.1%]*
+    hint-priority p95  +39.16 [-2.98, +81.31]   miss  +2.5% [+1.3%, +3.7%]*
+    program-fcfs-cap p95  -84.71 [-103.41, -66.00]*  miss  -5.5% [-7.2%, -3.8%]*
+
+=== batch 16 ===
+  rate(util 0.6) = 0.0206/s  busy 0.65
+  rate(util 0.7) = 0.0226/s  busy 0.71
+  rate(util 0.8) = 0.0265/s  busy 0.81
+  rate(util 0.9) = 0.0323/s  busy 0.91
+  slack_factor = 1.875  (FCFS miss 22.8% at util 0.8)
+  load 0.78 (util 0.6, x1.0)  choice  0.1%  rent>0  0.8%  forced 6197.4  resident max 12  active max/p95 8/4.0  at-cap  0.0% INACTIVE CAP-NEVER-BINDS
+    fcfs   p50    55.3  p95   184.8  miss 20.3% (infeasible  1.1%)
+    sjf        p95   -0.44 [-1.04, +0.17]   miss  +0.1% [-0.1%, +0.3%]
+    edf           vs program-fcfs: p95   +0.01 [-0.01, +0.03]   miss  +0.1% [-0.1%, +0.3%]
+    edf        p95   +0.01 [-0.01, +0.03]   miss  +0.1% [-0.1%, +0.3%]
+    lsf           vs program-fcfs: p95   -0.00 [-0.00, +0.00]   miss  +0.1% [-0.1%, +0.3%]
+    lsf        p95   -0.00 [-0.00, +0.00]   miss  +0.1% [-0.1%, +0.3%]
+    lsf-oracle p95   -0.44 [-1.04, +0.17]   miss  +0.2% [-0.1%, +0.5%]
+    program-fcfs p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    hint-priority vs program-fcfs: p95   +0.01 [-0.01, +0.03]   miss  +0.1% [-0.1%, +0.3%]
+    hint-priority p95   +0.01 [-0.01, +0.03]   miss  +0.1% [-0.1%, +0.3%]
+    program-fcfs-cap p95  -14.91 [-23.19, -6.62]*  miss  -1.1% [-2.6%, +0.4%]
+  load 0.85 (util 0.7, x1.0)  choice  0.1%  rent>0  0.9%  forced 6201.5  resident max 13  active max/p95 8/4.2  at-cap  0.0% INACTIVE CAP-NEVER-BINDS
+    fcfs   p50    61.7  p95   204.6  miss 23.1% (infeasible  1.1%)
+    sjf        p95   +0.28 [-0.88, +1.44]   miss  +0.3% [-0.0%, +0.6%]
+    edf           vs program-fcfs: p95   +0.00 [-0.00, +0.00]   miss  +0.0% [-0.3%, +0.3%]
+    edf        p95   -0.04 [-0.12, +0.04]   miss  +0.0% [-0.3%, +0.3%]
+    lsf           vs program-fcfs: p95   +0.00 [-0.00, +0.00]   miss  -0.1% [-0.3%, +0.1%]
+    lsf        p95   -0.04 [-0.12, +0.04]   miss  -0.1% [-0.3%, +0.1%]
+    lsf-oracle p95   +0.28 [-0.88, +1.44]   miss  +0.3% [-0.0%, +0.6%]
+    program-fcfs p95   -0.04 [-0.13, +0.04]   miss  +0.0% [+0.0%, +0.0%]
+    hint-priority vs program-fcfs: p95   -0.00 [-0.01, +0.01]   miss  +0.0% [-0.3%, +0.3%]
+    hint-priority p95   -0.04 [-0.13, +0.04]   miss  +0.0% [-0.3%, +0.3%]
+    program-fcfs-cap p95  -17.33 [-28.64, -6.02]*  miss  -1.0% [-1.9%, -0.2%]*
+  load 1.00 (util 0.8, x1.0)  choice  0.1%  rent>0  1.0%  forced 6185.9  resident max 16  active max/p95 10/5.0  at-cap  0.0% INACTIVE
+    fcfs   p50    78.3  p95   252.9  miss 29.9% (infeasible  1.1%)
+    sjf        p95   -0.26 [-0.80, +0.29]   miss  -0.2% [-0.6%, +0.2%]
+    edf           vs program-fcfs: p95   -0.00 [-0.01, +0.01]   miss  +0.0% [+0.0%, +0.0%]
+    edf        p95   +0.00 [-0.02, +0.02]   miss  +0.0% [+0.0%, +0.0%]
+    lsf           vs program-fcfs: p95   -0.00 [-0.01, +0.01]   miss  +0.0% [+0.0%, +0.0%]
+    lsf        p95   +0.00 [-0.02, +0.02]   miss  +0.0% [+0.0%, +0.0%]
+    lsf-oracle p95   -0.26 [-0.81, +0.29]   miss  -0.2% [-0.6%, +0.2%]
+    program-fcfs p95   +0.01 [-0.01, +0.02]   miss  +0.0% [+0.0%, +0.0%]
+    hint-priority vs program-fcfs: p95   +0.00 [-0.01, +0.02]   miss  +0.0% [+0.0%, +0.0%]
+    hint-priority p95   +0.01 [-0.02, +0.04]   miss  +0.0% [+0.0%, +0.0%]
+    program-fcfs-cap p95  -27.43 [-44.60, -10.26]*  miss  -2.0% [-3.8%, -0.2%]*
+  load 1.22 (util 0.9, x1.0)  choice  0.4%  rent>0  1.5%  forced 6168.1  resident max 16  active max/p95 10/6.1  at-cap  0.9% INACTIVE
+    fcfs   p50   111.6  p95   334.4  miss 41.4% (infeasible  1.1%)
+    sjf        p95   -2.90 [-6.95, +1.15]   miss  -0.1% [-0.6%, +0.4%]
+    edf           vs program-fcfs: p95   +1.26 [-1.35, +3.87]   miss  +0.0% [+0.0%, +0.0%]
+    edf        p95   -0.25 [-0.99, +0.49]   miss  -0.1% [-0.3%, +0.1%]
+    lsf           vs program-fcfs: p95   +1.39 [-1.51, +4.30]   miss  +0.1% [-0.1%, +0.3%]
+    lsf        p95   -0.11 [-0.57, +0.34]   miss  +0.0% [-0.3%, +0.3%]
+    lsf-oracle p95   -2.39 [-5.99, +1.22]   miss  -0.1% [-0.7%, +0.5%]
+    program-fcfs p95   -1.51 [-4.84, +1.82]   miss  -0.1% [-0.3%, +0.1%]
+    hint-priority vs program-fcfs: p95   +1.72 [-1.86, +5.31]   miss  +0.1% [-0.1%, +0.3%]
+    hint-priority p95   +0.21 [-0.10, +0.53]   miss  +0.0% [-0.3%, +0.3%]
+    program-fcfs-cap p95  -39.79 [-63.52, -16.05]*  miss  -2.4% [-4.2%, -0.6%]*
+  load 1.10 (util 0.8, x1.1)  choice  0.2%  rent>0  1.2%  forced 6169.1  resident max 16  active max/p95 10/5.4  at-cap  0.6% INACTIVE
+    fcfs   p50    91.9  p95   287.1  miss 34.7% (infeasible  1.1%)
+    sjf        p95   -1.94 [-6.01, +2.14]   miss  +0.1% [-0.2%, +0.4%]
+    edf           vs program-fcfs: p95   -1.25 [-3.55, +1.05]   miss  +0.1% [-0.1%, +0.3%]
+    edf        p95   -2.36 [-5.76, +1.05]   miss  +0.0% [+0.0%, +0.0%]
+    lsf           vs program-fcfs: p95   -1.18 [-3.48, +1.11]   miss  +0.1% [-0.1%, +0.3%]
+    lsf        p95   -2.29 [-5.61, +1.03]   miss  +0.0% [+0.0%, +0.0%]
+    lsf-oracle p95   -2.31 [-5.67, +1.04]   miss  +0.3% [-0.2%, +0.8%]
+    program-fcfs p95   -1.11 [-3.42, +1.20]   miss  -0.1% [-0.3%, +0.1%]
+    hint-priority vs program-fcfs: p95   -1.00 [-3.31, +1.31]   miss  +0.1% [-0.1%, +0.3%]
+    hint-priority p95   -2.11 [-5.15, +0.93]   miss  +0.0% [+0.0%, +0.0%]
+    program-fcfs-cap p95  -30.18 [-49.44, -10.92]*  miss  -2.1% [-4.0%, -0.2%]*
+  load 1.25 (util 0.8, x1.25)  choice  0.5%  rent>0  1.6%  forced 6181.1  resident max 16  active max/p95 10/6.2  at-cap  1.7% INACTIVE
+    fcfs   p50   116.6  p95   342.3  miss 43.2% (infeasible  1.2%)
+    sjf        p95   +1.95 [-2.45, +6.35]   miss  +0.3% [-0.1%, +0.7%]
+    edf           vs program-fcfs: p95   +1.19 [-0.29, +2.66]   miss  +0.1% [-0.1%, +0.3%]
+    edf        p95   -0.05 [-1.32, +1.22]   miss  +0.3% [-0.3%, +0.9%]
+    lsf           vs program-fcfs: p95   +1.72 [-1.04, +4.48]   miss  +0.1% [-0.1%, +0.3%]
+    lsf        p95   +0.48 [-0.30, +1.27]   miss  +0.3% [-0.3%, +0.9%]
+    lsf-oracle p95   +1.48 [-3.08, +6.04]   miss  +0.4% [-0.4%, +1.1%]
+    program-fcfs p95   -1.24 [-3.57, +1.09]   miss  +0.2% [-0.2%, +0.6%]
+    hint-priority vs program-fcfs: p95   +1.03 [-2.41, +4.48]   miss  +0.0% [+0.0%, +0.0%]
+    hint-priority p95   -0.20 [-1.83, +1.42]   miss  +0.2% [-0.2%, +0.6%]
+    program-fcfs-cap p95  -39.17 [-62.20, -16.13]*  miss  -2.4% [-4.4%, -0.4%]*
+  load 1.50 (util 0.8, x1.5)  choice  2.7%  rent>0  4.6%  forced 6255.6  resident max 16  active max/p95 11/7.7  at-cap  8.5% INACTIVE
+    fcfs   p50   181.6  p95   466.6  miss 56.7% (infeasible  1.8%)
+    sjf        p95   -3.57 [-7.53, +0.40]   miss  -0.6% [-1.4%, +0.2%]
+    edf           vs program-fcfs: p95   +5.03 [-0.65, +10.72]   miss  +0.1% [-0.1%, +0.3%]
+    edf        p95   -0.68 [-4.37, +3.02]   miss  +0.5% [-0.2%, +1.1%]
+    lsf           vs program-fcfs: p95   +5.56 [-0.53, +11.64]   miss  +0.1% [-0.1%, +0.3%]
+    lsf        p95   -0.15 [-3.92, +3.63]   miss  +0.5% [-0.2%, +1.1%]
+    lsf-oracle p95   -0.26 [-4.77, +4.24]   miss  -0.0% [-1.1%, +1.1%]
+    program-fcfs p95   -5.71 [-10.92, -0.49]*  miss  +0.4% [-0.2%, +0.9%]
+    hint-priority vs program-fcfs: p95   +9.40 [-0.96, +19.75]   miss  +0.2% [-0.1%, +0.5%]
+    hint-priority p95   +3.69 [-3.85, +11.23]   miss  +0.6% [-0.1%, +1.2%]
+    program-fcfs-cap p95  -48.09 [-73.11, -23.07]*  miss  -1.7% [-3.3%, -0.0%]*
+  load 1.75 (util 0.8, x1.75)  choice  8.0%  rent>0 10.5%  forced 6434.4  resident max 16  active max/p95 11/8.7  at-cap 20.9%
+    fcfs   p50   253.4  p95   617.5  miss 66.6% (infeasible  3.1%)
+    sjf        p95  -15.04 [-28.41, -1.67]*  miss  +0.1% [-0.4%, +0.6%]
+    edf           vs program-fcfs: p95   +8.93 [+0.69, +17.17]*  miss  +0.5% [-0.1%, +1.0%]
+    edf        p95  -15.58 [-29.64, -1.52]*  miss  +0.4% [-0.4%, +1.1%]
+    lsf           vs program-fcfs: p95  +11.02 [+1.97, +20.07]*  miss  +0.5% [-0.0%, +0.9%]
+    lsf        p95  -13.49 [-26.51, -0.46]*  miss  +0.4% [-0.2%, +1.0%]
+    lsf-oracle p95  -21.65 [-37.52, -5.78]*  miss  +0.9% [+0.1%, +1.7%]*
+    program-fcfs p95  -24.51 [-40.26, -8.76]*  miss  -0.1% [-0.4%, +0.2%]
+    hint-priority vs program-fcfs: p95  +20.34 [+5.01, +35.67]*  miss  +0.6% [+0.1%, +1.2%]*
+    hint-priority p95   -4.17 [-15.64, +7.30]   miss  +0.6% [-0.1%, +1.3%]
+    program-fcfs-cap p95  -77.33 [-109.62, -45.03]*  miss  -2.6% [-4.6%, -0.5%]*
+  load 2.20 (util 0.8, x2.2)  choice 19.7%  rent>0 22.7%  forced 6773.9  resident max 16  active max/p95 12/9.1  at-cap 42.8%
+    fcfs   p50   349.6  p95   808.0  miss 75.4% (infeasible  7.3%)
+    sjf        p95  -34.72 [-46.17, -23.27]*  miss  +0.6% [-0.2%, +1.4%]
+    edf           vs program-fcfs: p95  +20.12 [+11.28, +28.97]*  miss  +0.6% [+0.1%, +1.0%]*
+    edf        p95  -33.67 [-47.34, -20.00]*  miss  +1.5% [+0.9%, +2.1%]*
+    lsf           vs program-fcfs: p95  +25.69 [+13.46, +37.93]*  miss  +0.4% [-0.2%, +1.0%]
+    lsf        p95  -28.10 [-43.73, -12.46]*  miss  +1.3% [+0.6%, +2.0%]*
+    lsf-oracle p95  -28.51 [-40.81, -16.21]*  miss  +1.6% [+0.9%, +2.3%]*
+    program-fcfs p95  -53.79 [-68.21, -39.37]*  miss  +0.9% [+0.4%, +1.5%]*
+    hint-priority vs program-fcfs: p95  +67.31 [+44.48, +90.14]*  miss  +0.5% [-0.1%, +1.0%]
+    hint-priority p95  +13.52 [-5.00, +32.03]   miss  +1.4% [+0.8%, +2.0%]*
+    program-fcfs-cap p95  -84.82 [-109.92, -59.72]*  miss  -5.1% [-6.2%, -4.0%]*
+  load 3.00 (util 0.8, x3.0)  choice 34.0%  rent>0 36.2%  forced 7054.6  resident max 16  active max/p95 11/9.1  at-cap 58.9%
+    fcfs   p50   492.4  p95  1006.7  miss 83.2% (infeasible 13.7%)
+    sjf        p95  -64.41 [-78.06, -50.75]*  miss  -0.6% [-1.2%, -0.1%]*
+    edf           vs program-fcfs: p95  +35.69 [+19.04, +52.33]*  miss  +0.4% [-0.4%, +1.1%]
+    edf        p95  -54.78 [-75.16, -34.40]*  miss  +0.9% [-0.1%, +1.9%]
+    lsf           vs program-fcfs: p95  +35.91 [+18.96, +52.86]*  miss  +1.1% [+0.6%, +1.6%]*
+    lsf        p95  -54.56 [-75.36, -33.76]*  miss  +1.7% [+0.8%, +2.5%]*
+    lsf-oracle p95  -55.13 [-73.13, -37.14]*  miss  +1.6% [+0.6%, +2.5%]*
+    program-fcfs p95  -90.46 [-103.06, -77.87]*  miss  +0.6% [-0.1%, +1.3%]
+    hint-priority vs program-fcfs: p95 +119.16 [+90.31, +148.02]*  miss  +0.8% [+0.2%, +1.4%]*
+    hint-priority p95  +28.70 [+0.86, +56.54]*  miss  +1.4% [+0.6%, +2.2%]*
+    program-fcfs-cap p95  -67.23 [-87.11, -47.34]*  miss  -6.5% [-8.2%, -4.7%]*
+
+=== summary ===
+  batch 2: lsf first separates from fcfs at load 0.78 on miss_vs_fcfs: p95 -15.4s [-31.3, +0.4], miss -2.7% [-3.9%, -1.5%]
+  batch 2: edf first separates from fcfs at load 0.78 on p95_vs_fcfs, miss_vs_fcfs: p95 -23.5s [-36.6, -10.4], miss -3.4% [-4.5%, -2.3%]
+  batch 2: hint-priority first separates from fcfs at load 0.78 on miss_vs_fcfs: p95 +6.5s [-26.3, +39.4], miss -3.4% [-5.3%, -1.6%]
+  batch 2: program-fcfs first separates from fcfs at load 0.78 on p95_vs_fcfs, miss_vs_fcfs: p95 -37.6s [-53.8, -21.3], miss -1.7% [-2.9%, -0.5%]
+  batch 2: program-fcfs-cap first separates from fcfs at load 0.78 on p95_vs_fcfs, miss_vs_fcfs: p95 -37.6s [-53.8, -21.3], miss -1.7% [-2.9%, -0.5%]
+  batch 2: lsf first separates from program-fcfs at load 0.78 on p95_vs_program: p95 +22.1s [+12.1, +32.2], miss -1.0% [-2.4%, +0.3%]
+  batch 2: edf first separates from program-fcfs at load 0.78 on p95_vs_program, miss_vs_program: p95 +14.0s [+5.6, +22.5], miss -1.8% [-2.8%, -0.7%]
+  batch 2: hint-priority first separates from program-fcfs at load 0.78 on p95_vs_program, miss_vs_program: p95 +44.1s [+8.0, +80.2], miss -1.8% [-3.5%, -0.1%]
+  batch 2: program-fcfs-cap never separates from program-fcfs at any load
+  batch 4: lsf first separates from fcfs at load 0.78 on p95_vs_fcfs: p95 -10.3s [-17.1, -3.5], miss -0.2% [-1.3%, +0.9%]
+  batch 4: edf first separates from fcfs at load 0.78 on p95_vs_fcfs: p95 -12.8s [-22.2, -3.4], miss -0.4% [-1.4%, +0.6%]
+  batch 4: hint-priority first separates from fcfs at load 0.78 on p95_vs_fcfs: p95 -8.9s [-16.0, -1.8], miss -0.6% [-1.5%, +0.4%]
+  batch 4: program-fcfs first separates from fcfs at load 0.78 on p95_vs_fcfs: p95 -19.7s [-29.7, -9.7], miss -0.4% [-1.1%, +0.4%]
+  batch 4: program-fcfs-cap first separates from fcfs at load 0.78 on p95_vs_fcfs: p95 -21.7s [-34.0, -9.4], miss -1.3% [-2.8%, +0.2%]
+  batch 4: lsf first separates from program-fcfs at load 0.78 on p95_vs_program: p95 +9.4s [+1.4, +17.5], miss +0.2% [-0.7%, +1.0%]
+  batch 4: edf first separates from program-fcfs at load 0.78 on p95_vs_program: p95 +6.9s [+0.1, +13.8], miss -0.0% [-0.6%, +0.6%]
+  batch 4: hint-priority first separates from program-fcfs at load 0.78 on p95_vs_program: p95 +10.8s [+0.9, +20.8], miss -0.2% [-0.7%, +0.4%]
+  batch 4: program-fcfs-cap first separates from program-fcfs at load 0.85 on miss_vs_program: p95 -0.4s [-12.4, +11.6], miss -1.9% [-3.3%, -0.4%]
+  batch 8: lsf first separates from fcfs at load 1.10 on p95_vs_fcfs: p95 -10.5s [-19.8, -1.1], miss +0.3% [-0.4%, +0.9%]
+  batch 8: edf first separates from fcfs at load 1.10 on p95_vs_fcfs, miss_vs_fcfs: p95 -14.4s [-27.6, -1.1], miss +0.7% [+0.1%, +1.4%]
+  batch 8: hint-priority first separates from fcfs at load 1.22 on p95_vs_fcfs: p95 -16.6s [-31.1, -2.2], miss +1.4% [-0.1%, +2.8%]
+  batch 8: program-fcfs first separates from fcfs at load 1.10 on p95_vs_fcfs: p95 -12.6s [-23.1, -2.0], miss -0.3% [-0.8%, +0.2%]
+  batch 8: program-fcfs-cap first separates from fcfs at load 0.78 on p95_vs_fcfs: p95 -16.2s [-25.3, -7.1], miss -0.7% [-2.2%, +0.7%]
+  batch 8: lsf first separates from program-fcfs at load 1.22 on miss_vs_program: p95 +5.6s [-1.9, +13.1], miss +1.4% [+0.4%, +2.4%]
+  batch 8: edf first separates from program-fcfs at load 1.00 on miss_vs_program: p95 -1.2s [-5.3, +2.9], miss +0.4% [+0.0%, +0.7%]
+  batch 8: hint-priority first separates from program-fcfs at load 1.00 on p95_vs_program: p95 +5.8s [+0.8, +10.7], miss +0.3% [-0.0%, +0.6%]
+  batch 8: program-fcfs-cap first separates from program-fcfs at load 0.78 on p95_vs_program: p95 -15.2s [-23.4, -6.9], miss -0.8% [-2.4%, +0.7%]
+  batch 16: lsf first separates from fcfs at load 1.75 on p95_vs_fcfs: p95 -13.5s [-26.5, -0.5], miss +0.4% [-0.2%, +1.0%]
+  batch 16: edf first separates from fcfs at load 1.75 on p95_vs_fcfs: p95 -15.6s [-29.6, -1.5], miss +0.4% [-0.4%, +1.1%]
+  batch 16: hint-priority first separates from fcfs at load 2.20 on miss_vs_fcfs: p95 +13.5s [-5.0, +32.0], miss +1.4% [+0.8%, +2.0%]
+  batch 16: program-fcfs first separates from fcfs at load 1.50 on p95_vs_fcfs: p95 -5.7s [-10.9, -0.5], miss +0.4% [-0.2%, +0.9%]
+  batch 16: program-fcfs-cap first separates from fcfs at load 0.78 on p95_vs_fcfs: p95 -14.9s [-23.2, -6.6], miss -1.1% [-2.6%, +0.4%]
+  batch 16: lsf first separates from program-fcfs at load 1.75 on p95_vs_program: p95 +11.0s [+2.0, +20.1], miss +0.5% [-0.0%, +0.9%]
+  batch 16: edf first separates from program-fcfs at load 1.75 on p95_vs_program: p95 +8.9s [+0.7, +17.2], miss +0.5% [-0.1%, +1.0%]
+  batch 16: hint-priority first separates from program-fcfs at load 1.75 on p95_vs_program, miss_vs_program: p95 +20.3s [+5.0, +35.7], miss +0.6% [+0.1%, +1.2%]
+  batch 16: program-fcfs-cap first separates from program-fcfs at load 0.78 on p95_vs_program: p95 -14.9s [-23.2, -6.6], miss -1.1% [-2.6%, +0.4%]
+
+elapsed 2708s -> /Users/tabrezlj/Deck/self-healing-agent/results/scheduling_map_slo_cap.json
