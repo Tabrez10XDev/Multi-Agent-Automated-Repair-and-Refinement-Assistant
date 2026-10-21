@@ -29,6 +29,9 @@ import urllib.request
 OLLAMA = "http://localhost:11434"
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_PATH = os.path.join(REPO, "data", "calibration", "measured.json")
+# The small demo task the prompt sizes and the pytest stage are measured on.
+# It lived at the repo root until 2d3159a moved measured data under data/.
+DEMO_DIR = os.path.join(REPO, "data", "demo_target")
 MAC_BACKEND = "mac-metal"
 
 
@@ -230,8 +233,8 @@ def measure_prompt_sizes(model):
     """Token counts for the real coder prompt, split stable vs variable."""
     from maara.agents.navigator import get_test_file_contents
 
-    test_files = get_test_file_contents(REPO)
-    target_path = os.path.join(REPO, "target.py")
+    test_files = get_test_file_contents(DEMO_DIR)
+    target_path = os.path.join(DEMO_DIR, "target.py")
     with open(target_path) as f:
         source_code = f.read()
 
@@ -382,7 +385,7 @@ def measure_cpu_stages():
     t0 = time.time()
     subprocess.run(
         [sys.executable, "-m", "pytest", "test_target.py", "-v", "--tb=short"],
-        capture_output=True, text=True, cwd=REPO, timeout=60,
+        capture_output=True, text=True, cwd=DEMO_DIR, timeout=60,
     )
     out["pytest_seconds"] = round(time.time() - t0, 3)
 

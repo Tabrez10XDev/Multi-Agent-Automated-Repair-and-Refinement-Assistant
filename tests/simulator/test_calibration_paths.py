@@ -33,3 +33,9 @@ def test_another_backend_gets_its_own_directory(fn):
 def test_backend_names_cannot_escape_the_calibration_dir(bad):
     with pytest.raises(ValueError):
         calibration_path(bad, "measured.json")
+
+
+def test_the_demo_task_is_where_the_probe_reads_it():
+    from probes.calibrate import DEMO_DIR
+    for fn in ("target.py", "test_target.py"):
+        assert os.path.exists(os.path.join(DEMO_DIR, fn))
