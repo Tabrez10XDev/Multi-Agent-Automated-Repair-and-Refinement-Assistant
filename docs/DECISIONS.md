@@ -993,3 +993,50 @@ hypotheses included, is unchanged. Caveats, stated with the result:
 
 When the file is committed, pass 2 proper reruns from it. If its values
 differ from the ones above, pass 2a is superseded.
+
+## 34. GPU closed; best-estimate costs from public data
+
+Set 2026-10-23, before any run below. The owner has closed the GPU work: the
+RTX 5060 Ti box faulted three times (Xid 79) and is unreachable, so G2 (its
+batching coefficient) will not be measured. This is a scope limitation, not a
+pending task. The "simulated RTX 5060 Ti" is fixed here from public data.
+
+**Coefficient from public throughput.** The simulator's decode law is
+iteration time ∝ 1 + (n−1)c, so aggregate throughput at n concurrent streams
+is mu(n) = n/(1 + (n−1)c) times one stream's. From a published table:
+mu(n) = agg(n)/agg(1), then c = (n/mu − 1)/(n − 1).
+
+| Source | Setup | agg tok/s | c at n |
+|---|---|---|---|
+| llama.cpp discussion #18030, `llama-batched-bench` | RTX 3060, Phi-4-mini Q4_K_M, TG128 | 108.0 / 173.05 / 228.86 / 275.70 at n = 1/2/4/8 | 0.25 / 0.30 / 0.31 |
+| same | RTX 3090 | 234.89 / 355.02 / 522.21 / 675.19 | 0.32 / 0.27 / 0.26 |
+| Aman12x/vllm-serving-bench | L4, vLLM, Qwen2.5-7B-Instruct AWQ | 50.8 / 193.0 / 534.9 / 862.8 / 1080.9 at n = 1/4/16/32/64 | 0.018 / 0.035 / 0.029 / 0.032 |
+
+- **Best estimate for this project's server (Ollama, which is llama.cpp, on
+  the 5060 Ti): c = 0.3** (range 0.25–0.32 at n ≤ 8). At n ≥ 16 llama.cpp
+  switches kernels and the table's c falls to about 0.06–0.10; MAARA runs at
+  batch ≤ 16 and our own probe fits n ≤ 8, so 0.3 stands.
+- **vLLM-class batcher: c ≈ 0.03.** Below the §33 sweep's lowest value.
+- **Rates.** The G1 run-2 values of the §33 amendment. They agree with public
+  5060 Ti numbers: qwen decode 62.8 tok/s against 51.4 (Qwen3-8B Q4,
+  16K context, hardware-corner.net) and about 55 (Llama-3.1-8B Q4_K_M,
+  insiderllm.com); prefill 3,022 against 1,448 at 16K depth. Our prompts are
+  short, and both rates fall with context depth.
+- **Caveats.** The llama.cpp rows are a 3.8B model on other cards, not qwen
+  7B on a 5060 Ti; a larger model is more memory-bound, so its c is if
+  anything lower. Ollama's own scheduler may add overhead on top of
+  llama.cpp. CPU stage times stay the Mac's; KV is DERIVED.
+
+**Profile.** `gpu_5060ti_public` in `simulator/workload.py`: the G1 rates
+tagged TRANSCRIBED G1, c = 0.3 tagged PUBLIC ESTIMATE. Its costs equal the
+§33 pass-2a setup at 0.3 (a test checks this), so FINDINGS §37's c = 0.3
+column *is* the best-estimate result and is not rerun.
+
+**One added run.** The §33 pass-2a setup (profile `gpu_5060ti`, the same
+`--rates`, every other flag as `experiments/run_gpu_sweep.sh`) at
+`--batch-decode-coeff 0.03`, for both `scheduling_map` and
+`sweep_decode_coeff`, to `results/gpu_sweep/gpu_5060ti_g1rates/*c0.03*`. The
+cap's k there is 4/8/15 at batch 4/8/16. Scored against §33's H1, H2 and H4
+unchanged; H3 is extended to "batch-16 better cells at 0.03 ≤ at 0.15". The
+default policy set now includes `program-fcfs-qcap` (§35); its rows in this
+run are exploratory.
