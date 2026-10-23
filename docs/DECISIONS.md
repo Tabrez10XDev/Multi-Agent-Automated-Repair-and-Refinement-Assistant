@@ -1040,3 +1040,40 @@ cap's k there is 4/8/15 at batch 4/8/16. Scored against §33's H1, H2 and H4
 unchanged; H3 is extended to "batch-16 better cells at 0.03 ≤ at 0.15". The
 default policy set now includes `program-fcfs-qcap` (§35); its rows in this
 run are exploratory.
+
+## 35. The self-lifting cap (`program-fcfs-qcap`), pre-registered
+
+Set 2026-10-23, before any run below. `program-fcfs-cap` wins at batch 16 on
+Mac costs but loses in overload at batch 4 (FINDINGS §34) and is never a net
+gain below batch 16 on GPU rates (§37). Both losses are where throughput sets
+the tail and the cap gives up up to EPS = 5% of it. **Rule:** use the cap
+while fewer than `max_batch` requests are waiting; admit up to `max_batch`
+while at least that many are. The threshold is fixed here and not tuned. The
+waiting count is read off the current queue, so the rule uses no oracle field
+and does not feed back through the cap as the removed load term did.
+
+Where the cap's k equals the batch limit the rule is identical to
+`program-fcfs` by construction: batch 2 at every coefficient, and batch 4 at
+0.3.
+
+**Runs.** `experiments.scheduling_map` on `holdout_qwen`, `--load-axis
+capacity --kv-mb 1024 --retention lru --batches 2 4 8 16 --seeds 20 --slo-mix
+tight:1.0:0.3,standard:2.0:0.4,loose:4.0:0.3 --deadline-basis estimate
+--workers 8`, default policy set, to `results/workflow_qcap/`:
+- **R1:** `--profile mac_ollama_measured` (c = 0.841, Mac rates).
+- **R2:** `--profile gpu_5060ti_public` (c = 0.3, the §34 best estimate).
+- **R3:** `--profile gpu_5060ti_public --batch-decode-coeff 0.841` (GPU rates
+  with Mac-like batching: where the cap lost most, FINDINGS §37).
+
+**Hypotheses**, on p95 vs `program-fcfs` (the driver's paired 95% CI over 20
+seeds), 40 cells per run:
+- **Q1.** qcap is significantly worse in at most 2 cells, in each run.
+- **Q2.** In R1 at batch 16, qcap is significantly better in at least 5 of 10
+  cells (the plain cap had 9 in §36's 0.841 column).
+- **Q3.** In each run, cells where qcap is significantly better ≥ cells where
+  it is significantly worse.
+
+Exploratory only: qcap against `program-fcfs-cap`, paired from the per-seed
+p95 arrays. `holdout_qwen` is the fitting set, so every result here is a
+**development result, not out-of-sample**. Testing qcap out of sample needs a
+fresh trace set (HumanEval is used up, §26/§31) and a freeze first.
