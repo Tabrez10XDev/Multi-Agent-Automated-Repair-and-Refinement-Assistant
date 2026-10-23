@@ -1486,7 +1486,10 @@ freeze `program-fcfs`.
 
 ## 32. Sealed `final_qwen`, partial: program-level ordering holds out of sample
 
-> **Partial (2026-10-15/16), current.** 5 of 40 cells, batch 2 only. The run
+> **Superseded (2026-10-22) by §33**, which reports the full 40-cell run
+> and `final_llama`; the five cells below are unchanged in it.
+>
+> **Partial (2026-10-15/16).** 5 of 40 cells, batch 2 only. The run
 > stopped when the laptop slept on battery and the session ended; it was not
 > stopped on a result. The sealed retention run and the `final_llama` map did
 > not start. Finishing reruns the same freeze commit on the remaining cells.
@@ -1524,3 +1527,140 @@ At load 1.00, LSF and EDF cut p95 by 16% against FCFS, inside §29's 15-22%
 range on the fitting set, so nothing here suggests the holdout result was
 overfit. Batches 4-16 are
 untested out of sample.
+
+## 33. Sealed `final` set, complete: program-level ordering holds out of sample
+
+> **Current (2026-10-22).** Supersedes §32. Runs 1 and 3 of DECISIONS §31,
+> each run once from freeze commit `f4c889b`, clean tree, reported as they
+> came out.
+
+**Setup.** As §32: `scheduling_map --slo-mix
+tight:1.0:0.3,standard:2.0:0.4,loose:4.0:0.3`, 20 paired seeds, KV 1024 MB,
+LRU, profile `mac_ollama_measured` (coefficient 0.841), busy load axis,
+batches 2/4/8/16 × 10 loads = 40 cells per trace. `final_qwen` has 91 tasks
+(HumanEval/75 excluded, §31 amendment); `final_llama` has 92. Results,
+force-added because a sealed run is one-shot:
+`results/sealed/scheduling_map_final_qwen_full.{json,log}` (5,823 s) and
+`results/sealed/scheduling_map_final_llama.{json,log}`.
+
+Cells where the rule is significantly better / worse / tied on p95 task
+latency (paired 95% CI over 20 seeds), by batch 2 / 4 / 8 / 16:
+
+| comparison | `final_qwen` | `final_llama` | both, of 80 |
+|---|---|---|---|
+| `program-fcfs` vs FCFS | 10/0/0, 10/0/0, 8/0/2, 6/0/4 | 10/0/0, 10/0/0, 10/0/0, 8/0/2 | **72 / 0 / 8** |
+| LSF vs `program-fcfs` | 0/10/0, 0/9/1, 0/6/4, 0/4/6 | 0/10/0, 0/10/0, 0/9/1, 0/3/7 | **0 / 61 / 19** |
+| LSF-oracle vs `program-fcfs` | 0/30/10 in total | 0/33/7 in total | 0 / 63 / 17 |
+| EDF vs `program-fcfs` | 0/28/12 in total | 0/31/9 in total | 0 / 59 / 21 |
+| `hint-priority` vs `program-fcfs` | 0/31/9 in total | 0/36/4 in total | 0 / 67 / 13 |
+
+`program-fcfs` vs FCFS at load 1.00, seconds [95% CI] (change in FCFS p95):
+
+| batch | `final_qwen` | `final_llama` |
+|---|---|---|
+| 2 | −112.4 [−145.8, −79.0] (−28%) | −267.4 [−328.5, −206.2] (−36%) |
+| 4 | −60.5 [−83.9, −37.0] (−17%) | −190.5 [−241.7, −139.4] (−28%) |
+| 8 | −25.9 [−44.2, −7.5] (−8%) | −112.8 [−166.9, −58.6] (−17%) |
+| 16 | −2.1 [−5.7, +1.5] (−1%, n.s.) | −28.8 [−51.8, −5.8] (−4%) |
+
+1. **S1 holds on both traces.** `program-fcfs` is never significantly worse
+   than FCFS, and better in 72 of 80 cells. Largest cuts: −38% (`final_qwen`,
+   batch 2, load 1.50) and −40% (`final_llama`, batch 2, load 1.25). The 8
+   ties are at batch 8–16 below load 1.15, where the scheduler rarely has a
+   choice (cells flagged inactive).
+2. **S2 holds.** LSF is better than `program-fcfs` in 0 of 80 cells and worse
+   in 61. Oracle output lengths do not change this (0 better, 63 worse), so
+   the loss is not estimator error.
+3. **The gain shrinks with batch size**, as on the fitting set (§29): a larger
+   batch drains the queue that ordering acts on.
+4. **Same pattern on unseen tasks.** The holdout map at the same setup
+   (`results/scheduling_map_slo_cap.json`, commit `404e44d`) gives 31/0/9 for
+   `program-fcfs` vs FCFS and 0/28/12 for LSF vs `program-fcfs`.
+
+**Verdict:** program-level ordering is the result; slack-based ordering is a
+negative result, out of sample, on two coder models. Mac costs only; on GPU
+costs, see DECISIONS §33.
+
+## 34. Concurrency cap (pre-registered S3): helps at batch 8–16, costs ~5% in overload at batch 4
+
+> **Current (2026-10-22).** S3 of DECISIONS §31, first evaluated on the
+> sealed set. No expectation was registered.
+
+**Rule.** `program-fcfs-cap` (`AdaptiveCapProgramFCFS`, EPS 0.05, frozen)
+admits the smallest k with `mu(k) >= 0.95 mu(max_batch)`, where
+`mu(k) = k / (1 + (k-1)c)`. **k depends only on the batching coefficient c**:
+at 0.841 it is 2 at batch 4 and 3 at batch 8–16. At batch 2 it equals
+`program-fcfs` exactly. Sources: the §33 sealed JSONs and the holdout
+`results/scheduling_map_slo_cap.json`.
+
+Cap vs `program-fcfs` on p95, significantly better / worse / tied:
+
+| batch (k) | `final_qwen` | `final_llama` | holdout `qwen` |
+|---|---|---|---|
+| 4 (2) | 2 / 6 / 2 | 2 / 5 / 3 | 0 / 6 / 4 |
+| 8 (3) | 6 / 3 / 1 | 8 / 1 / 1 | 4 / 2 / 4 |
+| 16 (3) | **10 / 0 / 0** | **10 / 0 / 0** | 9 / 1 / 0 |
+| sealed, batch 4–16 | | | **38 / 15 / 7 of 60** |
+
+1. **Batch 16: better in every sealed cell.** The change in p95 is −10% to
+   −16% (`final_qwen`) and −20% to −33% (`final_llama`) up to load 1.5,
+   narrowing to −2% to −7% at load 3.0. Largest: −363.6 s [−409.1, −318.2]
+   (`final_llama`, load 1.50).
+2. **Batch 8: better below deep overload.** The change is −4% to −9%
+   (`final_qwen`, load ≤ 1.25) and −1% to −17% (`final_llama`, load ≤ 1.75),
+   becoming +2% worse at load ≥ 1.75 (`final_qwen`) and 3.0 (`final_llama`).
+3. **Batch 4: worse in overload.** At load 0.74–0.85 it is −5% to −6% better.
+   From load 1.15–1.25 up it is +3% to +6% worse. Interpretation, not
+   measured: capping 4 to 2 gives up `1 - mu(2)/mu(4)` = 4.3% of
+   throughput, and in overload throughput sets the tail, so the loss matches
+   the throughput given up.
+4. The holdout run shows the same signs, with fewer cells separating.
+
+**Verdict:** a useful mechanism at large batch sizes on a nearly serial
+batcher, and a regression at batch 4 under overload. A load-aware version was
+tried before the freeze and removed (the docstring explains why), so it isn't
+claimed here. Because k is a function of c, the cap's value on a better
+batcher is untested; that is H3 of DECISIONS §33.
+
+## 35. Retention at 8x context: retention matters, ski-rental still loses to keep-all
+
+> **Preliminary (2026-10-22).** Holdout (fitting) set, 10 seeds, as
+> DECISIONS §31 requires for 8x. Not sealed. 8x is a simulator-only context
+> scale (GPU_TODO).
+
+**Setup.** `run_retention_grid --trace-set holdout_qwen --scales 8
+--headrooms 0.25,0.5,1.0 --util 0.8 --batch 4 --seeds 10`, FCFS, profile
+`mac_ollama_measured`, with the calibration bracket scaled by context
+(`87d21da`). The budget is the active peak (2,227 MB) plus the headroom
+times the reusable working set (1,274 MB). Output:
+`results/retention_headroom_8x.{json,log}` (4,470 s).
+
+Paired change against keep-all, seconds [95% CI]; * excludes zero. Keep-all
+p95 is 2,191–2,210 s, and its recompute is 185–365 s:
+
+| headroom (KV MB) | evict-now p95 | ski-rental p95 | ski-rental recompute | offline-ref p95 |
+|---|---|---|---|---|
+| 0.25 (2,545) | +222.1 [+127.5, +316.7]* (+10.0%) | +171.2 [+69.0, +273.3]* (+7.7%) | +164.1* | +65.2* |
+| 0.5 (2,864) | +234.8 [+143.1, +326.5]* (+10.7%) | +95.7 [+19.4, +172.0]* (+4.4%) | +118.4* | +49.8 |
+| 1.0 (3,501) | +241.3 [+145.5, +337.2]* (+11.0%) | −2.4 [−31.2, +26.5] | +136.1* | −11.8 |
+
+Contrast, the sealed 1x run (DECISIONS §31 run 2,
+`results/sealed/retention_headroom_final_qwen.json`, 20 seeds, budgets
+418–563 MB). Evict-now is +31.0 to +44.8 s on p95 (each significant).
+Ski-rental ties keep-all on p95 (−2.8 to +3.5 s) but recomputes +9.9 to
++16.6 s more in every cell. Ski-rental-pred does the same (+9.3 to +17.1 s).
+**R1 holds:** neither variant is better than keep-all on recompute or on p95.
+
+1. **At 8x, retention matters.** Dropping everything (evict-now) costs 10–11%
+   on p95 and 648–828 s of recompute. At 1x it cost about 8–12% on p95 with
+   about a sixth of the recompute (+114 to +139 s).
+2. **Ski-rental's releases are the wrong ones.** It recomputes 118–164 s more
+   than keep-all at every budget, and is significantly worse on p95 at the two
+   tighter budgets (+7.7%, +4.4%). The learning-augmented variant is no
+   better (+232.2*, +101.2*, +1.7 s).
+3. **LRU equals keep-all in every cell**, and the offline reference loses to
+   it at the tightest budget (+65.2 s*), consistent with §26.
+
+**Verdict:** the regime FINDINGS §7 predicted, where retention matters, does
+appear at 8x. Rent-to-buy release still doesn't beat holding KV until memory
+pressure forces eviction. Keep-all/LRU is best at every budget tested.

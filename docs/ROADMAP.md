@@ -1,18 +1,19 @@
 # Milestone 2 roadmap
 
-Status as of 2026-10-20. One line per workstream; detail lives in the linked
+Status as of 2026-10-22. One line per workstream; detail lives in the linked
 sections of FINDINGS / OPEN_ISSUES / DECISIONS.
 
 | # | Workstream | Status |
 |---|---|---|
 | 1 | Ollama prompt-cache baseline | **done** (FINDINGS §20, §22, §28) |
-| 2 | Retention comparison | **1x done** (FINDINGS §24-25); 8x calibration fixed, grid not complete (OPEN_ISSUES §27) |
+| 2 | Retention comparison | **done**: 1x sealed and 8x holdout; keep-all/LRU best everywhere (FINDINGS §24-25, §35) |
 | 3 | Better output-length estimator | **closed on evidence**: the oracle estimator does not help LSF, and LSF loses to `program-fcfs` (FINDINGS §29-30) |
-| 4 | vLLM on an RTX 5060 Ti 16 GB | deferred; plan in `docs/GPU_TODO.md` |
-| - | Sealed `final` evaluation | policies frozen (DECISIONS §31, `f4c889b`); `final_qwen` 5 of 40 cells done (FINDINGS §32) |
+| 4 | RTX 5060 Ti 16 GB | set up; G1 rates measured; G2/vLLM blocked by a GPU hardware fault (Xid 79). Coefficient sweep instead (DECISIONS §33) |
+| - | Sealed `final` evaluation | **done**: `final_qwen` and `final_llama` maps and the 1x retention grid (FINDINGS §33-35) |
 
-Milestone 2 headline (DECISIONS §31): program-level ordering. Remaining, in
-order: finish the sealed runs from `f4c889b`, then the 8x retention grid.
+Milestone 2 headline (DECISIONS §31): program-level ordering, confirmed on the
+sealed set (FINDINGS §33). Remaining: the DECISIONS §33 batching-cost sweep,
+then G2 once the GPU is repaired.
 The sections below are the original plan, kept for the record.
 
 ## 1. Ollama prompt-cache baseline — DONE

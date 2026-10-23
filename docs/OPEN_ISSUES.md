@@ -8,13 +8,13 @@ What is not settled, not validated, or known to be wrong. Read this before trust
 > resolve. They are not sequential within a file. The other parts live in
 > `ARCHITECTURE.md`, `DECISIONS.md`, `FINDINGS.md` and `OPEN_ISSUES.md`.
 
-## Status index (2026-10-15)
+## Status index (2026-10-22)
 
 | § | issue | status | next action |
 |---|---|---|---|
 | 6 | Engine invariants | **closed**, kept as a record | none: the suite enforces them |
 | 9.1, 9.2, 9.3, 9.7 | Prefill, rent model, decode coefficient, arrival rate | **resolved** | none |
-| 9.4 | Rates are Mac/Metal | **open**, a standing scope statement | the GPU profile, once GPU time is booked (GPU_TODO) |
+| 9.4 | Rates are Mac/Metal | **open**; G1 GPU rates measured, the coefficient (G2) blocked by a GPU hardware fault (Xid 79, three times; with RIT IT) | DECISIONS §33 sweep over the coefficient; G2 when the card is fixed |
 | 9.5 | `model_switch_seconds = 0.0` | **open**, low impact | check `ollama ps` during the `final` collection |
 | 9.6 | Invented `REPRESENTATIVE_ISSUE` | **not needed** for trace-driven results | none |
 | 11 | Old "next steps" list | **closed** | none |
@@ -27,10 +27,10 @@ What is not settled, not validated, or known to be wrong. Read this before trust
 | 24 | `issue_parser` recall gap | **open**; the holdout logs are lost, but the `final` server log is being captured to `~/ollama_final_A.log` | copy that log somewhere durable, then compare per call |
 | 25 | Scoping reuse with a match-time guard | **not needed**: the holdout traces have 0% cross-run reuse | none |
 | 26 | "Ski-rental never fires" | **superseded** by §27 and FINDINGS §24–25 | none |
-| 27 | No operating point where ski-rental beats keep-all | **open, highest impact**; calibration fixed (`87d21da`), grid not yet complete | run the 8x headroom grid |
+| 27 | No operating point where ski-rental beats keep-all | **open, lower impact**: none at 1x (sealed) or 8x (holdout), FINDINGS §35 | optional: 16x |
 | 28 | Batch-cap labels counted the wrong thing | **fixed** in code; the §29–31 labels are **not yet re-derived** | rerun the maps, or qualify the labels in FINDINGS |
 | 29 | Deadlines carry almost no per-task size | **open**; `task` basis added and tested, not run | one map with `--deadline-basis task` |
-| 30 | Busy load axis not comparable across batch sizes | **open**; `capacity` axis added and tested, not run | rerun the SLO map with `--load-axis capacity` |
+| 30 | Busy load axis not comparable across batch sizes | **open**; capacity-axis maps pre-registered (DECISIONS §33) and running | score DECISIONS §33 in FINDINGS |
 
 **Still open and relevant: 8** — 9.4, 9.5, 14, 24, 27, 28, 29, 30.
 
@@ -576,6 +576,13 @@ coverage from 0% to 26.2% of blocks. Necessary, but as the table above shows,
 not enough to make the rule fire.
 
 ## 27. The live-rent band is set by concurrency, not by KV budget
+
+> **Update (2026-10-22).** The 8x headroom grid completed (holdout, 10
+> seeds; FINDINGS §35). Retention now matters (evict-now +10-11% p95), but
+> ski-rental is still no better than keep-all: +171.2 s and +95.7 s on p95 at
+> the two tighter budgets, a tie at the loosest, and +118 to +164 s of
+> recompute at every budget. The sealed 1x run gives the same answer (R1
+> holds). No operating point found at 1x or 8x.
 
 > **Update (2026-10-15).** Two 8x headroom runs failed in load calibration:
 > the arrival-rate bisection floor (0.005/s) is above the util-0.8 rate at 8x
