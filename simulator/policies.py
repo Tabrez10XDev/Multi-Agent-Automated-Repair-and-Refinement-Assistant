@@ -486,6 +486,26 @@ class AdaptiveCapProgramFCFS(ProgramFCFSScheduler):
         return next(k for k in range(1, max_batch + 1) if mu(k) >= target)
 
 
+class BacklogLiftedCapProgramFCFS(AdaptiveCapProgramFCFS):
+    """
+    `program-fcfs-cap` with the cap lifted while a full batch of requests is
+    waiting (DECISIONS 35).
+
+    The cap gives up up to EPS of throughput. While the queue is short that
+    buys latency for the oldest tasks; in overload, where throughput sets the
+    tail, it is a pure loss (FINDINGS 34, 37). The waiting count is read off
+    the current queue, not estimated from arrivals, so unlike the load term
+    removed above it does not feed back through the cap into its own input.
+    Threshold (waiting >= max_batch) fixed before any run; not tuned.
+    """
+    name = "program-fcfs-qcap"
+
+    def admit_cap(self, now, views, cost, max_batch):
+        if len(views) >= max_batch:
+            return max_batch
+        return super().admit_cap(now, views, cost, max_batch)
+
+
 class HintPriorityScheduler(Scheduler):
     """
     A client-declared priority, then oldest task first. Mimics NVIDIA Dynamo's
@@ -526,6 +546,7 @@ SCHEDULERS = {c.name: c for c in [
     FCFSScheduler, SJFScheduler, EDFScheduler, LeastSlackFirstScheduler,
     StaticPriorityScheduler, ProgramFCFSScheduler, HintPriorityScheduler,
     AdaptiveCapProgramFCFS,
+    BacklogLiftedCapProgramFCFS,
 ]}
 
 

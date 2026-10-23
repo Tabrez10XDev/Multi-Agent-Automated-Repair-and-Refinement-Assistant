@@ -185,6 +185,21 @@ def _gpu_5060ti_rates() -> dict:
     return gpu_rates_from(_GPU_CAL_DIR)
 
 
+# G1 run 2 on the RTX 5060 Ti, transcribed from the measured.json printed over
+# SSH before the card failed (FINDINGS 37; the file itself was never copied
+# off the box). prefill / decode tok/s.
+_G1_RATES = {CODER_MODEL: (3021.98, 62.78), SENTINEL_MODEL: (4001.12, 98.25)}
+# Ollama is llama.cpp: llama-batched-bench on an RTX 3060 / 3090 gives
+# 0.25-0.32 at n = 2..8 (DECISIONS 34). Not measured on this card.
+_GPU_COEFF_PUBLIC = 0.3
+
+
+def _gpu_5060ti_public_rates() -> dict:
+    return {name: replace(r, prefill_rate=_G1_RATES[name][0],
+                          decode_rate=_G1_RATES[name][1], measured=False)
+            for name, r in _rates_from_measured().items()}
+
+
 @dataclass(frozen=True)
 class HardwareProfile:
     """
@@ -204,6 +219,11 @@ class HardwareProfile:
     # this machine. Everything else is DERIVED from published configs.
     kv_measured: frozenset = frozenset()
     batch_decode_coeff_measured: bool = False
+    # Provenance for unmeasured values that are not placeholders either (a
+    # transcription, a public estimate). Shown by provenance() in place of
+    # PLACEHOLDER when set.
+    rates_tag: str = ""
+    coeff_tag: str = ""
 
 
 DEFAULT_PROFILE = "mac_ollama_measured"
@@ -233,6 +253,19 @@ PROFILES = {
         batch_decode_coeff=_GPU_COEFF[0],
         batch_decode_coeff_measured=_GPU_COEFF[1],
         iteration_overhead_s=0.001,
+    ),
+    # The best estimate of the RTX 5060 Ti now that the card is out of reach
+    # (DECISIONS 34). CPU stage times stay the Mac's; KV is DERIVED.
+    "gpu_5060ti_public": HardwareProfile(
+        name="gpu_5060ti_public",
+        description=("RTX 5060 Ti 16 GB, best estimate: rates G1 run 2 transcribed "
+                     "(FINDINGS 37); coefficient a public estimate, llama.cpp "
+                     "batched-bench (DECISIONS 34)"),
+        rates=_gpu_5060ti_public_rates,
+        batch_decode_coeff=_GPU_COEFF_PUBLIC,
+        iteration_overhead_s=0.001,
+        rates_tag="TRANSCRIBED G1",
+        coeff_tag="PUBLIC ESTIMATE",
     ),
 }
 
@@ -350,7 +383,7 @@ class CostModel:
                  f"  hardware profile     {p.name}  [{p.description}]"]
         base = p.rates()
         for name, r in self.rates.items():
-            tag = "MEASURED" if r.measured else "PLACEHOLDER"
+            tag = "MEASURED" if r.measured else (p.rates_tag or "PLACEHOLDER")
             b = base.get(name)
             if b and (r.prefill_rate, r.decode_rate) != (b.prefill_rate, b.decode_rate):
                 tag = (f"OVERRIDDEN from profile values {b.prefill_rate:.1f}/"
@@ -364,7 +397,8 @@ class CostModel:
                          f"decode={r.decode_rate:>6.1f} tok/s  "
                          f"kv={r.kv_bytes_per_token/1024:>5.0f} KiB/tok  "
                          f"[rates {tag}; kv {kv_tag}]")
-        coeff_tag = "MEASURED" if p.batch_decode_coeff_measured else "PLACEHOLDER - sweep this"
+        coeff_tag = ("MEASURED" if p.batch_decode_coeff_measured
+                     else p.coeff_tag or "PLACEHOLDER - sweep this")
         if self.batch_decode_coeff != p.batch_decode_coeff:
             coeff_tag = f"OVERRIDDEN from profile value {p.batch_decode_coeff}"
         lines.append(f"  batch_decode_coeff   {self.batch_decode_coeff}  [{coeff_tag}]")

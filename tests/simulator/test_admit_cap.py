@@ -51,3 +51,18 @@ def test_the_cap_is_one_only_when_batching_buys_nothing():
     assert rep["mean_admit_cap"] == 1.0
     assert rep["max_resident"] == 1
     assert rep["throughput_tasks_per_s"] > 0
+
+
+def test_a_backlog_lifts_the_cap():
+    # rate 0.5 on 30 tasks: far more requests waiting than max_batch 8.
+    capped, lifted = run("program-fcfs-cap"), run("program-fcfs-qcap")
+    assert lifted["mean_admit_cap"] > capped["mean_admit_cap"]
+    assert lifted["max_resident"] == 8
+    assert lifted["tasks_completed"] == capped["tasks_completed"] == 30
+
+
+def test_under_light_load_the_lifted_cap_is_the_plain_cap():
+    capped, lifted = run("program-fcfs-cap", rate=0.005), run("program-fcfs-qcap", rate=0.005)
+    assert lifted["mean_admit_cap"] == capped["mean_admit_cap"] == 3.0
+    assert lifted["p95_task_latency_s"] == capped["p95_task_latency_s"]
+    assert lifted["tasks_completed"] == 30

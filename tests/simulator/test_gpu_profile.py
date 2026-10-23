@@ -87,3 +87,24 @@ def test_overridden_rates_are_used_and_reported_as_overridden():
 def test_an_unknown_model_override_is_refused():
     with pytest.raises(ValueError):
         CostModel.from_profile("mac_ollama_measured", rate_overrides={"gpt-x": (1.0, 1.0)})
+
+
+def test_the_public_estimate_profile_has_g1_rates_and_the_public_coefficient():
+    cost = CostModel.from_profile("gpu_5060ti_public")
+    assert cost.batch_decode_coeff == pytest.approx(0.3)
+    assert (cost.rates[CODER_MODEL].prefill_rate, cost.rates[CODER_MODEL].decode_rate) == (3021.98, 62.78)
+    assert (cost.rates[SENTINEL_MODEL].prefill_rate, cost.rates[SENTINEL_MODEL].decode_rate) == (4001.12, 98.25)
+    assert not any(r.measured for r in cost.rates.values())
+    lines = cost.provenance().splitlines()
+    assert all("TRANSCRIBED G1" in next(l for l in lines if m in l) for m in (CODER_MODEL, SENTINEL_MODEL))
+    assert "PUBLIC ESTIMATE" in next(l for l in lines if "batch_decode_coeff" in l)
+    assert "PLACEHOLDER" not in cost.provenance()
+
+
+def test_the_public_profile_matches_the_g1_rates_override():
+    # FINDINGS 37 ran these rates as a --rates override; the profile must be the same costs.
+    public = CostModel.from_profile("gpu_5060ti_public")
+    override = CostModel.from_profile("gpu_5060ti", batch_decode_coeff=0.3, rate_overrides={
+        CODER_MODEL: (3021.98, 62.78), SENTINEL_MODEL: (4001.12, 98.25)})
+    assert public.rates == {m: workload.replace(r, measured=False) for m, r in override.rates.items()}
+    assert public.batch_decode_coeff == override.batch_decode_coeff
