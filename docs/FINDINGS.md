@@ -1798,7 +1798,8 @@ Exploratory, not pre-registered:
    At the same 0.841, the cap wins 9 batch-16 cells on Mac rates (§36) but 4
    here (−6% to −8%). At batch 4 it is worse in 8 cells (+5% to +18%), and at
    batch 8 it is worse in overload (+8% to +12% at loads 1.25–2.0). On GPU
-   rates, the cap is a net loss below batch 16 at every coefficient.
+   rates, below batch 16, the cap is never a net gain: it is worse wherever
+   it binds, and identical where k reaches the batch limit.
 2. At the sweep's scheduler point (batch 8, 0.841), LSF beats plain FCFS by
    3.09 s [0.55, 5.63]. This is not a gain over `program-fcfs`, which LSF
    never beats in the map.
