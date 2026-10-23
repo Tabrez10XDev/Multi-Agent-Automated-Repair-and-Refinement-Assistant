@@ -980,3 +980,16 @@ is one (batch, load); 40 per coefficient; "significant" is the driver's paired
 Anything else found in these runs is labelled exploratory. Results go in
 FINDINGS (pass 1 and pass 2 each in their own section). Nothing here is called
 "GPU-measured" except the G1 rates.
+
+**Amendment, 2026-10-23, after pass 1 and before any pass 2 run.** The GPU
+box is unreachable, so `measured.json` can't be copied back. Pass 2 runs now
+as **pass 2a**: profile `gpu_5060ti` with `--rates
+qwen2.5-coder:7b=3021.98/62.78,llama3.2=4001.12/98.25`. These are the G1 run-2
+values exactly as `measured.json` printed them over SSH on 2026-10-23
+(session log), recorded as OVERRIDDEN in every manifest. Everything else, the
+hypotheses included, is unchanged. Caveats, stated with the result:
+- CPU-side stage times (RAG, pytest) stay at the Mac's.
+- KV bytes per token are DERIVED, and are identical for the same model files.
+
+When the file is committed, pass 2 proper reruns from it. If its values
+differ from the ones above, pass 2a is superseded.

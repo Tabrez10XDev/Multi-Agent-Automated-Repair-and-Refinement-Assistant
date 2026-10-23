@@ -237,6 +237,20 @@ PROFILES = {
 }
 
 
+def parse_rate_overrides(text: Optional[str]) -> Optional[dict]:
+    """'qwen2.5-coder:7b=3021.98/62.78,llama3.2=4001.12/98.25'
+    -> {model: (prefill tok/s, decode tok/s)}. Model names contain ':', hence
+    '=' and '/'."""
+    if not text:
+        return None
+    out = {}
+    for part in text.split(","):
+        model, _, pair = part.partition("=")
+        prefill, _, decode = pair.partition("/")
+        out[model.strip()] = (float(prefill), float(decode))
+    return out
+
+
 def get_profile(name: str) -> HardwareProfile:
     if name not in PROFILES:
         raise ValueError(f"unknown hardware profile {name!r}; "
@@ -284,7 +298,19 @@ class CostModel:
             self.iteration_overhead_s = p.iteration_overhead_s
 
     @classmethod
-    def from_profile(cls, name: str, **overrides) -> "CostModel":
+    def from_profile(cls, name: str, rate_overrides: Optional[dict] = None,
+                     **overrides) -> "CostModel":
+        """rate_overrides {model: (prefill, decode)} replaces those models'
+        rates for a what-if run; provenance() reports them as OVERRIDDEN."""
+        if rate_overrides:
+            rates = get_profile(name).rates()
+            for model, (prefill, decode) in rate_overrides.items():
+                if model not in rates:
+                    raise ValueError(f"unknown model {model!r} in rate overrides; "
+                                     f"known: {sorted(rates)}")
+                rates[model] = replace(rates[model], prefill_rate=prefill,
+                                       decode_rate=decode, measured=False)
+            overrides["rates"] = rates
         return cls(profile=name, **overrides)
 
     @property
@@ -322,8 +348,13 @@ class CostModel:
         p = self.hardware_profile
         lines = ["CostModel provenance:",
                  f"  hardware profile     {p.name}  [{p.description}]"]
+        base = p.rates()
         for name, r in self.rates.items():
             tag = "MEASURED" if r.measured else "PLACEHOLDER"
+            b = base.get(name)
+            if b and (r.prefill_rate, r.decode_rate) != (b.prefill_rate, b.decode_rate):
+                tag = (f"OVERRIDDEN from profile values {b.prefill_rate:.1f}/"
+                       f"{b.decode_rate:.1f}")
             # KV bytes/token has its own provenance: qwen's is confirmed
             # against an Ollama 0.33.3 prompt-cache log line ("3791 tokens,
             # 207.364 MiB" -> 57,356 B/token vs 57,344 derived, 0.02% apart).

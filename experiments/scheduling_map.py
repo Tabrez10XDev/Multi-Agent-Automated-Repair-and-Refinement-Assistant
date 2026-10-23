@@ -63,7 +63,7 @@ from experiments.run_scheduler_table import calibrate_slack, paired_ci, run_one
 from simulator.engine import EngineConfig
 from simulator.trace_loader import TRACE_SET_EXCLUSIONS
 from simulator.workload import (DEFAULT_PROFILE, PROFILES, CostModel, CpuStageSeconds,
-                                StageTokens)
+                                StageTokens, parse_rate_overrides)
 
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -197,6 +197,10 @@ def main():
     ap.add_argument("--profile", default=DEFAULT_PROFILE, choices=sorted(PROFILES),
                     help="hardware profile the cost model is built from "
                          "(simulator/workload.py PROFILES)")
+    ap.add_argument("--rates", default=None,
+                    help="override per-model rates for a what-if run, "
+                         "model=prefill/decode,... in tok/s (reported as OVERRIDDEN "
+                         "in the manifest's cost provenance)")
     args = ap.parse_args()
 
     slo = parse_slo(args.slo_mix)
@@ -206,8 +210,9 @@ def main():
         utils, multiples, batches, seeds = [0.8], [2.2], [8], [1, 2, 3]
 
     cost = CostModel.from_profile(
-        args.profile, **({} if args.batch_decode_coeff is None
-                         else {"batch_decode_coeff": args.batch_decode_coeff}))
+        args.profile, rate_overrides=parse_rate_overrides(args.rates),
+        **({} if args.batch_decode_coeff is None
+           else {"batch_decode_coeff": args.batch_decode_coeff}))
     tok, cpu = StageTokens(), CpuStageSeconds()
     prof = cost.profile
     cache_mode = EngineConfig().cache_mode

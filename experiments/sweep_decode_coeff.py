@@ -37,7 +37,7 @@ from experiments.run_retention_grid import calibrate_rate, run_one
 from experiments.run_scheduler_table import paired_ci
 from simulator.engine import EngineConfig
 from simulator.workload import (DEFAULT_PROFILE, PROFILES, CostModel, CpuStageSeconds,
-                                StageTokens)
+                                StageTokens, parse_rate_overrides)
 
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 COEFFS = [0.05, 0.15, 0.30, 0.50]
@@ -85,6 +85,10 @@ def main():
     ap.add_argument("--profile", default=DEFAULT_PROFILE, choices=sorted(PROFILES),
                     help="hardware profile the cost model is built from "
                          "(simulator/workload.py PROFILES)")
+    ap.add_argument("--rates", default=None,
+                    help="override per-model rates for a what-if run, "
+                         "model=prefill/decode,... in tok/s (reported as OVERRIDDEN "
+                         "in the manifest's cost provenance)")
     args = ap.parse_args()
 
     tok, cpu = StageTokens.from_measured(), CpuStageSeconds.from_measured()
@@ -96,13 +100,15 @@ def main():
         "retention_point": RETENTION_POINT, "sched_point": SCHED_POINT,
         "ret_policies": ret_policies,
         "hardware_profile": args.profile,
-        "cost_provenance": CostModel.from_profile(args.profile).provenance(),
+        "cost_provenance": CostModel.from_profile(
+            args.profile, rate_overrides=parse_rate_overrides(args.rates)).provenance(),
         "cache_mode": cache_mode})
     t0 = time.time()
     out_rows = []
 
     for coeff in args.coeffs:
-        cost = CostModel.from_profile(args.profile, batch_decode_coeff=coeff)
+        cost = CostModel.from_profile(args.profile, batch_decode_coeff=coeff,
+                                      rate_overrides=parse_rate_overrides(args.rates))
         print(f"\n=== batch_decode_coeff {coeff} ===", flush=True)
 
         # Retention point.
