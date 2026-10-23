@@ -117,6 +117,13 @@ def measure_rates(model):
     """
     print(f"  [{model}] warming up (loads weights into memory)...")
     _generate(model, "warmup", num_predict=8)
+    # A decode-only warmup does not exercise the prefill path. On CUDA the
+    # first real prefill after a load ran ~70x slow (llama3.2: 558 tokens in
+    # 7.8 s, 2026-10-22), and the marginal rate below takes its slope from the
+    # smallest point, so one slow point made the rate negative. One discarded
+    # prefill of a mid-size prompt, with its own nonce so nothing is cached.
+    _generate(model, f"# {random.randint(10**9, 10**10)}\n" + "def g(y):\n    return y\n\n" * 200,
+              num_predict=1)
 
     prefill_points = []
     for reps in (50, 200, 700):
