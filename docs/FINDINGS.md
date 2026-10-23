@@ -1735,3 +1735,76 @@ nearly serial 0.841 to vLLM-class 0.15, program-level ordering keeps its
 gain, LSF never helps, and ski-rental never beats keep-all. Only the cap's
 value is hardware-dependent, and it fades as batching gets cheaper. A future
 measured GPU coefficient only picks a column of this table.
+
+## 37. Batching-cost sweep, pass 2a (G1 GPU rates): ordering holds, the cap does not carry over
+
+> **Provisional (2026-10-23).** Pass 2a of DECISIONS §33 (amendment), scored as
+> pre-registered. Rates are the RTX 5060 Ti G1 run-2 values (qwen
+> 3021.98/62.78, llama3.2 4001.12/98.25 tok/s), passed with `--rates` because
+> the box is unreachable, and recorded as OVERRIDDEN. The coefficient is swept,
+> not measured. This is superseded if the committed `measured.json` differs.
+
+**Setup.** As §36, with profile `gpu_5060ti` and `--rates`, at `4b15417`,
+clean tree in every manifest. Outputs: `results/gpu_sweep/gpu_5060ti_g1rates/`.
+Saturation throughput is 2.7–3.8× the Mac's at the same batch and coefficient
+(for example 0.095 against 0.034 tasks/s at batch 16 and 0.841). Caveats:
+- CPU-side stages (RAG, pytest) keep Mac timings.
+- The rates came from a card that later failed (Xid 79), and qwen decode
+  differed 13% between G1 runs 1 and 2.
+
+Cells significantly better / worse / tied on p95 (40 per coefficient):
+
+| comparison | 0.841 | 0.5 | 0.3 | 0.15 |
+|---|---|---|---|---|
+| `program-fcfs` vs FCFS (H1) | 29 / **0** / 11 | 30 / **0** / 10 | 29 / **0** / 11 | 30 / **0** / 10 |
+| LSF vs `program-fcfs` (H2) | **0** / 24 / 16 | **0** / 29 / 11 | **0** / 26 / 14 | **0** / 29 / 11 |
+| LSF-oracle vs `program-fcfs` | 0 / 24 / 16 | 0 / 26 / 14 | 0 / 28 / 12 | 0 / 28 / 12 |
+| cap vs `program-fcfs`, batch 16 (H3) | **4** / 1 / 5 | 4 / 1 / 5 | 0 / 1 / 9 | **0** / 2 / 8 |
+| cap vs `program-fcfs`, all batches | 6 / 12 / 22 | 4 / 5 / 31 | 0 / 7 / 33 | 0 / 2 / 38 |
+
+At load 1.0, the change in p95 for `program-fcfs` vs FCFS, by batch
+2 / 4 / 8 / 16: −25 / −21 / −10 / −0% at 0.841, −27 / −21 / −8 / −0% at 0.5,
+−28 / −20 / −9 / −1% at 0.3, and −27 / −21 / −8 / −1% at 0.15 (batch 16 is
+n.s.).
+
+Retention point (`sweep_decode_coeff`): keep-all recompute is **0.1–0.2% of
+makespan**, against 0.4–0.7% on Mac rates; the 11× faster prefill makes
+recompute nearly free. Ski-rental minus keep-all on p95:
+
+| coefficient | ski-rental − keep-all p95, s | recompute, s |
+|---|---|---|
+| 0.841 | +0.82* | +1.17* |
+| 0.5 | +0.38* | +1.13* |
+| 0.3 | −0.23 (n.s.) | +1.29* |
+| 0.15 | +0.60* | +1.15* |
+
+Evict-now costs only +2 to +5 s against p95s of 47–101 s.
+
+Scored:
+
+- **H1 held.** `program-fcfs` is worse than FCFS in 0 of 160 cells. Its gain
+  matches the Mac's: −20% to −21% at batch 4 and −25% to −28% at batch 2, at
+  load 1.0.
+- **H2 held.** LSF beats `program-fcfs` in 0 of 160 cells, and so does
+  LSF-oracle.
+- **H3 held.** The cap is better at batch 16 in 4 cells at 0.841 and 0 at
+  0.15.
+- **H4 held.** Recompute is 0.1–0.2% of makespan, and ski-rental is never
+  better than keep-all on p95.
+
+Exploratory, not pre-registered:
+
+1. **The cap's value depends on the hardware, not only on the coefficient.**
+   At the same 0.841, the cap wins 9 batch-16 cells on Mac rates (§36) but 4
+   here (−6% to −8%). At batch 4 it is worse in 8 cells (+5% to +18%), and at
+   batch 8 it is worse in overload (+8% to +12% at loads 1.25–2.0). On GPU
+   rates, the cap is a net loss below batch 16 at every coefficient.
+2. At the sweep's scheduler point (batch 8, 0.841), LSF beats plain FCFS by
+   3.09 s [0.55, 5.63]. This is not a gain over `program-fcfs`, which LSF
+   never beats in the map.
+
+**Verdict:** on the GPU's measured speeds, at every batching cost from 0.15 to
+0.841, the Milestone 2 conclusions hold: oldest-workflow-first keeps a
+20–28% p95 cut at batch 2–4, slack scheduling never helps, and retention is
+irrelevant at 1x. The concurrency cap (§34) is a Mac-cost result and should
+not be claimed for GPU deployment.

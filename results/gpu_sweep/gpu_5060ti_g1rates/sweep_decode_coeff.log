@@ -1,0 +1,34 @@
+
+=== batch_decode_coeff 0.15 ===
+  retention  rate 0.0948/s (busy 0.80)  keep-all recompute 0.5s = 0.1% of makespan  rent-active 14.1%
+    keep-all    p95    46.8  recompute     0.5s
+    ski-rental  p95    47.4  recompute     1.7s
+    evict-now   p95    49.1  recompute    11.4s
+    ski-rental - keep-all: p95 +0.60s [+0.12, +1.08]  recompute +1.15s [+0.78, +1.51]
+  scheduler  rate 0.0987/s (busy 0.80)  choice 0.2%  lsf - fcfs p95 -0.05s [-0.15, +0.05]
+
+=== batch_decode_coeff 0.3 ===
+  retention  rate 0.0870/s (busy 0.80)  keep-all recompute 0.6s = 0.1% of makespan  rent-active 15.2%
+    keep-all    p95    56.7  recompute     0.6s
+    ski-rental  p95    56.5  recompute     1.9s
+    evict-now   p95    58.7  recompute    11.4s
+    ski-rental - keep-all: p95 -0.23s [-0.96, +0.50]  recompute +1.29s [+0.99, +1.60]
+  scheduler  rate 0.0928/s (busy 0.81)  choice 0.4%  lsf - fcfs p95 -0.25s [-0.53, +0.03]
+
+=== batch_decode_coeff 0.5 ===
+  retention  rate 0.0811/s (busy 0.81)  keep-all recompute 0.9s = 0.1% of makespan  rent-active 18.2%
+    keep-all    p95    71.2  recompute     0.9s
+    ski-rental  p95    71.5  recompute     2.0s
+    evict-now   p95    75.0  recompute    11.4s
+    ski-rental - keep-all: p95 +0.38s [+0.02, +0.74]  recompute +1.13s [+0.72, +1.53]
+  scheduler  rate 0.0831/s (busy 0.81)  choice 0.6%  lsf - fcfs p95 +0.09s [-0.44, +0.63]
+
+=== batch_decode_coeff 0.841 ===
+  retention  rate 0.0714/s (busy 0.81)  keep-all recompute 1.3s = 0.2% of makespan  rent-active 21.3%
+    keep-all    p95   101.3  recompute     1.3s
+    ski-rental  p95   102.2  recompute     2.5s
+    evict-now   p95   106.1  recompute    11.4s
+    ski-rental - keep-all: p95 +0.82s [+0.10, +1.55]  recompute +1.17s [+0.67, +1.66]
+  scheduler  rate 0.0714/s (busy 0.81)  choice 2.3%  lsf - fcfs p95 -3.09s [-5.63, -0.55]
+
+elapsed 573s -> results/gpu_sweep/gpu_5060ti_g1rates/sweep_decode_coeff.json

@@ -13,8 +13,9 @@ sections of FINDINGS / OPEN_ISSUES / DECISIONS.
 
 Milestone 2 headline (DECISIONS §31): program-level ordering, confirmed on the
 sealed set (FINDINGS §33). The DECISIONS §33 sweep, pass 1 (Mac rates),
-holds at every coefficient (FINDINGS §36). Remaining: pass 2 on G1 GPU rates,
-then G2 once the GPU is repaired.
+holds at every coefficient (FINDINGS §36). Pass 2a on G1 GPU rates also holds
+(FINDINGS §37); the cap does not carry over. Remaining: rerun pass 2 from the
+committed `measured.json`, then G2 once the GPU is repaired.
 The sections below are the original plan, kept for the record.
 
 ## 1. Ollama prompt-cache baseline — DONE
