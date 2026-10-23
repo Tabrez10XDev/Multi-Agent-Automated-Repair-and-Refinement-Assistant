@@ -8,13 +8,13 @@ What is not settled, not validated, or known to be wrong. Read this before trust
 > resolve. They are not sequential within a file. The other parts live in
 > `ARCHITECTURE.md`, `DECISIONS.md`, `FINDINGS.md` and `OPEN_ISSUES.md`.
 
-## Status index (2026-10-22)
+## Status index (2026-10-23)
 
 | § | issue | status | next action |
 |---|---|---|---|
 | 6 | Engine invariants | **closed**, kept as a record | none: the suite enforces them |
 | 9.1, 9.2, 9.3, 9.7 | Prefill, rent model, decode coefficient, arrival rate | **resolved** | none |
-| 9.4 | Rates are Mac/Metal | **open**; G1 GPU rates measured, the coefficient (G2) blocked by a GPU hardware fault (Xid 79, three times; with RIT IT) | DECISIONS §33 sweep over the coefficient; G2 when the card is fixed |
+| 9.4 | Rates are Mac/Metal | **closed as a scope limitation** (owner, 2026-10-23): G1 GPU rates measured; G2 never measured (Xid 79, three times). Simulated GPU from public data, conclusions hold from c = 0.03 to 0.841 (DECISIONS §34, FINDINGS §38) | state it in the writeup |
 | 9.5 | `model_switch_seconds = 0.0` | **open**, low impact | check `ollama ps` during the `final` collection |
 | 9.6 | Invented `REPRESENTATIVE_ISSUE` | **not needed** for trace-driven results | none |
 | 11 | Old "next steps" list | **closed** | none |
@@ -30,9 +30,9 @@ What is not settled, not validated, or known to be wrong. Read this before trust
 | 27 | No operating point where ski-rental beats keep-all | **open, lower impact**: none at 1x (sealed) or 8x (holdout), FINDINGS §35 | optional: 16x |
 | 28 | Batch-cap labels counted the wrong thing | **fixed** in code; the §29–31 labels are **not yet re-derived** | rerun the maps, or qualify the labels in FINDINGS |
 | 29 | Deadlines carry almost no per-task size | **open**; `task` basis added and tested, not run | one map with `--deadline-basis task` |
-| 30 | Busy load axis not comparable across batch sizes | **resolved for the coefficient question**: capacity-axis maps at 4 coefficients, FINDINGS §36 | pass 2 on GPU rates (DECISIONS §33) |
+| 30 | Busy load axis not comparable across batch sizes | **resolved for the coefficient question**: capacity-axis maps on Mac and G1 GPU rates, FINDINGS §36–38 | none |
 
-**Still open and relevant: 7** — 9.4, 9.5, 14, 24, 27, 28, 29.
+**Still open and relevant: 6** — 9.5, 14, 24, 27, 28, 29.
 
 ---
 
@@ -127,7 +127,9 @@ The engine reaches the contended state the old one could not. Trace evidence:
    > Every conclusion above holds at the measured value. What moves is
    > capacity: the util-0.8 rate falls to 0.0265/s and keep-all p95 rises to
    > 278s.
-4. Rates are Mac/Metal, not CUDA. **Open; now explicit**: every number is
+4. Rates are Mac/Metal, not CUDA. **Closed as a scope limitation
+   (2026-10-23):** the GPU is simulated from G1 rates and public batching
+   data (DECISIONS §34, FINDINGS §38). Earlier note: every number is
    tagged with the `mac_ollama_measured` profile (DECISIONS §27), and the GPU
    profile waits on booked GPU time (`docs/GPU_TODO.md`).
 5. `model_switch_seconds = 0.0` assumes both models stay resident. **Open, low

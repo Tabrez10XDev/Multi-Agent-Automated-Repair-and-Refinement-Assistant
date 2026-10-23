@@ -1809,3 +1809,114 @@ Exploratory, not pre-registered:
 20–28% p95 cut at batch 2–4, slack scheduling never helps, and retention is
 irrelevant at 1x. The concurrency cap (§34) is a Mac-cost result and should
 not be claimed for GPU deployment.
+
+## 38. Simulated RTX 5060 Ti: best-estimate costs from public data
+
+> **Development result (2026-10-23).** DECISIONS §34, scored as
+> pre-registered. The GPU is closed; nothing here is measured on the card
+> except the G1 rates (transcribed, §37). Holdout set, not sealed.
+
+**Best estimate.** Public `llama-batched-bench` tables (llama.cpp discussion
+#18030; RTX 3060 and 3090) give a batching cost of c = 0.25–0.32 at 2–8
+streams. Ollama is llama.cpp, so the profile `gpu_5060ti_public` is the G1
+rates at **c = 0.3**. Its costs are identical to the §37 pass-2a setup at 0.3:
+R2 of §39, run under the new profile, reproduces §37's 0.3 column exactly
+(largest p95 difference over the shared policies: 0 s). So **§37's 0.3
+column is the best-estimate GPU result**:
+
+- `program-fcfs` vs FCFS: 29 better / **0 worse** / 11 tied. At load 1.0,
+  −28 / −20 / −9 / −1% at batch 2 / 4 / 8 / 16.
+- LSF vs `program-fcfs`: 0 / 26 / 14.
+- The cap: 0 / 7 / 33 (never a gain).
+- Ski-rental − keep-all p95: −0.23 s (n.s.); recompute 0.1–0.2% of makespan.
+
+**Added column, c = 0.03 (vLLM-class).** From a public vLLM benchmark of
+Qwen2.5-7B AWQ on an L4 (Aman12x/vllm-serving-bench), 0.018–0.035 at 4–64
+streams. Profile `gpu_5060ti` with the G1 `--rates`, at `1c842db`, clean
+tree. Outputs: `results/gpu_sweep/gpu_5060ti_g1rates/*c0.03*`. The cap's k is
+4 / 8 / 15 at batch 4 / 8 / 16.
+
+| comparison (40 cells) | better / worse / tied |
+|---|---|
+| `program-fcfs` vs FCFS (H1) | 28 / **0** / 12 |
+| LSF vs `program-fcfs` (H2) | **1** / 27 / 12 |
+| LSF-oracle vs `program-fcfs` | 2 / 27 / 11 |
+| EDF vs `program-fcfs` | 0 / 26 / 14 |
+| cap vs `program-fcfs`, batch 16 (H3) | **0** / 3 / 7 |
+| cap vs `program-fcfs`, all batches | 0 / 3 / 37 |
+
+At load 1.0, `program-fcfs` vs FCFS by batch 2 / 4 / 8 / 16: −29 / −21 / −6 /
+−1% (batch 16 n.s.). Retention point: keep-all recompute is 0.1% of makespan;
+ski-rental − keep-all p95 is +0.02 s [−0.33, +0.37], recompute +1.10 s
+[+0.75, +1.45]; evict-now p95 42.2 s against keep-all's 39.8 s.
+
+Scored:
+
+- **H1 held.** 0 worse cells.
+- **H2 held.** LSF is better in 1 cell (batch 8), within the ≤ 2 allowed.
+- **H3 (extended) held.** 0 batch-16 better cells at 0.03, against 0 at 0.15.
+- **H4 held.** Recompute 0.1% of makespan; ski-rental not better than
+  keep-all.
+
+**Verdict:** with the GPU simulated at its closest public-data costs, the
+Milestone 2 conclusions stand from c = 0.03 to 0.841. On GPU rates,
+oldest-workflow-first cuts p95 by 20–29% at batch 2–4 at load 1.0, and is
+never worse. Slack scheduling and
+ski-rental never help. The cap never helps on GPU rates. As batching gets
+cheaper, `program-fcfs`'s gain at batch 8–16 shrinks toward zero, because
+the queue rarely holds a choice.
+
+## 39. The self-lifting cap (`program-fcfs-qcap`): better than the cap, not safe
+
+> **Development result, not out-of-sample (2026-10-23).** DECISIONS §35,
+> scored as pre-registered, on the fitting set `holdout_qwen`.
+
+**Setup.** `program-fcfs-qcap` is `program-fcfs-cap` with the cap lifted to
+`max_batch` while at least `max_batch` requests are waiting. Three
+`scheduling_map` runs at `1c842db`, clean tree, capacity axis, 20 seeds,
+outputs in `results/workflow_qcap/`: R1 Mac (c 0.841), R2
+`gpu_5060ti_public` (c 0.3), R3 `gpu_5060ti_public` at c 0.841. Batch 2, and
+batch 4 in R2, are identical to `program-fcfs` by construction.
+
+Cells significantly better / worse / tied on p95 vs `program-fcfs`:
+
+| run | qcap, all batches | qcap, batch 16 | the plain cap, all batches | qcap vs the cap |
+|---|---|---|---|---|
+| R1 Mac, 0.841 | 16 / **3** / 21 | **10** / 0 / 0 | 15 / 7 / 18 | 10 / **0** / 30 |
+| R2 GPU, 0.3 | 0 / **5** / 35 | 0 / 1 / 9 | 0 / 7 / 33 | 3 / **0** / 37 |
+| R3 GPU, 0.841 | 6 / **6** / 28 | 4 / 0 / 6 | 6 / 12 / 22 | 12 / **0** / 28 |
+
+Effect sizes:
+- **R1 batch 16:** qcap is −3% to −12% (the cap −0% to −12%). It keeps every
+  cap win and adds the load-2.0 cell, where the cap was a tie.
+- **R1 batch 4, load ≥ 1.0:** qcap is +1% to +2% (two cells significant),
+  against the cap's +6% to +11%.
+- **R2 batch 8, loads 0.9–1.5:** qcap is +3% to +5% worse (4 cells), the cap
+  +4% to +8%. Its mean k there is 7.0–7.3 against max_batch 8, so a full batch
+  is rarely waiting and the lift rarely fires.
+- **R3 batch 4–8 at load ≥ 1.0:** qcap is +3% to +5% worse (6 cells), against
+  the cap's +8% to +18%.
+
+Scored:
+
+- **Q1 failed** in every run: 3, 5 and 6 worse cells, against the ≤ 2
+  allowed.
+- **Q2 held:** 10 of 10 batch-16 cells better in R1.
+- **Q3 held in R1 (16 ≥ 3) and R3 (6 ≥ 6); failed in R2** (0 < 5).
+
+Exploratory, not pre-registered:
+
+1. **qcap dominates the cap.** Across R1–R3 and the §38 c = 0.03 run, it is
+   never significantly worse than `program-fcfs-cap` (0 of 160 cells), and
+   better in 25. Over R1–R3 it cuts the cap's worse cells from 26 to 14.
+2. **The remaining losses** are where the cap binds without a full batch
+   waiting: just below the batch limit at moderate load. Lowering the
+   threshold would be tuning on this set, so any new threshold needs its
+   own pre-registration and a fresh test set.
+
+**Verdict:** the self-lifting cap fixes most of the cap's overload loss and
+keeps its Mac batch-16 gain, so it replaces `program-fcfs-cap` as the capped
+variant. It is not a safe default: it still loses 3–6 cells per run, and on
+the best-estimate GPU it never helps. Milestone 3's headline stays
+`program-fcfs`. qcap is a Mac/serial-batcher development result until a fresh
+trace set tests it.

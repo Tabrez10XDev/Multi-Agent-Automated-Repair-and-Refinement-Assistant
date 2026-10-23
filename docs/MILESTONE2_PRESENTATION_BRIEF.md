@@ -64,7 +64,7 @@ The gain is largest when batches are small and requests queue. At batch 16 it ap
 - **Batches 4–16, sealed, both traces (60 cells):** better than `program-fcfs` in **38**, worse in **15**, tie in **7**.
 - **Batch 16:** −10% to −16% (qwen) and **−20% to −33%** (llama) at loads up to 1.5.
 - **Batch 8:** −8% to −17% at low and moderate load.
-- **Batch 4 in overload:** +2% to +6% **worse**. A fixed cap is too tight when the queue is deep, so the cap should become load-aware next.
+- **Batch 4 in overload:** +3% to +6% **worse**. A fixed cap is too tight when the queue is deep, so the cap should become load-aware next.
 - **Batch 2:** identical by construction, since the cap equals the batch size.
 - **Fitting set:** the same pattern (`results/scheduling_map_slo_cap.json`), so the result is not a fluke of the sealed data.
 

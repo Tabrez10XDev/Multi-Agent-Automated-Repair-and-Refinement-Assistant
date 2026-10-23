@@ -1,5 +1,12 @@
 # GPU TODO: what to do once the RTX 5060 Ti arrives
 
+> **CLOSED (2026-10-23), owner's decision.** The card faulted three times
+> (Xid 79, "GPU has fallen off the bus") after G1 and the box is
+> unreachable. G1 rates were measured (FINDINGS §37); G2 onward were not, and
+> will not be. The GPU is simulated instead: profile `gpu_5060ti_public`,
+> G1 rates plus a public-data batching cost of 0.3 (DECISIONS §34, FINDINGS
+> §38). The plan below is kept for the record.
+
 > **TENTATIVE (2026-10-07).** The GPU is not confirmed, so no time goes into
 > preparing for it. The unchecked prep items below are built only once GPU
 > time is booked (about half a day). The minimum useful session, G0 to G3,
