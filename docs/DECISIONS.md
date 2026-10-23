@@ -934,3 +934,49 @@ its uncapped outputs. The HumanEval/75 exclusion (`TRACE_SET_EXCLUSIONS`,
 §31) stays. The §31 freeze and the sealed runs are unaffected: they replay
 committed traces, and `maara/` holds no simulator policy, parameter or
 driver default.
+
+## 33. Batching-cost sweep on the capacity axis, pre-registered
+
+Set 2026-10-22, before any run below. The RTX 5060 Ti measured G1 prefill and
+decode rates, then failed (Xid 79, three times) before G2 could measure its
+batching coefficient. A single measured coefficient is therefore replaced by a
+sweep: the conclusions are reported **as a function of
+`batch_decode_coeff`**, and a later measurement only places the GPU on that
+curve.
+
+**Runs.** `experiments.scheduling_map` on `holdout_qwen` (fitting set; the
+sealed `final` set is not touched, §26), `--load-axis capacity` (OPEN_ISSUES
+§30: the busy axis is not comparable across coefficients), `--kv-mb 1024
+--retention lru --batches 2 4 8 16 --seeds 20 --slo-mix
+tight:1.0:0.3,standard:2.0:0.4,loose:4.0:0.3 --deadline-basis estimate`,
+default policy set. Coefficients {0.15, 0.3, 0.5, 0.841} via
+`--batch-decode-coeff`, recorded as OVERRIDDEN except 0.841 under the Mac
+profile. Plus `experiments.sweep_decode_coeff --coeffs 0.15 0.3 0.5 0.841
+--seeds 20` for retention.
+
+- **Pass 1, now:** profile `mac_ollama_measured`, which separates the effect
+  of better batching from the effect of faster hardware.
+- **Pass 2, when `data/calibration/cuda-5060ti/measured.json` is committed:**
+  the same runs under `gpu_5060ti` (G1 rates MEASURED, coefficient OVERRIDDEN).
+
+The cap's k follows the coefficient (`AdaptiveCapProgramFCFS`, EPS 0.05, not
+tuned): at batch 4/8/16 it is 4/8/14 at 0.15, 4/7/12 at 0.3, 4/6/9 at 0.5 and
+2/3/3 at 0.841.
+
+**Hypotheses**, each scored held or failed per pass, with cell counts. A cell
+is one (batch, load); 40 per coefficient; "significant" is the driver's paired
+95% CI over 20 seeds on p95 task latency.
+
+- **H1.** `program-fcfs` is significantly worse than FCFS in 0 cells, at every
+  coefficient.
+- **H2.** LSF is significantly better than `program-fcfs` in at most 2 of 40
+  cells, at every coefficient.
+- **H3.** At batch 16, the number of cells where `program-fcfs-cap` is
+  significantly better than `program-fcfs` is lower at 0.15 than at 0.841.
+- **H4.** In `sweep_decode_coeff`, at every coefficient: recompute is under 1%
+  of makespan at the retention point, and ski-rental is not significantly
+  better than keep-all on p95.
+
+Anything else found in these runs is labelled exploratory. Results go in
+FINDINGS (pass 1 and pass 2 each in their own section). Nothing here is called
+"GPU-measured" except the G1 rates.
