@@ -30,9 +30,9 @@ What is not settled, not validated, or known to be wrong. Read this before trust
 | 27 | No operating point where ski-rental beats keep-all | **open, lower impact**: none at 1x (sealed) or 8x (holdout), FINDINGS §35 | optional: 16x |
 | 28 | Batch-cap labels counted the wrong thing | **fixed** in code; the §29–31 labels are **not yet re-derived** | rerun the maps, or qualify the labels in FINDINGS |
 | 29 | Deadlines carry almost no per-task size | **open**; `task` basis added and tested, not run | one map with `--deadline-basis task` |
-| 30 | Busy load axis not comparable across batch sizes | **open**; capacity-axis maps pre-registered (DECISIONS §33) and running | score DECISIONS §33 in FINDINGS |
+| 30 | Busy load axis not comparable across batch sizes | **resolved for the coefficient question**: capacity-axis maps at 4 coefficients, FINDINGS §36 | pass 2 on GPU rates (DECISIONS §33) |
 
-**Still open and relevant: 8** — 9.4, 9.5, 14, 24, 27, 28, 29, 30.
+**Still open and relevant: 7** — 9.4, 9.5, 14, 24, 27, 28, 29.
 
 ---
 
@@ -693,6 +693,11 @@ Next: one map with `--deadline-basis task` on a fitting set. Whether LSF can
 beat `program-fcfs` when deadlines carry size is the open question.
 
 ## 30. The "busy" load axis is not comparable across batch sizes or coefficients
+
+> **Update (2026-10-23).** The capacity axis has now been run: the
+> DECISIONS §33 sweep at coefficients 0.841/0.5/0.3/0.15 (FINDINGS §36). On it,
+> the §29–30 conclusions hold at every coefficient. The default busy-axis
+> sections still stand as measured, read per batch size.
 
 > **Open (2026-10-08); code added, not yet run.** FINDINGS §29–31 use the
 > default axis and stand as measured, read per batch size.

@@ -1664,3 +1664,74 @@ Ski-rental ties keep-all on p95 (−2.8 to +3.5 s) but recomputes +9.9 to
 **Verdict:** the regime FINDINGS §7 predicted, where retention matters, does
 appear at 8x. Rent-to-buy release still doesn't beat holding KV until memory
 pressure forces eviction. Keep-all/LRU is best at every budget tested.
+
+## 36. Batching-cost sweep, pass 1 (Mac rates): the conclusions do not depend on the coefficient
+
+> **Current (2026-10-23).** Pass 1 of DECISIONS §33, scored exactly as
+> pre-registered. The coefficient is swept, not measured: 0.841 is the Mac's
+> MEASURED value and 0.5, 0.3, 0.15 are OVERRIDDEN what-ifs. Pass 2 (the same
+> runs on G1 GPU rates) waits for the GPU calibration file.
+
+**Setup.** As DECISIONS §33: `experiments/run_gpu_sweep.sh` at `cbe313c`
+(the commit after the pre-registration `d06b932`), clean tree in every
+manifest. `holdout_qwen`, profile `mac_ollama_measured`, `--load-axis
+capacity` (load 1.0 = saturation throughput at that batch and coefficient),
+the SLO mix of §30, 20 paired seeds, 40 cells per coefficient. Outputs:
+`results/gpu_sweep/mac_ollama_measured/` (map runs 1,441–1,590 s each;
+`sweep_decode_coeff` 610 s).
+
+Cells significantly better / worse / tied on p95 (40 per coefficient):
+
+| comparison | 0.841 | 0.5 | 0.3 | 0.15 |
+|---|---|---|---|---|
+| `program-fcfs` vs FCFS (H1) | 28 / **0** / 12 | 29 / **0** / 11 | 29 / **0** / 11 | 29 / **0** / 11 |
+| LSF vs `program-fcfs` (H2) | **0** / 25 / 15 | **0** / 27 / 13 | **0** / 25 / 15 | **0** / 27 / 13 |
+| LSF-oracle vs `program-fcfs` | 0 / 24 / 16 | 0 / 26 / 14 | 0 / 26 / 14 | 0 / 27 / 13 |
+| cap vs `program-fcfs`, batch 16 (H3) | **9** / 0 / 1 | 6 / 0 / 4 | 4 / 0 / 6 | **4** / 0 / 6 |
+| cap k at batch 4 / 8 / 16 | 2 / 3 / 3 | 4 / 6 / 9 | 4 / 7 / 12 | 4 / 8 / 14 |
+
+At load 1.0, the change in p95 for `program-fcfs` vs FCFS, by batch
+2 / 4 / 8 / 16: −22 / −19 / −9 / −0% at 0.841, −24 / −19 / −8 / −0% at 0.5,
+−26 / −19 / −10 / −1% at 0.3, and −25 / −19 / −10 / −1% at 0.15 (batch 16 is
+n.s. throughout).
+
+Retention point (`sweep_decode_coeff`: batch 4, KV 512 MB, util 0.8 on the
+busy axis, recalibrated per coefficient), ski-rental minus keep-all:
+
+| coefficient | keep-all recompute, % of makespan | p95, s | recompute, s |
+|---|---|---|---|
+| 0.841 | 0.7% | +0.57 [−7.02, +8.17] | +10.18 [+4.77, +15.59]* |
+| 0.5 | 0.7% | +3.30 [−2.36, +8.95] | +10.08 [+5.85, +14.32]* |
+| 0.3 | 0.6% | +7.49 [+1.41, +13.56]* | +11.75 [+7.43, +16.07]* |
+| 0.15 | 0.4% | +3.14 [+1.26, +5.01]* | +13.48 [+8.75, +18.22]* |
+
+Scored:
+
+- **H1 held.** `program-fcfs` is worse than FCFS in 0 of 160 cells. On the
+  capacity axis its gain is nearly identical at every coefficient: −19% at
+  batch 4 and −22% to −26% at batch 2, at load 1.0.
+- **H2 held.** LSF beats `program-fcfs` in 0 of 160 cells (limit: 2 per
+  coefficient), and LSF-oracle in 0 of 160.
+- **H3 held.** The cap is better at batch 16 in 9 cells at 0.841 and 4 at
+  0.15. Its gains there shrink from −6% to −12% (0.841, loads 0.5–1.5) to
+  −5% to −8% (0.5), −1% to −5% (0.3) and −1% to −2% (0.15). This is
+  partly by construction: k rises toward `max_batch` as the coefficient
+  falls, and at 0.15 the cap equals `program-fcfs` exactly at batch 4–8.
+- **H4 held.** Recompute stays at 0.4–0.7% of makespan, and ski-rental is
+  never better than keep-all on p95. It is significantly worse at 0.3 and
+  0.15, and recomputes 10–13 s more at every coefficient.
+
+Exploratory, not pre-registered:
+
+1. **Batch 4 under overload depends on hardware.** The cap's batch-4 losses
+   (1 better, 5 worse at 0.841, the §34 pattern) disappear at 0.5 and below,
+   because k reaches 4 and the cap stops binding.
+2. **EDF beats `program-fcfs` in one cell** at 0.5 and one at 0.15, against
+   25–26 cells worse. That is within the about 1 in 20 expected by chance
+   (§31).
+
+**Verdict:** across the plausible range of batching cost, from the Mac's
+nearly serial 0.841 to vLLM-class 0.15, program-level ordering keeps its
+gain, LSF never helps, and ski-rental never beats keep-all. Only the cap's
+value is hardware-dependent, and it fades as batching gets cheaper. A future
+measured GPU coefficient only picks a column of this table.

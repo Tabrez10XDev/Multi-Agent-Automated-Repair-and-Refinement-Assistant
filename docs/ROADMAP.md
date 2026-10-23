@@ -12,7 +12,8 @@ sections of FINDINGS / OPEN_ISSUES / DECISIONS.
 | - | Sealed `final` evaluation | **done**: `final_qwen` and `final_llama` maps and the 1x retention grid (FINDINGS §33-35) |
 
 Milestone 2 headline (DECISIONS §31): program-level ordering, confirmed on the
-sealed set (FINDINGS §33). Remaining: the DECISIONS §33 batching-cost sweep,
+sealed set (FINDINGS §33). The DECISIONS §33 sweep, pass 1 (Mac rates),
+holds at every coefficient (FINDINGS §36). Remaining: pass 2 on G1 GPU rates,
 then G2 once the GPU is repaired.
 The sections below are the original plan, kept for the record.
 
