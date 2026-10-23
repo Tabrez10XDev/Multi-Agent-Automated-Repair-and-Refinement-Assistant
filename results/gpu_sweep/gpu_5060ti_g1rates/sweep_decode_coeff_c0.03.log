@@ -1,0 +1,10 @@
+
+=== batch_decode_coeff 0.03 ===
+  retention  rate 0.1026/s (busy 0.81)  keep-all recompute 0.4s = 0.1% of makespan  rent-active 13.4%
+    keep-all    p95    39.8  recompute     0.4s
+    ski-rental  p95    39.8  recompute     1.5s
+    evict-now   p95    42.2  recompute    11.4s
+    ski-rental - keep-all: p95 +0.02s [-0.33, +0.37]  recompute +1.10s [+0.75, +1.45]
+  scheduler  rate 0.1065/s (busy 0.80)  choice 0.1%  lsf - fcfs p95 -0.01s [-0.02, +0.00]
+
+elapsed 139s -> results/gpu_sweep/gpu_5060ti_g1rates/sweep_decode_coeff_c0.03.json
