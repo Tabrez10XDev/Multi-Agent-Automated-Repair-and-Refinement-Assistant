@@ -1953,3 +1953,77 @@ variant. It is not a safe default: it still loses 3–6 cells per run, and on
 the best-estimate GPU it never helps. Milestone 3's headline stays
 `program-fcfs`. qcap is a Mac/serial-batcher development result until a fresh
 trace set tests it.
+
+## 40. Autellix's PLAS and size-carrying deadlines: oldest-workflow-first still wins
+
+> **Development result (2026-10-24).** DECISIONS §36, scored as pre-registered
+> on the fitting set `holdout_qwen`. The sealed set is not touched.
+
+**Setup.** Three `scheduling_map` runs at `a95585d`, clean tree, capacity
+axis, 20 paired seeds, default policy set now including `plas`. Outputs are
+in `results/plas_taskdl/`:
+- S1: Mac costs, c 0.841, estimate-basis deadlines.
+- S2: `gpu_5060ti_public`, c 0.3, estimate-basis deadlines.
+- S3: Mac costs with `--deadline-basis task`. Each task's deadline is sized
+  to its own critical path, with lognormal noise σ 0.3 (OPEN_ISSUES §29).
+
+**Non-interference check passed.** The engine change (recording attained
+service) moved nothing. S1 reproduces §39 R1 exactly for every existing
+policy: 1,080 values (p95, mean, miss rate), largest difference 0.
+
+Cells significantly better / worse / tied on p95 (40 per run):
+
+| comparison | S1 Mac | S2 GPU 0.3 | S3 Mac, task deadlines |
+|---|---|---|---|
+| PLAS vs `program-fcfs` (P1) | **0** / 29 / 11 | **0** / 30 / 10 | 0 / 29 / 11 |
+| PLAS vs FCFS (P2) | **0** / 27 / 13 | **0** / 29 / 11 | 0 / 27 / 13 |
+| `program-fcfs` vs FCFS | 28 / 0 / 12 | 29 / 0 / 11 | 28 / 0 / 12 |
+| LSF vs `program-fcfs` (T1) | 0 / 25 / 15 | 0 / 26 / 14 | **0** / 26 / 14 |
+| EDF vs `program-fcfs` (T2) | 0 / 25 / 15 | 0 / 23 / 17 | **0** / 26 / 14 |
+| LSF-oracle vs `program-fcfs` | 0 / 24 / 16 | 0 / 28 / 12 | 0 / 26 / 14 |
+| SJF vs `program-fcfs` | 0 / 26 / 14 | 0 / 27 / 13 | 0 / 26 / 14 |
+
+Effect sizes at load 1.0, batch 2 / 4 / 8 / 16, p95 change vs `program-fcfs`:
+- **PLAS, S1:** +91 / +67 / +23 / +1% (batch 16 n.s.).
+- **PLAS, S2:** +106 / +72 / +25 / +1%.
+- PLAS is also **worse than plain FCFS**: +49 / +36 / +13% at batch 2 / 4 / 8
+  in S1. It is worse on mean task latency too (S1 0 / 29 / 11, S2 0 / 31 / 9).
+- **LSF in S3:** +22 / +16% at batch 2 / 4.
+
+Scored:
+
+- **P1 held.** PLAS beats `program-fcfs` in 0 of 80 cells.
+- **P2 failed.** PLAS beats FCFS in 0 cells, against the 14–15 needed, half
+  of `program-fcfs`'s 28–29. It is worse than FCFS in 27 and 29.
+- **T1 held.** With size-carrying deadlines, LSF beats `program-fcfs` in 0
+  cells.
+- **T2 held.** EDF beats it in 0.
+
+Exploratory, not pre-registered:
+
+1. **Why PLAS fails here (interpretation).** MAARA's task sizes vary little.
+   On `holdout_qwen` the isolated critical path is 5.6–88.8 s, median 24.9 s,
+   coefficient of variation 0.61. Attained service grows as a task advances,
+   so PLAS demotes exactly the tasks closest to finishing and shares the GPU
+   round-robin across programs. Queueing theory says least-attained-service
+   pays off when sizes are highly variable (CV well above 1), where most
+   long-served jobs are also long-remaining. Below that, age-based ordering
+   is better. Autellix's gains come from workloads with long-tailed program
+   lengths, so this is a statement about MAARA-like workloads, not a
+   refutation of Autellix.
+2. **PLAS cuts deadline misses on Mac costs.** In S1 it misses fewer
+   deadlines than `program-fcfs` in 12 cells and more in 0. Misses
+   (−2 to −6 points at load 2.0) trade against a much worse tail. In S2 it
+   is mixed: 3 cells fewer, 7 more.
+3. **Size-carrying deadlines buy LSF and EDF misses, not latency.** In S3,
+   at batch 2, LSF misses fewer deadlines than `program-fcfs` in 7 of 10
+   cells (for example 22.6% against 28.3% at load 0.8). It does so while its
+   p95 is +5 to +22% worse. That is the deadline-versus-tail trade-off a
+   deadline rule is designed to make, and it vanishes from batch 4 up.
+
+**Verdict:** against the strongest published alternative, Autellix's PLAS,
+and against slack and deadline rules given each task's size, oldest-workflow-
+first remains the best rule for tail latency on this workload. No other
+ordering rule beats it in any of the 120 cells here. The cap variants are
+`program-fcfs` plus a concurrency limit, and are covered in §39. The headline's comparison set is now
+FCFS, SJF, EDF, LSF (online and oracle), the hint-priority rule and PLAS.

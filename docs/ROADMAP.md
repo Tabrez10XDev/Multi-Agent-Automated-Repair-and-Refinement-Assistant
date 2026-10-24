@@ -1,6 +1,6 @@
 # Milestone 2 roadmap
 
-Status as of 2026-10-23. One line per workstream; detail lives in the linked
+Status as of 2026-10-24. One line per workstream; detail lives in the linked
 sections of FINDINGS / OPEN_ISSUES / DECISIONS.
 
 | # | Workstream | Status |
@@ -9,6 +9,7 @@ sections of FINDINGS / OPEN_ISSUES / DECISIONS.
 | 2 | Retention comparison | **done**: 1x sealed and 8x holdout; keep-all/LRU best everywhere (FINDINGS §24-25, §35) |
 | 3 | Better output-length estimator | **closed on evidence**: the oracle estimator does not help LSF, and LSF loses to `program-fcfs` (FINDINGS §29-30) |
 | 4 | RTX 5060 Ti 16 GB | **closed** (owner, 2026-10-23): G1 rates measured, then the card failed (Xid 79). Simulated from public data: `gpu_5060ti_public`, c = 0.3 (DECISIONS §34, FINDINGS §38) |
+| 6 | Stronger baselines: Autellix's PLAS, size-carrying deadlines | **done**: PLAS is never better than `program-fcfs` (0 of 80 cells, worse in 59); LSF/EDF still lose with task deadlines (FINDINGS §40) |
 | 5 | Workflow improvement: self-lifting cap | **development result**: dominates the cap, not safe; Q1 failed (FINDINGS §39). Needs a fresh trace set to go further |
 | - | Sealed `final` evaluation | **done**: `final_qwen` and `final_llama` maps and the 1x retention grid (FINDINGS §33-35) |
 
@@ -17,10 +18,10 @@ sealed set (FINDINGS §33). The DECISIONS §33 sweep, pass 1 (Mac rates),
 holds at every coefficient (FINDINGS §36). Pass 2a on G1 GPU rates also holds
 (FINDINGS §37), and so does the public-data simulated GPU from c = 0.03 to
 0.3 (FINDINGS §38). The cap does not carry over to GPU costs; the
-self-lifting cap (§39) fixes most of its losses but not all. Next, with the
-owner's yes: a fresh trace set (MBPP or similar) to test qcap out of sample,
-the `--deadline-basis task` map (OPEN_ISSUES §29), and the Milestone 3
-write-up.
+self-lifting cap (§39) fixes most of its losses but not all. PLAS (Autellix) and
+task-sized deadlines don't beat it either (FINDINGS §40). Next: the Milestone
+3 write-up, with a threats-to-validity section. A fresh trace set (MBPP or
+similar) is optional, only for testing qcap out of sample.
 The sections below are the original plan, kept for the record.
 
 ## 1. Ollama prompt-cache baseline — DONE

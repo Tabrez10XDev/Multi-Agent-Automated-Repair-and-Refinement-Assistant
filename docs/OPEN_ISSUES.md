@@ -8,7 +8,7 @@ What is not settled, not validated, or known to be wrong. Read this before trust
 > resolve. They are not sequential within a file. The other parts live in
 > `ARCHITECTURE.md`, `DECISIONS.md`, `FINDINGS.md` and `OPEN_ISSUES.md`.
 
-## Status index (2026-10-23)
+## Status index (2026-10-24)
 
 | § | issue | status | next action |
 |---|---|---|---|
@@ -29,10 +29,10 @@ What is not settled, not validated, or known to be wrong. Read this before trust
 | 26 | "Ski-rental never fires" | **superseded** by §27 and FINDINGS §24–25 | none |
 | 27 | No operating point where ski-rental beats keep-all | **open, lower impact**: none at 1x (sealed) or 8x (holdout), FINDINGS §35 | optional: 16x |
 | 28 | Batch-cap labels counted the wrong thing | **qualified** (2026-10-23): FINDINGS §29 and §31 carry a caveat with resident-count numbers; capacity-axis maps (§33, §36–40) record residents | none; the hidden one-model-per-iteration scheduler goes in the writeup |
-| 29 | Deadlines carry almost no per-task size | **open**; `task` basis added and tested, not run | one map with `--deadline-basis task` |
+| 29 | Deadlines carry almost no per-task size | **resolved** (2026-10-24): with task-sized deadlines LSF and EDF still never beat `program-fcfs` on p95 (0 of 40), FINDINGS §40 | none |
 | 30 | Busy load axis not comparable across batch sizes | **resolved for the coefficient question**: capacity-axis maps on Mac and G1 GPU rates, FINDINGS §36–38 | none |
 
-**Still open and relevant: 5** — 9.5, 14, 24, 27, 29.
+**Still open and relevant: 4** — 9.5, 14, 24, 27.
 
 ---
 
@@ -679,7 +679,11 @@ hidden scheduler that no policy controls. Not changed; noted for the writeup.
 
 ## 29. Deadlines under the "estimate" basis carry almost no per-task information
 
-> **Open (2026-10-08); code added, not yet run.** FINDINGS §29–31 use the
+> **Resolved (2026-10-24), FINDINGS §40.** With `--deadline-basis task`, LSF
+> and EDF beat `program-fcfs` on p95 in 0 of 40 cells; they trade a worse tail
+> for fewer misses at batch 2 only.
+>
+> **Earlier status (2026-10-08):** code added, not yet run. FINDINGS §29–31 use the
 > default basis and stand as measured. The `task` basis exists and is tested
 > (`tests/simulator/test_deadline_basis.py`) but no map has been run with it.
 

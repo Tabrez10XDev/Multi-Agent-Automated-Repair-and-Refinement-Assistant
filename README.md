@@ -23,7 +23,8 @@ continuous-batching simulator:
   gain fades by batch 16 (§33).
 - **Both textbook mechanisms are negative results.** LSF never beats
   `program-fcfs`, even with oracle output lengths, and neither does SJF
-  (§33). Ski-rental never beats keep-all: at MAARA's 1x context recompute is
+  (§33). Nor do Autellix's least-attained-service rule (PLAS) or deadline
+  rules given each task's size (§40). Ski-rental never beats keep-all: at MAARA's 1x context recompute is
   under 1% of makespan, and at 8x it recomputes more for no gain (§24, §35).
 - **These conclusions hold across batching costs from 0.03 to 0.841,** on
   measured Mac costs and on a simulated RTX 5060 Ti. The simulated GPU uses
