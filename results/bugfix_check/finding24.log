@@ -1,0 +1,11 @@
+
+=== batch_decode_coeff 0.841 ===
+  retention  rate 0.0265/s (busy 0.82)  keep-all recompute 13.8s = 0.7% of makespan  rent-active 18.9%
+    keep-all    p95   277.7  recompute    13.8s
+    ski-rental  p95   277.8  recompute    18.2s
+    evict-now   p95   314.7  recompute   125.7s
+    offline-ref p95   278.9  recompute    23.4s
+    ski-rental - keep-all: p95 +0.06s [-4.82, +4.95]  recompute +4.40s [+1.71, +7.08]
+  scheduler  rate 0.0265/s (busy 0.81)  choice 2.2%  lsf - fcfs p95 -5.86s [-13.78, +2.07]
+
+elapsed 126s -> results/bugfix_check/finding24.json

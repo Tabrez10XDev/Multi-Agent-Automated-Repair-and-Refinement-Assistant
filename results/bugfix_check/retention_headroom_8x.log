@@ -1,0 +1,29 @@
+headroom grid: trace=holdout_qwen scales=[8] headrooms=[0.25, 0.5, 1.0] util=0.8 batch=4 profile=mac_ollama_measured coeff=0.841 seeds=10
+
+=== 8x  rate 0.0032/s (busy 0.80; pass 1 0.0162/s at 4096 MB)  WS 1274 MB  active peak 2227 MB  [3241s] ===
+  headroom 0.25  KV    2545 MB   retention            p95          Δp95 vs keep-all   recomp         Δrecomp vs keep-all rent-act
+                              keep-all          2210.2                              364.9                               20.0%
+                              lru               2210.2        +0.0 [+0.0, +0.0]     364.9          +0.0 [+0.0, +0.0]    20.0%
+                              evict-now         2432.4  +222.2 [+127.7, +316.7]*   1013.5    +648.6 [+510.6, +786.5]*    0.0%
+                              ski-rental        2252.8    +42.7 [-15.1, +100.4]     421.1       +56.2 [+31.6, +80.8]*   15.0%
+                              ski-rental-pred   2229.7      +19.6 [-6.2, +45.4]     416.2       +51.3 [+16.6, +86.0]*   15.5%
+                              offline-ref       2283.3     +73.1 [+1.4, +144.8]*    425.3      +60.4 [-30.4, +151.2]    13.8%
+  [cell done at 3585s]
+  headroom 0.50  KV    2864 MB   retention            p95          Δp95 vs keep-all   recomp         Δrecomp vs keep-all rent-act
+                              keep-all          2197.3                              303.1                               19.9%
+                              lru               2197.3        +0.0 [+0.0, +0.0]     303.1          +0.0 [+0.0, +0.0]    19.9%
+                              evict-now         2432.4  +235.1 [+143.4, +326.8]*   1013.5    +710.4 [+572.4, +848.4]*    0.0%
+                              ski-rental        2197.2      -0.1 [-38.7, +38.5]     325.7       +22.6 [-28.8, +74.0]    15.6%
+                              ski-rental-pred   2241.5    +44.2 [-21.5, +109.9]     337.7        +34.6 [-3.3, +72.6]    15.8%
+                              offline-ref       2277.7     +80.4 [+0.4, +160.3]*    394.5      +91.4 [+11.3, +171.6]*   13.5%
+  [cell done at 3987s]
+  headroom 1.00  KV    3501 MB   retention            p95          Δp95 vs keep-all   recomp         Δrecomp vs keep-all rent-act
+                              keep-all          2191.1                              185.1                               19.4%
+                              lru               2191.1        +0.0 [+0.0, +0.0]     185.1          +0.0 [+0.0, +0.0]    19.4%
+                              evict-now         2432.4  +241.3 [+145.5, +337.2]*   1013.5    +828.3 [+710.3, +946.3]*    0.0%
+                              ski-rental        2163.0     -28.1 [-82.4, +26.3]     228.4      +43.3 [-23.2, +109.8]    16.0%
+                              ski-rental-pred   2170.6     -20.5 [-73.0, +32.0]     238.9      +53.8 [-30.4, +138.0]    16.0%
+                              offline-ref       2181.7      -9.4 [-75.8, +57.1]     270.7      +85.6 [+12.8, +158.3]*   12.4%
+  [cell done at 4511s]
+
+elapsed 4511s -> results/bugfix_check/retention_headroom_8x.json

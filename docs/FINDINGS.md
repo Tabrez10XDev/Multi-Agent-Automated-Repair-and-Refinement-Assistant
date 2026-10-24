@@ -1653,6 +1653,23 @@ batcher is untested; that is H3 of DECISIONS §33.
 
 ## 35. Retention at 8x context: retention matters, ski-rental still loses to keep-all
 
+> **Corrected 2026-10-24 (DECISIONS §8 item 11).** The numbers below were
+> computed with a KV-accounting leak that charged phantom memory, mostly to
+> ski-rental, whose releases create the gaps that trigger it. Rerun on the
+> fixed engine (`0059925`, same flags, `results/bugfix_check/retention_headroom_8x.json`):
+> evict-now and LRU are unchanged (+222/+235/+241 s p95, all significant;
+> LRU = keep-all). **Ski-rental is no longer significantly worse on p95**:
+> +42.7 / −0.1 / −28.1 s at headroom 0.25 / 0.5 / 1.0, none significant
+> (was +171.2* / +95.7* / −2.4). Its extra recompute shrinks to +56.2* /
+> +22.6 / +43.3 s (was +164.1* / +118.4* / +136.1*). Offline-ref p95 is
+> +73.1* / +80.4* / −9.4. **What survives:** retention matters at 8x
+> (evict-now), and ski-rental never beats keep-all in any cell. **What does
+> not:** "ski-rental's releases are the wrong ones" (point 2 below) and its
+> significant p95 penalty; at 8x it ties keep-all. §24's point also
+> reproduces every verdict, with ski-rental's extra recompute down from
+> +10.2 s [4.8, 15.6] to +4.4 s [1.7, 7.1]. The sealed 1x contrast quoted
+> below predates the fix and has not been rerun (owner's decision, §26).
+
 > **Preliminary (2026-10-22).** Holdout (fitting) set, 10 seeds, as
 > DECISIONS §31 requires for 8x. Not sealed. 8x is a simulator-only context
 > scale (GPU_TODO).

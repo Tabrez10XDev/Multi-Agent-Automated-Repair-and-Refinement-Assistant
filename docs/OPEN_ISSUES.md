@@ -31,8 +31,9 @@ What is not settled, not validated, or known to be wrong. Read this before trust
 | 28 | Batch-cap labels counted the wrong thing | **qualified** (2026-10-23): FINDINGS §29 and §31 carry a caveat with resident-count numbers; capacity-axis maps (§33, §36–40) record residents | none; the hidden one-model-per-iteration scheduler goes in the writeup |
 | 29 | Deadlines carry almost no per-task size | **resolved** (2026-10-24): with task-sized deadlines LSF and EDF still never beat `program-fcfs` on p95 (0 of 40), FINDINGS §40 | none |
 | 30 | Busy load axis not comparable across batch sizes | **resolved for the coefficient question**: capacity-axis maps on Mac and G1 GPU rates, FINDINGS §36–38 | none |
+| 31 | KV leak in admission (DECISIONS §8 item 11) | **fixed** (`4049013`); dev re-check: scheduling 1,440/1,440 verdicts unchanged; retention directions hold but ski-rental's 8x p95 penalty disappears (FINDINGS §35 correction) | owner: rerun the sealed 1x retention run, or report it as pre-fix |
 
-**Still open and relevant: 4** — 9.5, 14, 24, 27.
+**Still open and relevant: 5** — 9.5, 14, 24, 27, 31.
 
 ---
 
@@ -730,3 +731,31 @@ understates steady-state capacity, with the same bias at every batch.
 
 Next: rerun the SLO map on the capacity axis before comparing boundaries
 across batch sizes or coefficients.
+
+---
+
+## 31. KV leak in admission: results before `4049013`
+
+Found 2026-10-24 (DECISIONS §8 item 11). Admission re-created chain blocks
+that had survived eviction past a broken prefix match, overwriting live
+entries without releasing their bytes. The engine then believed more KV was
+in use than was, and evicted more. It acts only under eviction pressure and
+only where a chain has a gap, which ski-rental's releases create most often.
+
+**Re-check on the development set** (rule set in DECISIONS §8 before
+running; outputs in `results/bugfix_check/`):
+- **Scheduling, §40 S1 map:** all 1,440 paired-CI verdicts identical. The
+  scheduling findings (§29–34, §36–40) rest on the same LRU, 1,024 MB
+  configuration, where the leak is rare (0–64 blocks per run).
+- **Retention, §24 point:** every verdict identical; ski-rental's extra
+  recompute +10.2 → +4.4 s, still significant.
+- **Retention, §35 8x grid:** directions hold (nothing beats keep-all), but
+  ski-rental's significant p95 penalty at headroom 0.25 and 0.5 disappears,
+  and its extra recompute is significant only at 0.25. See the §35
+  correction.
+
+**Open:** the sealed 1x retention run (`results/sealed/retention_headroom_final_qwen.json`,
+FINDINGS §33–35, "+9.9 to +16.6 s more recompute") predates the fix. Its
+direction is expected to hold and its magnitude to shrink, as on the dev set.
+Rerunning a sealed result is the owner's call (DECISIONS §26); until then it
+is quoted as pre-fix.
