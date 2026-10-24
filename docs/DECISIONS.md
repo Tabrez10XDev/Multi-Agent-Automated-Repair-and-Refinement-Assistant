@@ -1312,3 +1312,7 @@ the turn, the counterpart of the MAARA oracle's true output lengths.
   `run_retention_grid --trace-set tracelab_sealed --kv-mb 8192 --scales 1
   --batch 8 --seeds 20 --profile gpu_5060ti_public` (utils 0.6 and 0.8, all
   six retention policies). G4 is scored at util 0.8.
+- **Runtime rule applied** (fixed engine `1a2d0cc`): saturation 0.01775
+  tasks/s; the FCFS cell at batch 4, load 1.0, seed 1 took 9.8 s, so a map
+  projects to 7,200 × 9.8 s / 8 workers = 2.46 h plus about 0.4 h of
+  calibration, under 3 h. **N stays 80.**
