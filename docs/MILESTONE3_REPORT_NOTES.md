@@ -53,7 +53,7 @@ Hypothesis scorecard (all pre-registered and committed before the runs):
 - **Statistics.** Paired 95% CIs over 20 seeds with common random numbers (DECISIONS §24). Every run writes a manifest with git hash and dirty flag (§25).
 - **Pre-registration.** DECISIONS §26/§31/§33–36: commit hypotheses, then run, then score as written. Failed hypotheses are reported as failed.
 - **Sealed set.** `final_qwen`/`final_llama` were run once, after the policy freeze `f4c889b` (DECISIONS §26, §31). HumanEval is now used up.
-- **Load axis.** Capacity axis, load = arrival rate / saturation throughput (OPEN_ISSUES §30).
+- **Load axis.** Two axes; say which for every number. The sealed headline maps (§33, figure 1) are on the **busy** axis: load = arrival rate / the rate giving 80% GPU busy, so "load 1.0" there is 80% busy. The sweeps, qcap and PLAS runs (§36–40) are on the **capacity** axis: load = arrival rate / saturation throughput (OPEN_ISSUES §30).
 
 ## 4. Threats to validity (write this section)
 
@@ -87,7 +87,7 @@ These are left unedited in the submitted brief; correct them in the Milestone 3 
 
 ## 7. Figures the report needs (input to the visualization refactor)
 
-Existing figures live in `results/figures/regime/` (`experiments/plot_regime.py`, busy-axis maps from §29–31) and `results/figures/original/`. None yet cover the capacity-axis, sealed, sweep, qcap or PLAS results. Needed:
+Built 2026-10-24: `make figures-m3` writes figures 1–6 below to `results/figures/m3/` (`experiments/plot_m3.py`; sources in that folder's README). Older figures live in `results/figures/regime/` (`experiments/plot_regime.py`, busy-axis maps from §29–31) and `results/figures/original/`. None yet cover the capacity-axis, sealed, sweep, qcap or PLAS results. Needed:
 1. **Headline:** p95 change vs FCFS against load, one line per batch, sealed qwen and llama (§33).
 2. **Baseline league table:** cells better/worse/tied vs `program-fcfs` for every rule, including SJF and PLAS (§33, §40).
 3. **Sensitivity:** headline effect vs batching coefficient, Mac and GPU rates (§36–38).
