@@ -1077,3 +1077,49 @@ Exploratory only: qcap against `program-fcfs-cap`, paired from the per-seed
 p95 arrays. `holdout_qwen` is the fitting set, so every result here is a
 **development result, not out-of-sample**. Testing qcap out of sample needs a
 fresh trace set (HumanEval is used up, §26/§31) and a freeze first.
+
+## 36. Autellix's PLAS and size-carrying deadlines, pre-registered
+
+Set 2026-10-23, before any run below. The headline, `program-fcfs` (§31,
+FINDINGS §33), is program-level ordering, which is Autellix's thesis. So far
+it has been compared only with request-level FCFS. This adds Autellix's own
+rule, and the test OPEN_ISSUES §29 calls for: whether LSF wins once deadlines
+carry each task's size.
+
+**PLAS** (`ProgramLASScheduler`, `plas`): requests ordered by their task's
+attained service, then by task age. Attained service is the admission-to-
+completion time of the task's finished requests, summed over generate_fix's
+1–3-way fan-out. Autellix's multi-level queues and anti-starvation threshold
+are omitted, so it has no parameters. The engine records the value; no other
+policy reads it.
+
+**Runs.** `experiments.scheduling_map` on `holdout_qwen`, `--load-axis
+capacity --kv-mb 1024 --retention lru --batches 2 4 8 16 --seeds 20 --slo-mix
+tight:1.0:0.3,standard:2.0:0.4,loose:4.0:0.3 --workers 8`, default policy set
+(now with `plas`), to `results/plas_taskdl/`:
+- **S1:** `--profile mac_ollama_measured --deadline-basis estimate`
+- **S2:** `--profile gpu_5060ti_public --deadline-basis estimate`
+- **S3:** `--profile mac_ollama_measured --deadline-basis task`
+
+**Hypotheses**, on p95 (the driver's paired 95% CI over 20 seeds), 40 cells
+per run:
+- **P1.** PLAS is significantly better than `program-fcfs` in at most 2
+  cells, in each of S1 and S2. Reason: MAARA tasks are similar in size and
+  the tail is old tasks waiting, while PLAS favours newcomers.
+- **P2.** In each of S1 and S2, the number of cells where PLAS is
+  significantly better than FCFS is at least half the number where
+  `program-fcfs` is.
+- **T1.** In S3, LSF is significantly better than `program-fcfs` in at most 2
+  cells.
+- **T2.** In S3, EDF is significantly better than `program-fcfs` in at most 2
+  cells.
+
+Exploratory only: PLAS vs `program-fcfs` on mean task latency (paired from
+the per-seed arrays), and deadline-miss rates in S3.
+
+**Non-interference check.** The engine change must move no other policy:
+S1's existing policies must equal FINDINGS §39 R1 (same flags and seeds)
+cell for cell. If they don't, the runs are void.
+
+Everything here is a **development result** on the fitting set; the sealed
+set is not touched (§26).
