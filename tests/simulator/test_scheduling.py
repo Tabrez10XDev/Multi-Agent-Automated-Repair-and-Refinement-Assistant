@@ -92,6 +92,24 @@ def test_ties_break_deterministically_by_arrival_then_id():
     assert SJFScheduler().order(vs, now=0.0) == [2, 1, 3]
 
 
+def test_plas_orders_by_attained_service_then_task_age():
+    from dataclasses import replace
+    vs = [replace(view(1, task_id=1), task_arrival_s=0.0, task_attained_s=30.0),
+          replace(view(2, task_id=2), task_arrival_s=5.0, task_attained_s=2.0),
+          replace(view(3, task_id=3), task_arrival_s=1.0, task_attained_s=2.0)]
+    assert SCHEDULERS["plas"]().order(vs, now=10.0) == [3, 2, 1]
+
+
+def test_attained_service_is_past_gpu_time_and_bounded_by_latency():
+    # generate_fix fans out one request per file (at most 3), so a task's
+    # summed service can exceed its latency, but by no more than that fan-out.
+    eng, rep = run_engine("plas", n_tasks=8)
+    assert rep["tasks_completed"] == 8
+    for t in eng.tasks:
+        att = eng.task_attained[t.task_id]
+        assert 0.0 < att <= 3 * (eng.task_done_at[t.task_id] - t.arrival_time) + 1e-9
+
+
 @pytest.mark.parametrize("name", sorted(SCHEDULERS))
 def test_every_scheduler_returns_a_permutation(name):
     vs = [view(i, enqueued_at=float(i), deadline=100.0 - i,

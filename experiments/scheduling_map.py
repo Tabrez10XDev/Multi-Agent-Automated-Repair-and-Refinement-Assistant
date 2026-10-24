@@ -71,6 +71,7 @@ POLICIES = [("fcfs", "online", "fcfs"), ("sjf", "online", "sjf"),
             ("edf", "online", "edf"), ("lsf", "online", "lsf"),
             ("lsf", "oracle", "lsf-oracle"),
             ("program-fcfs", "online", "program-fcfs"),
+            ("plas", "online", "plas"),
             ("hint-priority", "online", "hint-priority"),
             ("program-fcfs-cap", "online", "program-fcfs-cap"),
             ("program-fcfs-qcap", "online", "program-fcfs-qcap")]
@@ -429,8 +430,8 @@ def summarise(batches):
             lines.append(f"batch {mb}: cap never binds at any load (KV-bound: the "
                          f"KV budget, not max_batch, limits concurrency)")
         for tag in ("fcfs", "program"):
-            for pol in ("lsf", "edf", "hint-priority", "program-fcfs", "program-fcfs-cap",
-                        "program-fcfs-qcap"):
+            for pol in ("lsf", "edf", "hint-priority", "program-fcfs", "plas",
+                        "program-fcfs-cap", "program-fcfs-qcap"):
                 if pol == "program-fcfs" and tag == "program":
                     continue
                 first = None

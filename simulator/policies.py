@@ -102,6 +102,9 @@ class ReqView:
     task_arrival_s: float = 0.0
     slo_class: Optional[str] = None
     slo_priority: int = 0
+    # Observable, not oracle: GPU wall-clock (admission to completion) of the
+    # task's finished requests so far. Past service, never remaining work.
+    task_attained_s: float = 0.0
 
     def __getattr__(self, name):
         # Only reached when normal dataclass lookup fails.
@@ -447,6 +450,28 @@ class ProgramFCFSScheduler(Scheduler):
             views, key=lambda v: (v.task_arrival_s, v.enqueued_at, v.req_id))]
 
 
+class ProgramLASScheduler(Scheduler):
+    """
+    Least attained service first, at the program level: requests ordered by
+    how much GPU time their task has already had, then by task age. This is
+    Autellix's PLAS (Luo et al., 2025), the published alternative to
+    `program-fcfs` (DECISIONS 36). MAARA's pipeline is sequential apart from
+    generate_fix's one-request-per-file fan-out (1-3), whose service is summed
+    as PLAS sums all of a program's calls.
+
+    Autellix discretizes attained service into multi-level queues and adds an
+    anti-starvation threshold; both are omitted, so this has no parameters.
+    Attained service is the admission-to-completion time of the task's
+    finished requests, which the engine observes; nothing is estimated.
+    """
+    name = "plas"
+
+    def order(self, views, now):
+        return [v.req_id for v in sorted(
+            views, key=lambda v: (v.task_attained_s, v.task_arrival_s,
+                                  v.enqueued_at, v.req_id))]
+
+
 class AdaptiveCapProgramFCFS(ProgramFCFSScheduler):
     """
     Oldest task first, plus a concurrency cap set from the hardware's batching
@@ -545,6 +570,7 @@ class StaticPriorityScheduler(Scheduler):
 SCHEDULERS = {c.name: c for c in [
     FCFSScheduler, SJFScheduler, EDFScheduler, LeastSlackFirstScheduler,
     StaticPriorityScheduler, ProgramFCFSScheduler, HintPriorityScheduler,
+    ProgramLASScheduler,
     AdaptiveCapProgramFCFS,
     BacklogLiftedCapProgramFCFS,
 ]}

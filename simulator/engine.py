@@ -417,6 +417,8 @@ class Engine:
         self._isolated_task_s = (
             self.estimator.estimate_task_total(CODER_MODEL) if self.estimator else None)
         self.task_arrival = {t.task_id: t.arrival_time for t in tasks}
+        # GPU time each task's finished requests have had (PLAS, DECISIONS 36).
+        self.task_attained = {}
         self.task_slo = {}          # task_id -> (class name, priority rank)
         if self.cfg.deadline_basis not in ("estimate", "task"):
             raise ValueError(f"deadline_basis {self.cfg.deadline_basis!r}")
@@ -848,6 +850,7 @@ class Engine:
             attempt_index=n.attempt_index, replan_index=n.replan_index,
             priority=0, deadline=self.task_deadline.get(n.task_id),
             task_arrival_s=self.task_arrival.get(n.task_id, 0.0),
+            task_attained_s=self.task_attained.get(n.task_id, 0.0),
             slo_class=self.task_slo.get(n.task_id, (None, 0))[0],
             slo_priority=self.task_slo.get(n.task_id, (None, 0))[1],
             # true_output and node are handed over so an ORACLE estimator can
@@ -1177,6 +1180,9 @@ class Engine:
             if r.state is State.DECODE and r.generated >= r.node.output_tokens:
                 r.state = State.DONE
                 r.finished_at = self.now
+                tid = r.node.task_id
+                self.task_attained[tid] = (self.task_attained.get(tid, 0.0)
+                                           + r.finished_at - r.started_at)
                 self.running.remove(r)
                 self.pinned_bytes -= r.private_bytes
                 for k in r.held_blocks:
