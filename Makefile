@@ -2,7 +2,7 @@ PY := ./venv/bin/python
 
 # Targets that call a live model server are separated out and gated. Running
 # one by accident costs hours, so each requires CONFIRM=1.
-.PHONY: help test analyze pass-at-1 grid check-traces validate-cache calibrate probe-cache probe-batch probe-vllm-batch collect figures
+.PHONY: help test analyze pass-at-1 grid check-traces validate-cache calibrate probe-cache probe-batch probe-vllm-batch collect figures figures-m3
 
 help:
 	@echo "Offline (no model server, safe to run anytime):"
@@ -12,6 +12,7 @@ help:
 	@echo "  make grid          retention x scheduler grid (quick: 1 util, 1 scale)"
 	@echo "  make check-traces  verify every committed trace stayed in its sandbox"
 	@echo "  make validate-cache TRACE=<path>   frozen cache rule vs a held-out trace"
+	@echo "  make figures-m3    Milestone 3 report figures -> results/figures/m3 (RESULTS=<dir> to override)"
 	@echo ""
 	@echo "Calls the live model (needs Ollama; requires CONFIRM=1):"
 	@echo "  make calibrate     re-measure rates and prompt sizes -> data/calibration"
@@ -28,6 +29,9 @@ analyze:
 	$(PY) -m analysis.analyze_trace --set shared_first
 
 figures: analyze
+
+figures-m3:
+	$(PY) -m experiments.plot_m3 $(if $(RESULTS),--results $(RESULTS))
 
 pass-at-1:
 	$(PY) -m analysis.pass_at_1
