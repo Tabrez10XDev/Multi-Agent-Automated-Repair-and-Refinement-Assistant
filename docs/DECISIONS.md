@@ -1123,3 +1123,132 @@ cell for cell. If they don't, the runs are void.
 
 Everything here is a **development result** on the fitting set; the sealed
 set is not touched (§26).
+
+## 37. Public workload: TraceLab user turns, pre-registered
+
+Set 2026-10-24, from the TraceLab README, `artifacts/utils/DB_SCHEMA.md`, the
+`user_turn_decomposition` README and the 19-row `example_sessions/sanitized`
+schema example only. No release data had been downloaded when this was
+committed. Purpose: OPEN_ISSUES threat 3 (MILESTONE3_REPORT_NOTES §4), one
+self-made workload with low size variance (critical-path CV 0.61, FINDINGS
+§40). TraceLab is real Claude Code / Codex sessions from pseudonymous users.
+
+**Source.** `uw-syfi/TraceLab` release **v0.0.2** (2026-07-24),
+`syfi_coding_trace.jsonl.gz`, SHA-256
+`11ce51ec0a25e3d1d95b025bca2f7d1647e47571eb7cc968acd5fc64d4b4fb65`,
+CC BY 4.0. v0.0.2 rather than v0.0.1: 8,058 sessions from 52 users against
+43, so the user-level split below has more users per side. The raw file is
+kept outside the repo (`~/maara_external/`) and is read only by the build
+script; the simulator reads the derived files.
+
+**Program = one TraceLab user turn**, TraceLab's own definition
+(`user_turn_decomposition`), not one chosen here: within a session, rounds in
+`round_index`, file order; a round opens a new turn when it has a
+`user_message` event at or before its first model output. Rounds before a
+session's first trigger belong to no turn and are dropped. Each turn is one
+task, a chain DAG in round order:
+- **LLM node per round**, model `qwen2.5-coder:7b` for every node (Claude and
+  Codex rates are unknowable; a single model also removes the engine's hidden
+  model-choice step, OPEN_ISSUES §28). Tokens: suffix = `newly_append_tokens`,
+  prefix = `prefix_tokens`, decode = `output_tokens` (`max(1, ·)`).
+- **Context cap.** The model's native window, 32,768 tokens. Output is capped
+  at 8,192; then the append is capped at `32,768 − output`; then the prefix at
+  what remains. Prefix is dropped first, as a server truncating history would.
+  Clipped rounds and removed tokens are counted and reported; no turn is
+  dropped for size.
+- **CPU node after each round with tools**, duration = latest `result_at`
+  minus earliest `emitted_at` over the round's tools (parallel calls overlap),
+  capped at 600 s so one stalled command cannot set the tail; capped nodes
+  are counted. Human waiting time is outside turns by construction.
+- **Prefix identity.** Block keys hash `(session_id, epoch, block index)`, so
+  a round reuses the leading blocks any earlier round of the same session
+  wrote. `epoch` increments when a round's `prefix_tokens` is under half the
+  previous round's `input_tokens_total` (a compaction or reset), so a reset
+  context cannot falsely hit. **Plumbing check, not a hypothesis:** on the dev
+  split, run with arrivals spaced so no two turns overlap, keep-all, simulated
+  prefix-hit tokens must be within ±15% of the recorded `prefix_tokens` sum
+  after clipping. If not, the adapter is fixed before any policy run.
+- Oracle fields (`critical_path_remaining`, reuse gaps) are filled from the
+  recorded future as on MAARA. `Task.critical_path_total` is the isolated
+  critical path under the run's cost model.
+- **Cleaning.** Rows with null input or output tokens are dropped and
+  counted. Exact duplicate `(provider, session_id, round_index, round_id)`
+  rows keep the first in file order (DB_SCHEMA reports 514 duplicate
+  `(session_id, round_index)` pairs; replaying both would double the work).
+
+**Split and sample.** Users go to dev or sealed by the first byte of
+`sha256("tracelab-split:" + user)`, under 128 = dev, so no user is on both
+sides. From each side, the **80 turns** with the smallest
+`sha256("tracelab-sample:" + session_id + ":" + turn ordinal)` are taken,
+whatever their size: the tail is not trimmed. Runtime rule, fixed now:
+before any comparison, time one FCFS cell (batch 4, load 1.0, seed 1) on dev;
+if the projected map exceeds 3 h, halve N and repeat. This is decided from
+wall time only. Sealed names (`tracelab_sealed`) go behind the same
+`MAARA_POLICIES_FROZEN` gate as §26.
+
+**Online estimator.** The existing `ExecutionEstimator` walks MAARA stages,
+so the public source gets a generic one. Remaining work for a turn that has
+completed k rounds = `E[R − k | R > k]` rounds, from the empirical
+distribution of rounds per turn R on the dev split (1 if no dev turn has
+R > k), times the mean round cost (prefill + decode at the dev means, under
+the run's cost model) plus the mean tool time per round. Output tokens use a
+running mean of observed completions, cold-started from the dev mean. All dev
+constants are frozen with the policies and reused unchanged on sealed. Mean
+residual life is the honest online signal: it knows the distribution, never
+the task.
+
+**Runs.** `experiments.scheduling_map --trace-set tracelab_{dev,sealed}
+--load-axis capacity --kv-mb 8192 --retention lru --batches 2 4 8 16
+--seeds 20 --slo-mix tight:1.0:0.3,standard:2.0:0.4,loose:4.0:0.3
+--deadline-basis task --profile gpu_5060ti_public`. `hint-priority` is
+excluded (its ranks are MAARA stages); every other default policy runs.
+- KV 8,192 MB: the 16 GB card minus about 4.7 GB of Q4 7B weights and
+  runtime overhead, rounded down. Derived, not measured. One full
+  32,768-token context is 1.75 GiB, so batch 16 can be KV-bound; that is the
+  realistic regime.
+- `--deadline-basis task` because the estimate basis is MAARA-specific. It
+  hands EDF and LSF the size signal, so G3 is their best case.
+- **D1/D2** (dev): c = 0.3 (the profile's Ollama estimate), and
+  `--batch-decode-coeff 0.03` (vLLM estimate), §34.
+- Then a **freeze commit**. Then **E1/E2** (sealed): the same two maps, each
+  once. Then **E3**: `run_retention_grid` headroom mode on `tracelab_sealed`,
+  batch 8, `--kv-mb 8192`, util 0.8, 20 seeds, c = 0.3, FCFS, retention
+  keep-all / lru / ski-rental / evict-now.
+- No Mac-cost runs: 32k-token prefills at Mac rates are not a serving regime
+  anyone runs.
+
+**Metrics.** p95 task latency is primary, as in §33. p95 slowdown (latency ÷
+isolated critical path) is co-primary for G1 and primary for G2, because the
+theory behind G2 predicts slowdown, and p95 latency on a heavy-tailed
+workload is set by the largest turns. Significance is the driver's paired
+95% CI over 20 seeds: better = `hi < 0`, worse = `lo > 0`. 40 cells per map.
+
+**Hypotheses**, scored on the sealed maps E1 and E2, each separately; dev
+maps are reported as development:
+- **G1 (headline generalizes).** `program-fcfs` is significantly better than
+  FCFS in at least 20 of 40 cells and worse in at most 2, on p95 latency
+  **and** on p95 slowdown. "Generalizes" is claimed only if both hold.
+- **G2 (size variance flips PLAS).** Applies only if the sealed split's
+  isolated critical-path CV is at least **1.0** (an exponential's; MAARA is
+  0.61), measured from the derived trace before any run. Then PLAS is
+  significantly better than `program-fcfs` on p95 slowdown in at least 3
+  cells. If the CV is under 1.0, G2 is void and reported as void. p95-latency
+  direction is reported without a prediction.
+- **G3.** LSF and EDF are each significantly better than `program-fcfs` in at
+  most 2 cells on p95 latency.
+- **G4 (retention matters at real context sizes).** In E3, keep-all's
+  recompute is over 1% of makespan (MAARA: under 1%, §24/§33).
+
+Exploratory, no prediction: ski-rental vs keep-all on p95 and recompute (E3);
+SJF, LSF-oracle, cap, qcap; Claude vs Codex turns separately; replaying real
+turn start times instead of Poisson re-timing.
+
+**Threats fixed in advance.** One model's rates stand in for frontier models;
+tool times are users' machines; subagent sessions, if TraceLab records them
+as separate sessions, add load already counted inside the parent's tool
+time. None of these is corrected; each is reported.
+
+**Order checkable in git:** this commit; then the download, with its SHA-256
+checked against the above in an amendment line here; adapter and derived
+files; D1, D2; freeze; E1, E2, E3. Every manifest's `git_hash` must fit that
+order.
