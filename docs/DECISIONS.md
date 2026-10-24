@@ -1256,3 +1256,14 @@ order.
 *Amendment 2026-10-24, before any adapter code:* downloaded to
 `~/maara_external/tracelab-v0.0.2/syfi_coding_trace.jsonl.gz` (100,939,722
 bytes); SHA-256 matches the value above and `gzip -t` passes.
+
+*Amendment 2026-10-24, before any adapter code or run:* the slowdown
+denominator is the engine's lone-task replay (`Engine._isolated_service_s`,
+commit `ffd15e4`): the task alone on an idle engine under the run's cost
+model, batch cap, KV budget and cache mode, FCFS and keep-all. It replaces
+"isolated critical path" above wherever slowdown is meant, because the
+recorded critical path is on a different clock. G2's CV is the CV of this
+same quantity on the sealed split under E1's configuration (batch 4, c = 0.3),
+computed before any policy run; it depends on no policy. LSF-oracle needs an
+oracle estimator for the public source: it reads the recorded rounds left in
+the turn, the counterpart of the MAARA oracle's true output lengths.
