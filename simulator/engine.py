@@ -287,6 +287,11 @@ class Request:
 # Engine
 # --------------------------------------------------------------------------
 
+# Engine._isolated_service_s results, per process. Bounded by tasks x distinct
+# run configs, which is small for any map.
+_ISOLATED_CACHE = {}
+
+
 class Engine:
     _is_isolation_probe = False
 
@@ -1320,14 +1325,24 @@ class Engine:
         untouched. Report-time only, from completed tasks. No policy sees it:
         it is not on ReqView and nothing in the run reads it.
         """
+        cfg = replace(self.cfg, record_key_uses=False)
+        # The answer depends on the task's work and the run's config, not on
+        # the seed's arrival times or the policy, so a map would otherwise
+        # replay every task once per seed per policy. Keyed on everything the
+        # replay reads; arrival_time and task_id are reset below, so excluded.
+        key = (repr(self.cost), repr(cfg),
+               tuple(repr(replace(n, task_id=0)) for n in task.nodes))
+        hit = _ISOLATED_CACHE.get(key)
+        if hit is not None:
+            return hit
         lone = replace(task, task_id=0, arrival_time=0.0,
                        nodes=[replace(n, task_id=0) for n in task.nodes])
-        cfg = replace(self.cfg, record_key_uses=False)
         eng = Engine([lone], self.cost, cfg,
                      retention=KeepAllRetention(), scheduler=FCFSScheduler())
         eng._is_isolation_probe = True      # its own report() must not recurse
         eng.run()
-        return eng.task_done_at.get(0, 0.0)
+        _ISOLATED_CACHE[key] = iso = eng.task_done_at.get(0, 0.0)
+        return iso
 
     def report(self) -> dict:
         lat = [self.task_done_at[t.task_id] - t.arrival_time
