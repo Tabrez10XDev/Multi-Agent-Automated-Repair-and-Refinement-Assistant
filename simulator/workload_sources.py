@@ -21,9 +21,16 @@ WHAT AN ENTRY CARRIES
                           ExecutionEstimator. The online estimator is wired to
                           MAARA stage names, so a source with other stages
                           needs its own.
+    oracle_factory        fn(cost, tok, cpu) -> estimator, or None for today's
+                          OracleEstimator. Used when a driver asks for the
+                          "oracle" estimator (lsf-oracle); the stock one reads
+                          MAARA stage names too.
     supports_deadline_basis   which --deadline-basis values make sense on this
                           source. A source with no isolated-task estimate can
                           only support "task".
+    excluded_policies     scheduler labels that make no sense on this source
+                          (hint-priority ranks MAARA stages). Drivers skip them
+                          and record the exclusion in the run manifest.
 
 MAARA names (TRACE_SETS keys and the sealed names) are served by a built-in
 entry that calls exactly the load_trace path the drivers used before.
@@ -51,6 +58,8 @@ class WorkloadSource:
     sealed: bool = False
     estimator_factory: Optional[Callable] = None
     supports_deadline_basis: frozenset = ALL_DEADLINE_BASES
+    oracle_factory: Optional[Callable] = None
+    excluded_policies: frozenset = frozenset()
 
     def matches(self, name):
         return name.startswith(self.key) if self.prefix else name == self.key
@@ -61,14 +70,16 @@ _SOURCES: list = []
 
 def register_source(key, load, *, prefix=False, sealed=False,
                     estimator_factory=None,
-                    supports_deadline_basis=ALL_DEADLINE_BASES):
+                    supports_deadline_basis=ALL_DEADLINE_BASES,
+                    oracle_factory=None, excluded_policies=()):
     """Register a workload source under an exact name (or a name prefix).
     Re-registering a key replaces it, so an adapter module can be reloaded."""
     bases = frozenset(supports_deadline_basis)
     bad = bases - ALL_DEADLINE_BASES
     if bad:
         raise ValueError(f"unknown deadline basis {sorted(bad)}")
-    src = WorkloadSource(key, load, prefix, sealed, estimator_factory, bases)
+    src = WorkloadSource(key, load, prefix, sealed, estimator_factory, bases,
+                         oracle_factory, frozenset(excluded_policies))
     unregister_source(key)
     _SOURCES.append(src)
     return src
@@ -89,7 +100,21 @@ def _maara_load(name, seed, arrival_rate):
 _MAARA = WorkloadSource("maara", _maara_load)
 
 
+_BUILTIN_ADAPTERS_LOADED = False
+
+
+def _load_builtin_adapters():
+    """Import the shipped public-workload adapters once, so their names are
+    registered for every driver without a flag. Lazy because an adapter imports
+    this module (circular at import time otherwise)."""
+    global _BUILTIN_ADAPTERS_LOADED
+    if not _BUILTIN_ADAPTERS_LOADED:
+        _BUILTIN_ADAPTERS_LOADED = True
+        import simulator.adapters.tracelab  # noqa: F401  (registers on import)
+
+
 def known_sources():
+    _load_builtin_adapters()
     names = set(TRACE_SETS) | set(SEALED_TRACE_SETS)
     for s in _SOURCES:
         names.add(s.key + "*" if s.prefix else s.key)
@@ -99,6 +124,7 @@ def known_sources():
 def get_source(name):
     """The entry serving `name`: exact registrations first, then the longest
     matching prefix, then MAARA's own sets."""
+    _load_builtin_adapters()
     exact = [s for s in _SOURCES if not s.prefix and s.matches(name)]
     if exact:
         return exact[0]

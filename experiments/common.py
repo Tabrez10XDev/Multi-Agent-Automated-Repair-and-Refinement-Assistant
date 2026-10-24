@@ -70,9 +70,11 @@ def make_estimator(trace_set, cost, tok, cpu, name="online"):
     """The estimator for a run on `trace_set`. A source may bring its own
     "online" estimator (the stock one is wired to MAARA stage names); every
     other name, and every MAARA set, gets the stock class exactly as before."""
-    factory = get_source(trace_set).estimator_factory
-    if factory is not None and name == "online":
-        return factory(cost, tok, cpu)
+    src = get_source(trace_set)
+    if src.estimator_factory is not None and name == "online":
+        return src.estimator_factory(cost, tok, cpu)
+    if src.oracle_factory is not None and name == "oracle":
+        return src.oracle_factory(cost, tok, cpu)
     return ESTIMATORS[name](cost, tok, cpu)
 
 

@@ -63,7 +63,7 @@ from simulator.engine import EngineConfig
 from simulator.trace_loader import TRACE_SET_EXCLUSIONS
 from simulator.workload import (DEFAULT_PROFILE, PROFILES, CostModel, CpuStageSeconds,
                                 StageTokens, parse_rate_overrides)
-from simulator.workload_sources import check_deadline_basis
+from simulator.workload_sources import check_deadline_basis, get_source
 
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -208,6 +208,10 @@ def main():
     # A source that cannot support the requested deadline basis is refused
     # before any calibration, not discovered mid-run.
     check_deadline_basis(args.trace_set, args.deadline_basis)
+    # Policies the source cannot run (hint-priority ranks MAARA stages on
+    # TraceLab) are skipped here, before any calibration, and recorded below.
+    excluded = sorted(get_source(args.trace_set).excluded_policies)
+    policies = [p for p in POLICIES if p[2] not in excluded]
     slo = parse_slo(args.slo_mix)
     utils, multiples, batches = CALIBRATED_UTILS, OVERLOAD_MULTIPLES, args.batches
     seeds = list(range(1, args.seeds + 1))
@@ -224,7 +228,7 @@ def main():
     manifest = Manifest.start("scheduling_map", params={
         "trace_set": args.trace_set, "kv_mb": args.kv_mb, "batches": batches,
         "excluded_tasks": TRACE_SET_EXCLUSIONS.get(args.trace_set, {}),
-        "retention": args.retention, "seeds": seeds, "policies": [p[2] for p in POLICIES],
+        "retention": args.retention, "seeds": seeds, "policies": [p[2] for p in policies],
         "calibrated_utils": utils, "overload_multiples_of_util_0.8": multiples,
         "load_axis": ("arrival rate / saturation throughput at the same batch "
                       "(FCFS, all tasks at once)" if args.load_axis == "capacity" else
@@ -239,7 +243,13 @@ def main():
                       if slo else "arrival + slack_factor * noisy critical path")
                      if args.deadline_basis == "task" else
                      ("arrival + slack_factor * multiplier * size_scale * isolated"
-                      if slo else "arrival + slack_factor * isolated"))})
+                      if slo else "arrival + slack_factor * isolated")),
+        # Only present when a source excludes something, so MAARA manifests
+        # keep exactly today's keys.
+        **({"excluded_policies": excluded,
+            "excluded_policies_reason": "not meaningful on this workload source "
+                                        "(workload_sources.excluded_policies)"}
+           if excluded else {})})
     t0 = time.time()
     print(f"trace={args.trace_set} kv={args.kv_mb:.0f}MB retention={args.retention} "
           f"profile={prof} coeff={cost.batch_decode_coeff} seeds={len(seeds)} "
@@ -313,10 +323,10 @@ def main():
 
                 jobs = [(s, e, sd, rate, slack, batch, args.kv_mb, args.retention,
                          args.trace_set, cost, tok, cpu, slo, args.deadline_basis)
-                        for s, e, _ in POLICIES for sd in seeds]
+                        for s, e, _ in policies for sd in seeds]
                 res = list(pool.map(_job, jobs))
                 by_pol = {}
-                for i, (_, _, label) in enumerate(POLICIES):
+                for i, (_, _, label) in enumerate(policies):
                     by_pol[label] = res[i * len(seeds):(i + 1) * len(seeds)]
                 cell = {"util_calibrated": util, "multiple_of_util_rate": mult,
                         "load": load, "arrival_rate": rate, "policies": {}}
