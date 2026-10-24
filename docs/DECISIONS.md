@@ -1252,3 +1252,7 @@ time. None of these is corrected; each is reported.
 checked against the above in an amendment line here; adapter and derived
 files; D1, D2; freeze; E1, E2, E3. Every manifest's `git_hash` must fit that
 order.
+
+*Amendment 2026-10-24, before any adapter code:* downloaded to
+`~/maara_external/tracelab-v0.0.2/syfi_coding_trace.jsonl.gz` (100,939,722
+bytes); SHA-256 matches the value above and `gzip -t` passes.
