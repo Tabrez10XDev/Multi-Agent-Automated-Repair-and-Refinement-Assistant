@@ -33,8 +33,7 @@ import statistics as st
 import time
 
 from experiments.manifest import Calibration, Manifest, bound_args, check_consistent
-from experiments.run_retention_grid import calibrate_rate, run_one
-from experiments.run_scheduler_table import paired_ci
+from experiments.common import calibrate_rate, paired_ci, run_retention_one
 from simulator.engine import EngineConfig
 from simulator.workload import (DEFAULT_PROFILE, PROFILES, CostModel, CpuStageSeconds,
                                 StageTokens, parse_rate_overrides)
@@ -47,7 +46,8 @@ RETENTION_POINT = {"batch": 4, "kv_mb": 512.0}
 SCHED_POINT = {"batch": 8, "kv_mb": 1024.0}
 RET_POLICIES = ["keep-all", "ski-rental", "evict-now"]
 BREAKDOWN = ("p50_task_latency_s", "p95_task_latency_s", "recompute_seconds",
-             "prefill_seconds", "decode_seconds", "idle_seconds", "makespan_s")
+             "prefill_seconds", "decode_seconds", "idle_seconds", "makespan_s",
+             "p95_slowdown", "mean_slowdown")
 
 
 def calibrated(manifest, name, coeff, point, cost, tok, cpu, cache_mode):
@@ -117,8 +117,8 @@ def main():
                                 p, cost, tok, cpu, cache_mode)
         ret = {}
         for pol in ret_policies:
-            ret[pol] = [run_one(pol, "fcfs", 1, s, p["kv_mb"], rate, cost, tok,
-                                cpu, batch=p["batch"], trace_set=TRACE)[1]
+            ret[pol] = [run_retention_one(pol, "fcfs", 1, s, p["kv_mb"], rate, cost, tok,
+                                       cpu, batch=p["batch"], trace_set=TRACE)[1]
                         for s in seeds]
         mean = lambda pol, k: st.fmean(r[k] for r in ret[pol])  # noqa: E731
         recomp_share = st.fmean(r["recompute_seconds"] / r["makespan_s"]
@@ -145,8 +145,8 @@ def main():
         p = SCHED_POINT
         srate, sbusy = calibrated(manifest, f"arrival_rate[sched,c={coeff}]",
                                   coeff, p, cost, tok, cpu, cache_mode)
-        sch = {s_name: [run_one("lru", s_name, 1, s, p["kv_mb"], srate, cost,
-                                tok, cpu, batch=p["batch"], trace_set=TRACE)[1]
+        sch = {s_name: [run_retention_one("lru", s_name, 1, s, p["kv_mb"], srate, cost,
+                                       tok, cpu, batch=p["batch"], trace_set=TRACE)[1]
                         for s in seeds]
                for s_name in ("fcfs", "lsf")}
         choice = st.fmean(r["frac_decisions_with_choice"] for r in sch["fcfs"])

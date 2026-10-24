@@ -43,105 +43,26 @@ from __future__ import annotations
 import argparse
 import json
 import time
-import hashlib
 import os
 import statistics as st
 
+# Shared helpers live in experiments/common.py; re-exported so existing imports
+# (tests, scripts) keep working.
+from experiments.common import (build, calibrate_rate, make_estimator,  # noqa: F401  re-exported for old imports
+                                run_retention_one, scale_context)
 from experiments.manifest import (Calibration, Manifest, bound_args,
                                   check_consistent, default_of)
-from simulator.engine import Engine, EngineConfig
-from simulator.policies import (RETENTIONS, SCHEDULERS, ExecutionEstimator,
-                          FCFSScheduler, HintBuilder, KeepAllRetention,
-                          SkiRentalPredictionsRetention)
-from simulator.trace_loader import (TRACE_SET_EXCLUSIONS, TRACE_SETS, load_trace,
-                                    resolve_trace_set)
+from simulator.engine import EngineConfig
+from simulator.trace_loader import TRACE_SET_EXCLUSIONS, TRACE_SETS
 from simulator.workload import (DEFAULT_PROFILE, PROFILES, CostModel, CpuStageSeconds,
-                                Kind, StageTokens, DEFAULT_BLOCK_TOKENS)
+                                StageTokens, DEFAULT_BLOCK_TOKENS)
 
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 POLICIES = ["keep-all", "lru", "evict-now", "ski-rental", "ski-rental-pred",
             "offline-ref"]
 
 
-def scale_context(tasks, factor: int):
-    """
-    Grow every prompt by `factor`, keeping the sharing structure intact.
-
-    Each block becomes `factor` blocks derived from it, so calls that shared a
-    block still share all of its descendants. prefix_tokens and suffix_tokens
-    scale with it, which is what makes a scaled run have proportionally larger
-    SHARED blocks rather than merely longer prompts.
-    """
-    if factor == 1:
-        return tasks
-    for t in tasks:
-        for n in t.nodes:
-            if n.kind is not Kind.LLM:
-                continue
-            n.prefix_tokens *= factor
-            n.suffix_tokens *= factor
-            n.output_tokens *= factor
-            derive = (lambda k, j:
-                      hashlib.sha1(f"{k}|x{j}".encode()).hexdigest()[:12])
-            # The per-block reuse gaps are keyed by block key, so they must be
-            # remapped with the keys. Without this they all miss at scale > 1
-            # and the engine silently falls back to the node-level gap, which
-            # is None for cross-run reuse -- reintroducing the bug DECISIONS 21
-            # fixed, but only in the scaled cells.
-            n.block_reuse_gap = {derive(k, j): g
-                                 for k, g in n.block_reuse_gap.items()
-                                 for j in range(factor)}
-            n.block_keys = [derive(k, j)
-                            for k in n.block_keys for j in range(factor)]
-    return tasks
-
-
-def build(scale, seed, arrival_rate, cost, tok, cpu, trace_set="original"):
-    paths = [os.path.join(_REPO, p) for p in resolve_trace_set(trace_set)]
-    tasks = load_trace(paths, arrival_rate=arrival_rate, seed=seed,
-                       exclude_tasks=TRACE_SET_EXCLUSIONS.get(trace_set, {})).tasks
-    return scale_context(tasks, scale)
-
-
-def run_one(policy, sched, scale, seed, kv_mb, arrival_rate, cost, tok, cpu,
-            batch=8, lam=0.5, sigma=0.5, chunk=512, trace_set="holdout_qwen",
-            record_key_uses=False):
-    tasks = build(scale, seed, arrival_rate, cost, tok, cpu, trace_set=trace_set)
-    pol = (SkiRentalPredictionsRetention(lam) if policy == "ski-rental-pred"
-           else RETENTIONS[policy]())
-    eng = Engine(tasks, cost,
-                 EngineConfig(kv_budget_mb=kv_mb, max_batch=batch,
-                              prefill_chunk_tokens=chunk,
-                              record_key_uses=record_key_uses),
-                 retention=pol, scheduler=SCHEDULERS[sched](),
-                 estimator=ExecutionEstimator(cost, tok, cpu),
-                 hints=HintBuilder(sigma=sigma, seed=seed))
-    return eng, eng.run()
-
-
-def calibrate_rate(target_util, scale, seed, kv_mb, cost, tok, cpu,
-                   lo=0.005, hi=8.0, iters=12, trace_set="holdout_qwen",
-                   batch=8, return_achieved=False):
-    """Binary-search the arrival rate giving `target_util` GPU busy under
-    FCFS/keep-all. Monotone in rate, so bisection is safe.
-
-    With return_achieved, returns (rate, busy fraction measured at that rate)
-    for the run manifest; None if no probe reached the target."""
-    best, best_busy = hi, None
-    for _ in range(iters):
-        mid = (lo + hi) / 2
-        try:
-            _, rep = run_one("keep-all", "fcfs", scale, seed, kv_mb, mid,
-                             cost, tok, cpu, batch=batch, trace_set=trace_set)
-            busy = rep["gpu_busy_frac"]
-        except RuntimeError:
-            busy = 1.0
-        if busy < target_util:
-            lo = mid
-        else:
-            hi = mid
-            best, best_busy = mid, busy
-    return (best, best_busy) if return_achieved else best
+run_one = run_retention_one     # historical name; run_scheduler_table has its own
 
 
 def hindsight_denominator(scale, seed, kv_mb, arrival_rate, cost, tok, cpu,
@@ -184,7 +105,10 @@ HEADROOM_METRICS = ("p50_task_latency_s", "p95_task_latency_s",
                     "mean_task_latency_s", "recompute_seconds", "total_rent_s",
                     "forced_evictions", "rent_active_tick_frac",
                     "retention_controlled_decisions", "prefix_hit_rate",
-                    "gpu_busy_frac", "peak_kv_util")
+                    "gpu_busy_frac", "peak_kv_util",
+                    # latency / the task's own lone-machine time (engine
+                    # _isolated_service_s); report-time, never seen by a policy
+                    "p95_slowdown", "mean_slowdown")
 
 
 def reusable_working_set(scale, seed, arrival_rate, kv_mb, cost, tok, cpu,
@@ -355,7 +279,7 @@ def headroom_main(args):
                     row["errors"] = len(rs) - len(ok)
                     row["per_seed"] = {k: [r[k] for r in ok] for k in
                                        ("p95_task_latency_s", "p50_task_latency_s",
-                                        "recompute_seconds")}
+                                        "recompute_seconds", "p95_slowdown")}
                     fmt = lambda c: (f"{c['mean_diff_s']:+7.1f} [{c['lo_s']:+.1f}, "
                                      f"{c['hi_s']:+.1f}]{'*' if c['significant'] else ' '}")
                     d95 = drc = ""
@@ -554,6 +478,8 @@ def main():
                         "total_rent_s": m("total_rent_s"),
                         "p50_task_latency_s": m("p50_task_latency_s"),
                         "p95_task_latency_s": m("p95_task_latency_s"),
+                        "p95_slowdown": m("p95_slowdown"),
+                        "mean_slowdown": m("mean_slowdown"),
                         "realized_ratio_vs_hindsight": ratio,
                         "retention_controlled_decisions": ctrl,
                         "cold_misses": m("cold_misses"),

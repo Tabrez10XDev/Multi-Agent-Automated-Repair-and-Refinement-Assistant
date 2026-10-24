@@ -33,12 +33,15 @@ import os
 import statistics as st
 import time
 
-from experiments import run_retention_grid
+# Shared helpers live in experiments/common.py; re-exported so existing imports
+# keep working. run_one here is the scheduler-row runner (run_retention_grid has
+# a different one under the same historical name).
+from experiments.common import (_T975, build, calibrate_rate,  # noqa: F401  re-exported for old imports
+                                calibrate_slack, paired_ci, run_retention_one,
+                                run_scheduler_one)
 from experiments.manifest import (Calibration, Manifest, bound_args,
                                   check_consistent, default_of)
-from experiments.run_retention_grid import build, calibrate_rate
-from simulator.engine import Engine, EngineConfig
-from simulator.policies import (ESTIMATORS, RETENTIONS, SCHEDULERS, HintBuilder)
+from simulator.engine import EngineConfig
 from simulator.workload import (DEFAULT_PROFILE, PROFILES, CostModel, CpuStageSeconds,
                                 StageTokens)
 
@@ -46,84 +49,7 @@ _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ORDER = ["fcfs", "sjf", "edf", "lsf", "static-priority"]
 
 
-def run_one(sched, estimator_name, scale, seed, kv_mb, rate, slack, retention,
-            cost, tok, cpu, trace_set, batch=16, chunk=512, sigma=0.5, slo=None,
-            deadline_basis="estimate"):
-    tasks = build(scale, seed, rate, cost, tok, cpu, trace_set=trace_set)
-    est = ESTIMATORS[estimator_name](cost, tok, cpu)
-    eng = Engine(tasks, cost,
-                 EngineConfig(kv_budget_mb=kv_mb, max_batch=batch,
-                              prefill_chunk_tokens=chunk, slack_factor=slack,
-                              slo_classes=slo, slo_seed=seed,
-                              deadline_basis=deadline_basis),
-                 retention=RETENTIONS[retention](),
-                 scheduler=SCHEDULERS[sched](),
-                 estimator=est,
-                 hints=HintBuilder(sigma=sigma, seed=seed))
-    return eng.run()
-
-
-# Two-sided 95% Student t critical values by degrees of freedom. stdlib has no
-# t quantile and the sim extra is deliberately numpy/matplotlib only.
-_T975 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447,
-         7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228, 11: 2.201, 12: 2.179,
-         13: 2.160, 14: 2.145, 15: 2.131, 16: 2.120, 17: 2.110, 18: 2.101,
-         19: 2.093, 20: 2.086, 25: 2.060, 30: 2.042}
-
-
-def paired_ci(a, b):
-    """Mean of a[i] - b[i] with a two-sided 95% t interval. Paired because
-    every row runs the same seeds (DECISIONS 24)."""
-    d = [x - y for x, y in zip(a, b)]
-    n = len(d)
-    mean = st.fmean(d)
-    if n < 2:
-        return {"mean_diff_s": mean, "lo_s": float("nan"),
-                "hi_s": float("nan"), "n": n, "significant": False}
-    df = n - 1
-    t = _T975.get(df) or (_T975[max(k for k in _T975 if k <= df)]
-                          if df < 30 else 1.96)
-    half = t * st.stdev(d) / n ** 0.5
-    lo, hi = mean - half, mean + half
-    return {"mean_diff_s": mean, "lo_s": lo, "hi_s": hi, "n": n,
-            "significant": not (lo <= 0.0 <= hi)}
-
-
-def calibrate_slack(scale, seeds, kv_mb, rate, retention, cost, tok, cpu,
-                    trace_set, batch=8, lo=0.5, hi=6.0, iters=10,
-                    target=(0.20, 0.30), slo=None, deadline_basis="estimate"):
-    """
-    Bisect slack_factor so FCFS lands in the target deadline-miss band.
-
-    Miss rate FALLS as slack rises, so the branch is inverted relative to
-    calibrate_rate. Returns (slack, achieved_miss_rate); the achieved rate is
-    returned rather than asserted because a trace may have no slack value that
-    lands in the band, and silently reporting a calibrated number that missed
-    its target would be worse than reporting the miss.
-    """
-    best, best_miss = hi, None
-    for _ in range(iters):
-        mid = (lo + hi) / 2
-        try:
-            # Average over the same seeds the table will use. Calibrating on
-            # one seed and reporting a multi-seed mean produced a confusing
-            # mismatch: 22.2% at calibration against 12.3% in the table.
-            miss = st.fmean(
-                run_one("fcfs", "online", scale, sd, kv_mb, rate, mid,
-                        retention, cost, tok, cpu, trace_set, batch=batch, slo=slo,
-                        deadline_basis=deadline_basis)["deadline_miss_rate"]
-                for sd in seeds)
-        except RuntimeError:
-            lo = mid
-            continue
-        best, best_miss = mid, miss
-        if miss > target[1]:
-            lo = mid          # too many misses -> more slack
-        elif miss < target[0]:
-            hi = mid          # too few -> less slack
-        else:
-            return mid, miss
-    return best, best_miss
+run_one = run_scheduler_one     # historical name; run_retention_grid has its own
 
 
 def main():
@@ -192,7 +118,7 @@ def main():
                   "seed": rb["seed"], "scheduler": "fcfs",
                   "retention": "keep-all",
                   "prefill_chunk_tokens":
-                      default_of(run_retention_grid.run_one, "chunk")}
+                      default_of(run_retention_one, "chunk")}
     # Before spending any engine time: a mismatch here is already knowable.
     check_consistent("arrival_rate", rate_under, run_config, ("util",))
 
@@ -254,13 +180,16 @@ def main():
         row = {"scheduler": sched, "estimator": est, "label": label,
                "p50_task_latency_s": m("p50_task_latency_s"),
                "p95_task_latency_s": m("p95_task_latency_s"),
+               "p95_slowdown": m("p95_slowdown"),
+               "mean_slowdown": m("mean_slowdown"),
                "deadline_miss_rate": m("deadline_miss_rate"),
                "mean_slack_at_completion_s": m("mean_slack_at_completion_s"),
                "estimator_mape_pct": m("estimator_mape_pct"),
                "frac_decisions_with_choice": m("frac_decisions_with_choice"),
                "seeds": len(seeds),
                # Per seed, in seed order, so rows can be compared paired.
-               "per_seed_p95_s": [r["p95_task_latency_s"] for r in reps]}
+               "per_seed_p95_s": [r["p95_task_latency_s"] for r in reps],
+               "per_seed_p95_slowdown": [r["p95_slowdown"] for r in reps]}
         base = next((r for r in results if r["label"] == "fcfs"), None)
         if base is not None and label != "fcfs":
             row["p95_vs_fcfs"] = paired_ci(row["per_seed_p95_s"],

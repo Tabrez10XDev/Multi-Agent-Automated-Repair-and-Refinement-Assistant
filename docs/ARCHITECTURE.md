@@ -68,6 +68,8 @@ can, and `probes/` is the only place that talks to a live model server.
 | `data/demo_target/` | The fixture the orchestrator demo repairs |
 | `archive/` | Retired code, with reasons in `archive/README.md`. Do not import |
 
+**Workload sources.** Drivers reach traces only through `resolve_workload(name, seed, arrival_rate)` in `simulator/workload_sources.py` (via `experiments/common.build`), never through `load_trace` directly. MAARA names (`TRACE_SETS` plus the sealed names) are served by a built-in entry that makes the same `load_trace` call as before; a public-trace adapter calls `register_source(name_or_prefix, fn, ...)` and returns `Task` objects. An entry may be `sealed` (same `MAARA_POLICIES_FROZEN` gate, DECISIONS §26), may bring its own `estimator_factory` (the stock estimator is wired to MAARA stage names) and may restrict `supports_deadline_basis`, which `scheduling_map` checks before any run. Helpers shared by the drivers live in `experiments/common.py`; the old driver modules re-export them.
+
 Run `make help` for one entry point per task, or:
 
 ```

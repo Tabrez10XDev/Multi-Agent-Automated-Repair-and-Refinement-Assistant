@@ -36,12 +36,12 @@ import heapq
 import math
 import random
 import statistics
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from typing import Optional
 
 from simulator.policies import (ESTIMATORS, RETENTIONS, SCHEDULERS, ExecutionEstimator,
-                          FCFSScheduler, LRURetention, ReqView)
+                          FCFSScheduler, KeepAllRetention, LRURetention, ReqView)
 from simulator.workload import (CODER_MODEL, CostModel, CpuStageSeconds, Kind,
                           StageTokens, WorkloadConfig, describe_trace,
                           generate_trace)
@@ -288,6 +288,8 @@ class Request:
 # --------------------------------------------------------------------------
 
 class Engine:
+    _is_isolation_probe = False
+
     def __init__(self, tasks, cost: CostModel, cfg: EngineConfig,
                  retention=None, scheduler=None, estimator=None, hints=None,
                  trace: bool = False):
@@ -1292,6 +1294,41 @@ class Engine:
 
     # -- reporting ---------------------------------------------------------
 
+    def _isolated_service_s(self, task) -> float:
+        """
+        Time `task` takes ALONE on an idle machine, under THIS run's cost
+        model: the task is replayed by a fresh Engine with nothing else in it,
+        so there is no queueing and nothing contends for the batch or the KV.
+
+        Not Task.critical_path_total. On the trace path that field is built
+        from the MEASURED Ollama durations (trace_loader._annotate), a different
+        clock from the cost model the run is simulated under, and it is the
+        oracle quantity the by-task deadline noise is drawn around. It is also
+        a lower bound that a lone task does not always meet: sibling calls of
+        one task share the engine's single prefill slot and decode together, so
+        a lone task can exceed its critical path (and, by hitting its own
+        earlier prompts, fall below a cold sum). Replaying it is the definition
+        of "alone", and makes a lone task's slowdown exactly 1.
+
+        Same cost model, chunk size, batch cap, KV budget and cache mode as the
+        run; FCFS and keep-all, so the denominator does not depend on the
+        policy under test (slowdowns compare across policies). The lone replay
+        starts cold, so a task in the real run that rides blocks an earlier
+        task left warm can finish a few percent under 1; that is the cache
+        working, not an error. Nodes are
+        shallow-copied with task_id 0 and arrival 0, so the run's own tasks are
+        untouched. Report-time only, from completed tasks. No policy sees it:
+        it is not on ReqView and nothing in the run reads it.
+        """
+        lone = replace(task, task_id=0, arrival_time=0.0,
+                       nodes=[replace(n, task_id=0) for n in task.nodes])
+        cfg = replace(self.cfg, record_key_uses=False)
+        eng = Engine([lone], self.cost, cfg,
+                     retention=KeepAllRetention(), scheduler=FCFSScheduler())
+        eng._is_isolation_probe = True      # its own report() must not recurse
+        eng.run()
+        return eng.task_done_at.get(0, 0.0)
+
     def report(self) -> dict:
         lat = [self.task_done_at[t.task_id] - t.arrival_time
                for t in self.tasks if t.task_id in self.task_done_at]
@@ -1301,6 +1338,18 @@ class Engine:
             if not lat:
                 return float("nan")
             return lat[min(len(lat) - 1, int(p * len(lat)))]
+
+        # Slowdown = latency / isolated service time (_isolated_service_s), so 1.0
+        # means the task ran as fast as it would alone. Latency alone cannot
+        # compare across tasks of very different size; this can.
+        slow = []
+        for t in ([] if self._is_isolation_probe else self.tasks):
+            if t.task_id not in self.task_done_at:
+                continue
+            iso = self._isolated_service_s(t)
+            if iso > 0:
+                slow.append((self.task_done_at[t.task_id] - t.arrival_time) / iso)
+        slow.sort()
 
         # Deadline accounting, over completed tasks only. Slack is signed:
         # positive means finished early, negative means missed and by how much.
@@ -1373,6 +1422,9 @@ class Engine:
             "p50_task_latency_s": pct(0.50),
             "p95_task_latency_s": pct(0.95),
             "p99_task_latency_s": pct(0.99),
+            "p95_slowdown": (slow[min(len(slow) - 1, int(0.95 * len(slow)))]
+                             if slow else float("nan")),
+            "mean_slowdown": statistics.fmean(slow) if slow else float("nan"),
             "deadline_miss_rate": (n_dl - met) / n_dl if n_dl else float("nan"),
             # The miss rate split by whether the deadline was already out of
             # reach (uncontended critical path) at the task's first admission.

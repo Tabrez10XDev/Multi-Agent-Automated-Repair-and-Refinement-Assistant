@@ -55,15 +55,15 @@ import statistics as st
 import time
 from concurrent.futures import ProcessPoolExecutor
 
-from experiments import run_retention_grid
+from experiments.common import (calibrate_rate, calibrate_slack, paired_ci,
+                                run_retention_one, run_scheduler_one)
 from experiments.manifest import (Calibration, Manifest, bound_args, check_consistent,
                                   default_of)
-from experiments.run_retention_grid import calibrate_rate
-from experiments.run_scheduler_table import calibrate_slack, paired_ci, run_one
 from simulator.engine import EngineConfig
 from simulator.trace_loader import TRACE_SET_EXCLUSIONS
 from simulator.workload import (DEFAULT_PROFILE, PROFILES, CostModel, CpuStageSeconds,
                                 StageTokens, parse_rate_overrides)
+from simulator.workload_sources import check_deadline_basis
 
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -86,10 +86,10 @@ CAPACITY_LOADS = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 2.0]
 SATURATION_RATE = 50.0     # tasks/s: every task arrives within about a second
 METRICS = ("p50_task_latency_s", "p95_task_latency_s", "mean_task_latency_s",
            "deadline_miss_rate", "miss_rate_infeasible_at_admit",
-           "miss_rate_feasible_at_admit")
+           "miss_rate_feasible_at_admit", "p95_slowdown", "mean_slowdown")
 # Kept per seed so any of them can be paired offline (experiments/reanalyze_slo.py).
 PER_SEED = ("p50_task_latency_s", "p95_task_latency_s", "mean_task_latency_s",
-            "deadline_miss_rate")
+            "deadline_miss_rate", "p95_slowdown", "mean_slowdown")
 ACTIVITY = ("frac_decisions_with_choice", "rent_active_tick_frac",
             "forced_evictions", "max_batch_seen", "p95_batch",
             "frac_time_at_batch_cap", "max_resident", "frac_time_at_resident_cap",
@@ -102,7 +102,7 @@ def _job(args):
     (sched, est, seed, rate, slack, batch, kv_mb, retention, trace_set,
      cost, tok, cpu, slo, deadline_basis) = args
     try:
-        rep = run_one(sched, est, 1, seed, kv_mb, rate, slack, retention,
+        rep = run_scheduler_one(sched, est, 1, seed, kv_mb, rate, slack, retention,
                       cost, tok, cpu, trace_set, batch=batch, slo=slo,
                       deadline_basis=deadline_basis)
     except RuntimeError as e:
@@ -134,7 +134,7 @@ def calibrate_point(manifest, cost, tok, cpu, prof, util, batch, kv_mb,
              "max_batch": b["batch"], "cache_mode": cache_mode,
              "seed": b["seed"], "scheduler": "fcfs", "retention": "keep-all",
              "hardware_profile": prof, "batch_decode_coeff": cost.batch_decode_coeff,
-             "prefill_chunk_tokens": default_of(run_retention_grid.run_one, "chunk")}
+             "prefill_chunk_tokens": default_of(run_retention_one, "chunk")}
     run_config = {"trace_set": trace_set, "scale": 1, "util": util,
                   "kv_mb": kv_mb, "max_batch": batch, "cache_mode": cache_mode,
                   "hardware_profile": prof,
@@ -159,7 +159,7 @@ def calibrate_saturation(manifest, cost, tok, cpu, prof, batch, kv_mb, retention
              "max_batch": batch, "cache_mode": cache_mode, "retention": retention,
              "hardware_profile": prof, "batch_decode_coeff": cost.batch_decode_coeff,
              "scheduler": "fcfs", "arrival_rate": SATURATION_RATE, "seeds": seeds}
-    vals = [run_one("fcfs", "online", 1, sd, kv_mb, SATURATION_RATE, 1.5, retention,
+    vals = [run_scheduler_one("fcfs", "online", 1, sd, kv_mb, SATURATION_RATE, 1.5, retention,
                     cost, tok, cpu, trace_set, batch=batch)["throughput_tasks_per_s"]
             for sd in seeds]
     sat = st.fmean(vals)
@@ -205,6 +205,9 @@ def main():
                          "in the manifest's cost provenance)")
     args = ap.parse_args()
 
+    # A source that cannot support the requested deadline basis is refused
+    # before any calibration, not discovered mid-run.
+    check_deadline_basis(args.trace_set, args.deadline_basis)
     slo = parse_slo(args.slo_mix)
     utils, multiples, batches = CALIBRATED_UTILS, OVERLOAD_MULTIPLES, args.batches
     seeds = list(range(1, args.seeds + 1))

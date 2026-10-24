@@ -21,7 +21,7 @@ import argparse
 import json
 import statistics as st
 
-from experiments.run_scheduler_table import paired_ci
+from experiments.common import paired_ci
 
 RULES = ("lsf", "edf", "hint-priority", "lsf-oracle")
 BASE = "program-fcfs"
