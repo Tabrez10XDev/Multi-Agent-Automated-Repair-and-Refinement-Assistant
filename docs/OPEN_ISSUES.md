@@ -28,11 +28,11 @@ What is not settled, not validated, or known to be wrong. Read this before trust
 | 25 | Scoping reuse with a match-time guard | **not needed**: the holdout traces have 0% cross-run reuse | none |
 | 26 | "Ski-rental never fires" | **superseded** by §27 and FINDINGS §24–25 | none |
 | 27 | No operating point where ski-rental beats keep-all | **open, lower impact**: none at 1x (sealed) or 8x (holdout), FINDINGS §35 | optional: 16x |
-| 28 | Batch-cap labels counted the wrong thing | **fixed** in code; the §29–31 labels are **not yet re-derived** | rerun the maps, or qualify the labels in FINDINGS |
+| 28 | Batch-cap labels counted the wrong thing | **qualified** (2026-10-23): FINDINGS §29 and §31 carry a caveat with resident-count numbers; capacity-axis maps (§33, §36–40) record residents | none; the hidden one-model-per-iteration scheduler goes in the writeup |
 | 29 | Deadlines carry almost no per-task size | **open**; `task` basis added and tested, not run | one map with `--deadline-basis task` |
 | 30 | Busy load axis not comparable across batch sizes | **resolved for the coefficient question**: capacity-axis maps on Mac and G1 GPU rates, FINDINGS §36–38 | none |
 
-**Still open and relevant: 6** — 9.5, 14, 24, 27, 28, 29.
+**Still open and relevant: 5** — 9.5, 14, 24, 27, 29.
 
 ---
 
@@ -647,9 +647,15 @@ presented as a general setting.
 
 ## 28. Batch-cap labels counted the wrong thing
 
-> **Fixed in code (2026-10-08); old labels not yet re-derived.** FINDINGS
-> §29–31 report "CAP-NEVER-BINDS", "at cap" and "(KV-bound)" from the
-> wrong counter. Don't quote them until the maps are rerun.
+> **Qualified (2026-10-23).** The old maps predate the resident metrics, so
+> rather than rerun them, FINDINGS §29 and §31 now carry a caveat. Batch 16
+> does reach its cap: 16 resident at every load, at the cap 2–4% of the time
+> at load 1.0 and 51–80% at load 3.0 (sealed maps). "KV-bound" holds at
+> operating load, not in overload. Every later map records residents.
+>
+> **Earlier status (2026-10-08):** fixed in code; old labels not yet
+> re-derived. FINDINGS §29–31 report "CAP-NEVER-BINDS", "at cap" and
+> "(KV-bound)" from the wrong counter.
 
 `max_batch` caps **resident** requests across both models (`len(self.running)`
 in `Engine._admit_loop`). The cell flags and the "at cap" column were built

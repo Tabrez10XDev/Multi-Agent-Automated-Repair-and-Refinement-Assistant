@@ -3,18 +3,32 @@
 A workflow-aware controller for LLM serving, and the multi-agent coding
 assistant used to generate a realistic workload for it.
 
-The serving question: an LLM server holds a KV cache it cannot fit everything
-in. When a request finishes, do you **keep** its prefix in case the workflow
-comes back to it, or **evict** it and recompute later? Keeping costs memory
-that other requests need now; evicting costs prefill time later. That is
-rent-or-buy, so the controller here is built on ski-rental:
+The serving question: agent workflows make many dependent LLM calls, so the
+server's decisions about **which waiting request runs next** and **which KV
+prefixes to keep** could shape end-to-end task latency. The project tests two
+textbook mechanisms against simple baselines, in a trace-driven
+continuous-batching simulator:
 
-1. **KV retention** — ski-rental, deterministic and learning-augmented, with
+1. **KV retention**: ski-rental, deterministic and learning-augmented, with
    rent derived from what an eviction actually costs its victim rather than
    from a tuned constant.
-2. **Scheduling** — least-slack-first over the workflow DAG, with an
-   output-length estimator, since a request's deadline depends on what is
-   waiting downstream of it.
+2. **Scheduling**: least-slack-first (LSF) over the workflow DAG, with an
+   output-length estimator.
+
+**What came out** (detail in `docs/FINDINGS.md`):
+- **The result that holds is program-level ordering.** `program-fcfs` runs
+  the oldest *workflow's* requests first. On a sealed test set it cuts p95
+  task latency against request-level FCFS by 17–36% at batch 2–4 at load
+  1.0, and by up to 40% in overload. It is never worse in 80 cells, and its
+  gain fades by batch 16 (§33).
+- **Both textbook mechanisms are negative results.** LSF never beats
+  `program-fcfs`, even with oracle output lengths, and neither does SJF
+  (§33). Ski-rental never beats keep-all: at MAARA's 1x context recompute is
+  under 1% of makespan, and at 8x it recomputes more for no gain (§24, §35).
+- **These conclusions hold across batching costs from 0.03 to 0.841,** on
+  measured Mac costs and on a simulated RTX 5060 Ti. The simulated GPU uses
+  measured G1 rates plus public batching data, and is a sensitivity analysis,
+  not a GPU measurement (§36–38).
 
 The workload is **MAARA**, a five-role repair pipeline (issue parser →
 evaluator → retriever → coder → test runner/debugger) running HumanEval tasks
@@ -57,7 +71,7 @@ three that call a live model require `CONFIRM=1`, because starting one by
 accident costs hours.
 
 ```bash
-make test          # full test suite (333 tests, ~2-3 min)
+make test          # full test suite (~400 tests, ~2-3 min)
 make analyze       # trace stats + figures for both trace sets
 make pass-at-1     # pass@1 per configuration from the committed outcomes
 make grid          # retention x scheduler grid (quick mode)
@@ -88,7 +102,7 @@ Direct invocation works too, and every module takes `--help`:
 | How does one run flow end to end? | `docs/TOUR.md` |
 | What is being worked on now, and what is next? | `docs/ROADMAP.md` |
 
-Headline results, with detail and caveats in `docs/FINDINGS.md`:
+Earlier workload results, with detail and caveats in `docs/FINDINGS.md`:
 
 - The reusable prefix at HumanEval scale is **small** — median 4 tokens, 13.7%
   of prompt tokens. A further ~24% of prompt tokens are repeated but
@@ -158,8 +172,10 @@ See `docs/OPEN_ISSUES.md` for the full list. The two that bite soonest:
   held-out testing (`docs/DECISIONS.md` §19). Held-out hit recall is 81% and
   80% (`docs/FINDINGS.md` §22), with every miss in `issue_parser`
   (`docs/OPEN_ISSUES.md` §24). Quote accuracy per role.
-- **Every result is a Mac + Ollama + Metal result.** Nothing has been measured
-  on the target RTX 5060 Ti 16 GB (`docs/DECISIONS.md` §29, `docs/GPU_TODO.md`).
+- **Every measured cost is a Mac + Ollama + Metal cost**, except the RTX 5060 Ti's
+  G1 prefill/decode rates. The card failed (Xid 79) before its batching
+  coefficient could be measured, so GPU results are simulated
+  (`docs/DECISIONS.md` §34, `docs/GPU_TODO.md`).
 - **The committed traces were collected without an output limit.** One
   `issue_parser` call in the sealed `final_qwen` trace generated 40,960 tokens
   over 26 minutes; that task is excluded from the simulator runs on that set

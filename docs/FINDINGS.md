@@ -1204,6 +1204,15 @@ as a holdout figure. Across all four unseen traces the rate is 310/2424 =
 
 ## 29. Scheduling regime map: ordering matters once requests queue, and the gain is task order, not slack
 
+> **Label caveat (2026-10-23, OPEN_ISSUES §28).** The "cap never binds",
+> "at cap" and "(KV-bound)" labels in this section came from the active-batch
+> counter, not the resident count the cap is enforced on, and this map predates
+> the resident metrics, so they can't be re-derived from it. Latency and miss
+> numbers are unaffected. The sealed maps (§33), which do record residents, show
+> batch 16 reaching 16 resident at every load. At load 1.0 it sits at the cap
+> only 2–4% of the time, rising to 51–80% at load 3.0. So "KV-bound" holds
+> at operating load, but not in overload.
+
 The question FINDINGS §27 could not answer from one operating point: is
 there **any** load and concurrency where a scheduling rule beats FCFS?
 
@@ -1431,6 +1440,18 @@ priority hints (Dynamo-style) improve on it.
 
 ## 31. What-if: efficient batching (0.15, HYPOTHETICAL)
 
+> **Label caveat (2026-10-23, OPEN_ISSUES §28).** The "cap never binds",
+> "at cap" and "(KV-bound)" labels in this section came from the active-batch
+> counter, not the resident count the cap is enforced on, and this map predates
+> the resident metrics, so they can't be re-derived from it. Latency and miss
+> numbers are unaffected. The sealed maps (§33), which do record residents, show
+> batch 16 reaching 16 resident at every load. At load 1.0 it sits at the cap
+> only 2–4% of the time, rising to 51–80% at load 3.0. At 0.15 (§36's
+> capacity-axis map, which records residents) it is at the cap 3% of the time
+> at load 1.0 and 46% at load 2.0. So "the cap never binds at batch 16" is
+> wrong in overload. The conclusion that the scheduler has little choice
+> still holds: it has a choice at 1% of decisions at load 1.0.
+
 **This is not a GPU measurement.** The question: §30's verdict could be an
 artefact of the Mac's nearly serial batching (coefficient 0.841, DECISIONS
 §28). Under vLLM-class batching, does LSF start to beat `program-fcfs`? The
@@ -1580,6 +1601,14 @@ latency (paired 95% CI over 20 seeds), by batch 2 / 4 / 8 / 16:
 **Verdict:** program-level ordering is the result; slack-based ordering is a
 negative result, out of sample, on two coder models. Mac costs only; on GPU
 costs, see DECISIONS §33.
+
+**Addendum (2026-10-23): SJF, not reported above.** In the same two sealed
+maps, SJF (shortest estimated remaining task work first) is never
+significantly better than `program-fcfs` on p95: 0 better / 33 worse / 7
+tied (qwen) and 0 / 35 / 5 (llama), so 0 / 68 / 12 over 80 cells. It is
++5% to +34% worse at batch 2–4, and the ties are at batch 8–16 under light
+load. A size-based rule loses to task age as LSF does. The 80 cells share
+traces and seeds, so they show consistency, not 80 independent tests.
 
 ## 34. Concurrency cap (pre-registered S3): helps at batch 8–16, costs ~5% in overload at batch 4
 
@@ -1857,6 +1886,10 @@ Scored:
 - **H3 (extended) held.** 0 batch-16 better cells at 0.03, against 0 at 0.15.
 - **H4 held.** Recompute 0.1% of makespan; ski-rental not better than
   keep-all.
+
+This is a sensitivity analysis inside the simulator's own batching law,
+with costs taken from other models and cards (DECISIONS §34). It is not GPU
+evidence.
 
 **Verdict:** with the GPU simulated at its closest public-data costs, the
 Milestone 2 conclusions stand from c = 0.03 to 0.841. On GPU rates,
