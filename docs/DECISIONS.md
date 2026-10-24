@@ -232,8 +232,14 @@ before touching the engine.
     surviving block is re-pinned, not re-created: prefill still recomputes it
     (as vLLM does), but it needs no new bytes and is protected from eviction
     by the request that is about to use it. `tests/simulator/test_kv_accounting.py`
-    recounts the live entries at every rent tick. Results computed before the
-    fix: see OPEN_ISSUES (retention findings re-checked there).
+    recounts the live entries at every rent tick. **Re-check, set before
+    running, development set only** (the sealed set is not rerun without the
+    owner's decision): FINDINGS §24's point (`sweep_decode_coeff --coeffs
+    0.841 --seeds 20`, its four retention policies), §35's 8x headroom grid,
+    and §40's S1 map, each with its original flags, to `results/bugfix_check/`.
+    A finding stands if every stated direction and significance verdict
+    reproduces; anything else is reported as changed in FINDINGS and
+    OPEN_ISSUES.
 
 ---
 
