@@ -220,6 +220,20 @@ before touching the engine.
     missing or non-integer score falls back to `DEFAULT_SCORE`. Prompts are
     unchanged, so traces collected before and after stay comparable. Do not
     reintroduce an unguarded index into model output anywhere in `maara/`.
+11. **Surviving blocks were re-created, leaking KV** (found 2026-10-24 while
+    profiling TraceLab runs). A prefix match stops at the first missing block,
+    but a later block of the same chain can survive eviction. `_try_admit`
+    created a fresh entry for every key past the match, overwriting a live
+    one without releasing its bytes, so `_entry_bytes`, `_evictable_bytes` and
+    `_evictable_n` drifted up for the rest of the run: phantom KV use that
+    forced extra evictions. On `holdout_qwen` at 512 MB, batch 4, ski-rental
+    ended 22 entries over (335 counted, 313 live); TraceLab dev 258 over. No
+    held block was ever overwritten, so refcounts were not corrupted. Now a
+    surviving block is re-pinned, not re-created: prefill still recomputes it
+    (as vLLM does), but it needs no new bytes and is protected from eviction
+    by the request that is about to use it. `tests/simulator/test_kv_accounting.py`
+    recounts the live entries at every rent tick. Results computed before the
+    fix: see OPEN_ISSUES (retention findings re-checked there).
 
 ---
 
@@ -1267,3 +1281,28 @@ same quantity on the sealed split under E1's configuration (batch 4, c = 0.3),
 computed before any policy run; it depends on no policy. LSF-oracle needs an
 oracle estimator for the public source: it reads the recorded rounds left in
 the turn, the counterpart of the MAARA oracle's true output lengths.
+
+*Amendment 2026-10-24, before any TraceLab policy run (adapter commit
+`fece185`):*
+- **Plumbing check, rescored.** Summed over all rounds as written, simulated
+  hits were 7,816,262 tokens against 9,476,653 recorded (ratio 0.825, outside
+  ±15%). The gap is the first round of each turn: its recorded prefix is
+  history from the session's earlier turns (2.04M tokens, 21.5%), and no
+  sampled turn's predecessor is in the 80-turn sample, so it cannot be hit by
+  construction. Over non-first rounds the ratio is 1.043 (7.76M vs 7.44M), a
+  pass. The check is scored over non-first rounds; both numbers are reported.
+  The adapter was not changed. Consequence, reported as a threat: **KV reuse
+  across a human's turns is not modelled**; each turn's first round
+  recomputes its history, so retention results understate reuse.
+- **Engine bug fixed before any run** (§8 item 11), plus a speed fix: the
+  derived-rent tick rebuilt the full evictable list every iteration only to
+  test whether it was empty; it now reads the (now exact) counter. Golden
+  check: 15 configurations on MAARA and TraceLab produced identical reports
+  except where the leak itself acted.
+- **Runtime rule re-timed** on the fixed engine before applying it; the
+  pre-fix probe projected about 14 h per map.
+- **E3 corrected.** Headroom mode sizes the budget from the working set and
+  cannot hold it at 8,192 MB, so E3 is the driver's grid mode:
+  `run_retention_grid --trace-set tracelab_sealed --kv-mb 8192 --scales 1
+  --batch 8 --seeds 20 --profile gpu_5060ti_public` (utils 0.6 and 0.8, all
+  six retention policies). G4 is scored at util 0.8.

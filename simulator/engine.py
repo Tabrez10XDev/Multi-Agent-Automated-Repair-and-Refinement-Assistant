@@ -676,7 +676,13 @@ class Engine:
         # Generated tokens are not part of the prompt chain but still need KV.
         output_bytes = self.cost.kv_bytes(
             r.model, self.cfg.blocks_for(node.output_tokens))
-        need = len(new_keys) * block_bytes + output_bytes
+        # A block past the match can still be cached: an earlier block of the
+        # chain was evicted and a later one survived. Prefill recomputes it, as
+        # vLLM does, but its KV already exists, so it is re-pinned rather than
+        # re-created and needs no new bytes. Re-creating it overwrote the live
+        # entry and leaked its bytes from the budget (DECISIONS 37 amendment).
+        absent = lambda keys: sum(1 for k in keys if k not in self.entries)  # noqa: E731
+        need = absent(new_keys) * block_bytes + output_bytes
 
         # Check the WORST case, not the current one. With some blocks already
         # cached a request can look admissible, then become permanently
@@ -691,7 +697,10 @@ class Engine:
                 f"budget is {self.cfg.kv_budget_mb:.0f}MB. Raise kv_budget_mb.")
 
         if need > self.free_bytes:
-            held = set(chain[:matched])
+            # Every cached block of this chain is protected, not only the
+            # matched ones: evicting a surviving block past the match would
+            # only make this request create it again.
+            held = set(chain)
             candidates = [e for e in self.entries.values()
                           if e.evictable and e.key not in held]
             victims = self.retention.choose_victims(
@@ -719,7 +728,7 @@ class Engine:
                 matched = self._match_blocks(r)
                 matched_tokens = min(matched * bt, node.prompt_tokens)
                 new_keys = chain[matched:]
-                need = len(new_keys) * block_bytes + output_bytes
+                need = absent(new_keys) * block_bytes + output_bytes
 
             for v in ():
                 # Test against live free space only. An earlier version also
@@ -760,6 +769,8 @@ class Engine:
                 self._key_uses.setdefault(k, []).append(self.now)
                 self._key_nbytes[k] = block_bytes
         for k in new_keys:
+            if k in self.entries:
+                continue                  # surviving block: pinned below, see `absent`
             self.entries[k] = KVEntry(
                 key=k, model=r.model, tokens=bt, nbytes=block_bytes,
                 created=self.now, last_used=self.now,
@@ -1043,10 +1054,16 @@ class Engine:
         else:
             if pressure is None:
                 pressure = self._under_pressure()
-            if evictable is None:
+            # The lazy clock keeps _evictable_n current, so it only needs the
+            # count here. Rebuilding the list every iteration was O(resident
+            # entries) per tick and most of the run time on 32k-token contexts
+            # (DECISIONS 37); the sweep variant builds its own list anyway.
+            if evictable is None and self._rent_impl == "sweep":
                 evictable = [e for e in self.entries.values() if e.evictable]
+            any_evictable = (bool(evictable) if evictable is not None
+                             else self._evictable_n > 0)
             self.m["rent_ticks"] += 1
-            if pressure and evictable:
+            if pressure and any_evictable:
                 self.m["rent_active_ticks"] += 1
             self._accrue_derived_rent(dt, pressure, evictable)
 
