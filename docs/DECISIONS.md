@@ -1351,3 +1351,32 @@ cut for time, not in response to any result:
   reported as not done.
 - **E1, E3 and G2's CV** are unchanged, and the freeze commit still comes
   between D1 and E1.
+
+*Amendment 2026-10-25, owner's decision after D1 (`87f952b`, 5 seeds, dev
+only), before the freeze and before any sealed file is opened.* Cuts for
+time, each justified by D1's structure, not by which policy won:
+- **Batch 16 dropped.** At 8,192 MB the KV budget holds at most 6 requests
+  (max_resident 6), so D1's batch-8 and batch-16 cells were identical seed
+  for seed; counting both would double-count 10 cells. E1 runs `--batches 2
+  4 8`: 30 cells. **G1 is rescaled** to better in at least 15 of 30 and worse
+  in at most 2, on p95 latency and on p95 slowdown. G2 (3 cells) and G3
+  (at most 2 cells) are unchanged.
+- **E1 runs only the scored policies:** `--policies plas lsf edf` (fcfs and
+  program-fcfs are always kept). `program-fcfs-cap` and `-qcap` were
+  identical to `program-fcfs` in all 40 D1 cells (the cap never binds);
+  SJF and LSF-oracle are exploratory. All four are reported as dev-only.
+  `--policies` is new in this commit; golden check: a `--quick` map with
+  the subset gives values identical to the full map for every kept policy.
+- **E1 and E3 run at the same time** (E3's grid mode is serial; one
+  ski-rental run took 129 s on dev). Results are deterministic, so this
+  affects only wall time. E1: `scheduling_map --trace-set tracelab_sealed
+  --load-axis capacity --kv-mb 8192 --retention lru --batches 2 4 8
+  --policies plas lsf edf --seeds 20 --slo-mix
+  tight:1.0:0.3,standard:2.0:0.4,loose:4.0:0.3 --deadline-basis task
+  --profile gpu_5060ti_public --workers 8`. E3 as amended above.
+- D1 at 5 seeds, for the record (development, not scored): `program-fcfs`
+  vs FCFS 4 better / 0 worse / 36 tied on p95 latency, 1 / 3 / 36 on p95
+  slowdown; on p95 slowdown PLAS was better in 3 cells, LSF and EDF in 6.
+
+**This commit is the TraceLab policy freeze.** E1, E3 and G2's CV run with
+`MAARA_POLICIES_FROZEN` set to its hash, which a later amendment records.

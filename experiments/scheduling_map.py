@@ -195,6 +195,9 @@ def main():
                          "throughput at each batch cap (OPEN_ISSUES 30)")
     ap.add_argument("--quick", action="store_true",
                     help="3 seeds, loads util 0.8 and 2.2x only, batch 8")
+    ap.add_argument("--policies", nargs="+", default=None,
+                    help="run only these policy labels (both baselines, fcfs and "
+                         "program-fcfs, are always kept); default: all")
     ap.add_argument("--out", default=os.path.join(_REPO, "results", "scheduling_map.json"))
     ap.add_argument("--profile", default=DEFAULT_PROFILE, choices=sorted(PROFILES),
                     help="hardware profile the cost model is built from "
@@ -212,6 +215,12 @@ def main():
     # TraceLab) are skipped here, before any calibration, and recorded below.
     excluded = sorted(get_source(args.trace_set).excluded_policies)
     policies = [p for p in POLICIES if p[2] not in excluded]
+    if args.policies:
+        unknown = set(args.policies) - {p[2] for p in POLICIES}
+        if unknown:
+            ap.error(f"unknown policies: {sorted(unknown)}")
+        keep = set(args.policies) | set(BASELINES)
+        policies = [p for p in policies if p[2] in keep]
     slo = parse_slo(args.slo_mix)
     utils, multiples, batches = CALIBRATED_UTILS, OVERLOAD_MULTIPLES, args.batches
     seeds = list(range(1, args.seeds + 1))
@@ -447,6 +456,8 @@ def summarise(batches):
                         "program-fcfs-cap", "program-fcfs-qcap"):
                 if pol == "program-fcfs" and tag == "program":
                     continue
+                if not any(pol in c["policies"] for c in b["cells"]):
+                    continue            # not run (excluded or --policies)
                 first = None
                 for c in sorted(b["cells"], key=lambda c: c["load"]):
                     row = c["policies"].get(pol, {})

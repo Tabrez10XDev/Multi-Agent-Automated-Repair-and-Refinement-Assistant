@@ -317,3 +317,11 @@ def test_heavier_load_gives_the_scheduler_more_choice():
                  estimator=est)
     heavy = eng.run()
     assert heavy["frac_decisions_with_choice"] > light["frac_decisions_with_choice"]
+
+
+def test_scheduling_map_rejects_unknown_policy_before_calibration():
+    import subprocess, sys
+    r = subprocess.run([sys.executable, "-m", "experiments.scheduling_map", "--quick",
+                        "--policies", "no-such-policy"], capture_output=True, text=True,
+                       timeout=60)
+    assert r.returncode == 2 and "unknown policies" in r.stderr
