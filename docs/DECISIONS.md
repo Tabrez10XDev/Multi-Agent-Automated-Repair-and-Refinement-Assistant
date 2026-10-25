@@ -249,6 +249,18 @@ before touching the engine.
     `results/sealed/retention_headroom_final_qwen_fixed.json`. It is a
     correction of a measurement bug, not a new test: the pre-fix file is kept
     and both are reported, with R1 rescored on the fixed run.
+12. **The lone-replay memo filled memory** (found 2026-10-25, D1 at 16.5 h
+    with 15 of 40 cells done). `_ISOLATED_CACHE` keyed on the full repr of
+    every node. TraceLab nodes carry up to 2,048 block keys and
+    arrival-dependent reuse annotations, so each seed and load added about
+    28 MB of new keys per task set and nothing was ever hit; each of 8
+    workers reached about 5 GB, swap reached 31.8 of 32 GB, and the map
+    slowed as it thrashed. Results were not affected (the memo stores only
+    the replay's answer), but the run would not finish. The key is now a
+    SHA-256 digest of the same text, so the memo answers exactly as before
+    in about 100 bytes per entry. `tests/simulator/test_slowdown.py` checks
+    that keys are 32-byte digests and that a repeat run hits without growth.
+    Do not key a per-process cache on unbounded reprs.
 
 ---
 
@@ -1325,3 +1337,17 @@ the turn, the counterpart of the MAARA oracle's true output lengths.
   tasks/s; the FCFS cell at batch 4, load 1.0, seed 1 took 9.8 s, so a map
   projects to 7,200 × 9.8 s / 8 workers = 2.46 h plus about 0.4 h of
   calibration, under 3 h. **N stays 80.**
+
+*Amendment 2026-10-25, owner's decision, before any sealed TraceLab run (no
+freeze commit yet, no sealed file opened):* the first D1 was stopped after
+16.5 h by the memo bug (§8 item 12). The development output seen: batch 2
+complete and batch 4 loads 0.5–0.9, D1 only; nothing from D2 or the sealed
+split. On the fixed code the full plan projects to about 2 days, so scope is
+cut for time, not in response to any result:
+- **D1** is rerun with `--seeds 5` (otherwise unchanged), as a development
+  and timing check. **D2 is dropped.**
+- **E2 is dropped.** G1–G3 are scored on **E1 alone**, with the thresholds
+  as written (they were already per map). The c = 0.03 public run is
+  reported as not done.
+- **E1, E3 and G2's CV** are unchanged, and the freeze commit still comes
+  between D1 and E1.

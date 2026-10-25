@@ -32,6 +32,7 @@ rent_model="blocking".
 from __future__ import annotations
 
 import argparse
+import hashlib
 import heapq
 import math
 import random
@@ -287,8 +288,10 @@ class Request:
 # Engine
 # --------------------------------------------------------------------------
 
-# Engine._isolated_service_s results, per process. Bounded by tasks x distinct
-# run configs, which is small for any map.
+# Engine._isolated_service_s results, per process, keyed by a 32-byte digest.
+# Node reprs carry arrival-dependent reuse annotations, so a map adds entries
+# per seed and load; the full repr as key held ~28 MB per TraceLab task set
+# and filled swap (DECISIONS 8 item 12). A digest keeps each entry ~100 bytes.
 _ISOLATED_CACHE = {}
 
 
@@ -1347,8 +1350,12 @@ class Engine:
         # the seed's arrival times or the policy, so a map would otherwise
         # replay every task once per seed per policy. Keyed on everything the
         # replay reads; arrival_time and task_id are reset below, so excluded.
-        key = (repr(self.cost), repr(cfg),
-               tuple(repr(replace(n, task_id=0)) for n in task.nodes))
+        h = hashlib.sha256()
+        for part in (repr(self.cost), repr(cfg),
+                     *(repr(replace(n, task_id=0)) for n in task.nodes)):
+            h.update(part.encode())
+            h.update(b"\0")
+        key = h.digest()
         hit = _ISOLATED_CACHE.get(key)
         if hit is not None:
             return hit

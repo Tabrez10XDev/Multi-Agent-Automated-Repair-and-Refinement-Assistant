@@ -53,3 +53,16 @@ def test_slowdown_is_not_on_the_policy_view_and_is_deterministic():
     _, a = _run(10, 0.05)
     _, b = _run(10, 0.05)
     assert repr(a) == repr(b)      # repr: the report holds NaNs, which never compare equal
+
+
+def test_isolated_cache_keys_are_fixed_size_digests():
+    # The memo once keyed on full node reprs: ~28 MB per TraceLab task set,
+    # added per seed and load, which filled swap mid-map (DECISIONS 8 item 12).
+    from simulator import engine as engine_mod
+    engine_mod._ISOLATED_CACHE.clear()
+    _, first = _run(6, 0.05)
+    keys = list(engine_mod._ISOLATED_CACHE)
+    assert keys and all(isinstance(k, bytes) and len(k) == 32 for k in keys)
+    _, again = _run(6, 0.05)                 # all hits: same answer, no growth
+    assert len(engine_mod._ISOLATED_CACHE) == len(keys)
+    assert again["p95_slowdown"] == first["p95_slowdown"]
