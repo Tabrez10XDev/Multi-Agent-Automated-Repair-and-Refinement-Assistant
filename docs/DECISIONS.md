@@ -240,6 +240,15 @@ before touching the engine.
     A finding stands if every stated direction and significance verdict
     reproduces; anything else is reported as changed in FINDINGS and
     OPEN_ISSUES.
+    **Sealed correction rerun, approved by the owner 2026-10-24:** the 1x
+    retention run of §31 (run 2) is rerun once on the fixed engine with its
+    original command (`results/sealed/run_sealed.sh`, line 9:
+    `run_retention_grid --trace-set final_qwen --scales 1 --headrooms
+    0.25,0.5,1.0 --util 0.8 --batch 4 --seeds 20`) under the same freeze
+    (`MAARA_POLICIES_FROZEN=f4c889b`; no policy has changed since), to
+    `results/sealed/retention_headroom_final_qwen_fixed.json`. It is a
+    correction of a measurement bug, not a new test: the pre-fix file is kept
+    and both are reported, with R1 rescored on the fixed run.
 
 ---
 
