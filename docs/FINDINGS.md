@@ -47,7 +47,7 @@ measurements and are unaffected.
 | 31. What-if: efficient batching | *sim*, what-if 0.15, not measured | HYPOTHETICAL coefficient 0.15. LSF still never beats `program-fcfs` on p95 (0 of 40 cells; worse in 22). Its tight-class gains (up to 14 points at batch 2) are paid for by the loose class. At batch 8–16 the scheduler rarely has a choice (cap-binding labels qualified by OPEN_ISSUES §28). Verdict: freeze `program-fcfs`. Deadlines were recalibrated to a fixed FCFS miss rate. |
 | 32. Sealed `final_qwen`, partial | current, *sim*, 0.841, **out of sample**, 5 of 40 cells | On 91 unseen tasks at batch 2, `program-fcfs` cuts p95 by 14-33% against FCFS in all 5 cells (loads 0.71-1.15), and LSF is significantly worse than `program-fcfs` in all 5 (+18 to +57 s). Pre-registered S1 and S2 hold; S3 untestable at batch 2. Batches 4-16 not yet run. |
 | 35. Retention at 8x; sealed 1x contrast | **corrected 2026-10-25** on the fixed engine (DECISIONS §8 item 11) | 8x holdout: evict-now +222/+235/+241 s p95 (significant); ski-rental ties keep-all on p95 (was significantly worse at two budgets) and recomputes more. Sealed 1x rerun: ski-rental ties keep-all on p95 and recomputes +4.1 to +6.7 s more; **R1 fails in 1 of 6 p95 cells** (`ski-rental-pred` −11.2 s at headroom 0.25). Both versions are in §35. |
-| 41. TraceLab public workload | development only (D1, 5 seeds); sealed E1/E3 pending | `program-fcfs` vs FCFS 4 better / 0 worse / 36 tied on p95. Batch 8 ≡ batch 16 (KV caps concurrency at 6). Sealed size CV 1.53, so G2 applies. |
+| 41. TraceLab public workload | sealed E1 scored (20 seeds); E3 (G4) pending; D1 is development | **G1 fails**: `program-fcfs` beats FCFS on p95 latency in 12 of 30 cells (needed 15) and is worse on p95 slowdown in 12. **G2 holds** (PLAS better on slowdown in 17). **G3 holds** (LSF, EDF better on latency in 0). Heavy tail (CV 1.53) reverses the ranking on slowdown. Batch 8 ≡ batch 16. |
 
 ---
 
@@ -2080,12 +2080,11 @@ ordering rule beats it in any of the 120 cells here. The cap variants are
 `program-fcfs` plus a concurrency limit, and are covered in §39. The headline's comparison set is now
 FCFS, SJF, EDF, LSF (online and oracle), the hint-priority rule and PLAS.
 
-## 41. TraceLab public workload: development map D1 (sealed E1/E3 pending)
+## 41. TraceLab public workload: D1 development map, sealed E1 (G1–G3); E3 pending
 
 > **Development result (2026-10-25), not scored.** DECISIONS §37 and its
 > amendments. The pre-registered hypotheses G1–G4 are scored only on the
-> sealed maps E1 and E3, which are running at freeze `9297ff0`; this section
-> gets a "Sealed" part when they finish. Nothing below may be quoted as a
+> sealed maps E1 and E3, run at freeze `9297ff0` ("Sealed" parts below). Nothing below may be quoted as a
 > test of G1–G4.
 
 **Workload.** TraceLab v0.0.2 (uw-syfi/TraceLab, CC BY 4.0): real Claude
@@ -2148,4 +2147,63 @@ in p95 (% of FCFS p95; * significant), loads 0.5 / 0.6 / 0.7 / 0.8 / 0.9 /
    975.8 s; population SD, as for the sealed figure). Figure 7 (c) draws the
    dev distribution against MAARA's.
 
-**Sealed (E1, E3): pending.**
+### Sealed E1: G1–G3 scored (2026-10-26)
+
+**Setup.** As D1 but `--trace-set tracelab_sealed --batches 2 4 8
+--policies plas lsf edf --seeds 20`, `MAARA_POLICIES_FROZEN=9297ff0`, at
+`5deff32`, clean tree, 47,652 s. Output
+`results/tracelab/E1_sealed_c0.3.{json,log}`. 30 cells, 20 seeds each.
+Counts below are from the per-seed values via `paired_ci`; the p95-latency
+counts equal the driver's stored `p95_vs_*` intervals cell for cell.
+
+Cells better / worse / tied, p95 task latency | p95 slowdown:
+
+| comparison | batch 2 | batch 4 | batch 8 | of 30 |
+|---|---|---|---|---|
+| `program-fcfs` vs FCFS | 6/0/4 \| 0/2/8 | 3/0/7 \| 0/5/5 | 3/0/7 \| 0/5/5 | **12/0/18 \| 0/12/18** |
+| PLAS vs `program-fcfs` | 0/5/5 \| 7/0/3 | 0/3/7 \| 5/0/5 | 0/4/6 \| 5/0/5 | 0/12/18 \| **17/0/13** |
+| LSF vs `program-fcfs` | 0/3/7 \| 8/0/2 | 0/0/10 \| 5/0/5 | 0/1/9 \| 5/0/5 | **0/4/26** \| 18/0/12 |
+| EDF vs `program-fcfs` | 0/5/5 \| 8/0/2 | 0/1/9 \| 5/0/5 | 0/1/9 \| 5/0/5 | **0/7/23** \| 18/0/12 |
+
+- **G1 fails.** `program-fcfs` beats FCFS on p95 latency in 12 of 30 cells
+  (needed 15) and is never worse, but on p95 slowdown it is better in 0
+  and **worse in 12**. "Generalizes" is not claimed (DECISIONS §37).
+- **G2 holds.** PLAS beats `program-fcfs` on p95 slowdown in 17 cells
+  (needed 3). Reported without a prediction: it is worse on p95 latency in
+  12.
+- **G3 holds.** LSF and EDF beat `program-fcfs` on p95 latency in 0 cells
+  each (at most 2 allowed). Both are worse in some (LSF 4, EDF 7).
+
+`program-fcfs` vs FCFS, change (% of FCFS; * significant), loads 0.5 / 0.6
+/ 0.7 / 0.8 / 0.9 / 1.0 / 1.1 / 1.25 / 1.5 / 2.0:
+
+| batch | p95 latency | p95 slowdown |
+|---|---|---|
+| 2 | −0, −1, −1, −4, −15*, −29*, −39*, −59*, −71*, −72* | −6, −11, −3, +3, −2, +3, +7, +6, +22*, +77* |
+| 4 | −0, −0, −1, +2, −2, −3, +6, −15*, −21*, −14* | −1, +1, +8, +37, +116, +163*, +339*, +527*, +657*, +638* |
+| 8 | −0, −1, −0, +3, −1, −5, +7, −13*, −17*, −12* | −0, −1, +22, +61, +153, +192*, +416*, +626*, +779*, +690* |
+
+On p95 slowdown against `program-fcfs`, from load 1.0 up, PLAS is −54% to
+−92%, LSF −49% to −83% and EDF −59% to −86%, all significant.
+
+5. **The MAARA headline holds for latency only.** Grouping a program's
+   rounds cuts the p95 latency tail on real agent turns (−12% to −72% in
+   overload), as on MAARA, but in fewer cells than G1 required, and only
+   from load 0.9 (batch 2) or 1.25 (batches 4 and 8).
+6. **On slowdown the ranking reverses.** With a heavy tail (CV 1.53),
+   short turns wait behind a long turn whose rounds are kept together (the
+   likely mechanism; not isolated here):
+   `program-fcfs` multiplies p95 slowdown by up to 8.8 in overload, and
+   every size- or deadline-aware rule undoes most of that. On MAARA (CV
+   0.61) PLAS, LSF and EDF lost to `program-fcfs` in 23–30 of 40 cells on
+   latency; here they lose in 4–12 of 30 on latency and win in 17–18 on
+   slowdown. Which rule is "best" depends on the metric once task sizes
+   are heavy-tailed, which is the G2 prediction.
+7. **Bounds.** One public trace at one model's rates, simulated GPU costs
+   (c = 0.3), 80 turns, Poisson re-timing, no inter-turn KV reuse
+   (OPEN_ISSUES §33), task-basis deadlines.
+
+### Sealed E3: G4 pending
+
+The first E3 attempt was stopped in calibration (DECISIONS §37 amendment
+2026-10-26); the rerun started at 09:15 on 2026-10-26 at `45632a0`.

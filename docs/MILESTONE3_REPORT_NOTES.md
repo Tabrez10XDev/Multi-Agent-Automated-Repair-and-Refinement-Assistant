@@ -45,7 +45,7 @@ Hypothesis scorecard (all pre-registered and committed before the runs):
 - **Q1** failed; **Q2** held; **Q3** held in 2 of 3 runs (DECISIONS §35).
 - **P1** held; **P2** failed; **T1** and **T2** held (DECISIONS §36).
 - **R1** (DECISIONS §31) held pre-fix; on the fixed-engine rerun it **failed in 1 of 6** p95 cells (FINDINGS §35).
-- **G1–G4** (TraceLab, DECISIONS §37): pending the sealed runs E1/E3 (FINDINGS §41).
+- **G1–G3** (TraceLab sealed E1, DECISIONS §37, FINDINGS §41): **G1 failed** (program-fcfs better on p95 latency in 12 of 30, needed 15; worse on p95 slowdown in 12). **G2 held** (PLAS better on slowdown in 17). **G3 held** (LSF, EDF better on latency in 0). **G4** pending E3.
 
 ## 3. Method points the report must state
 
@@ -61,7 +61,7 @@ Hypothesis scorecard (all pre-registered and committed before the runs):
 
 1. **Seeds vary arrival times, not tasks.** The 20 seeds re-time a fixed set of traces; task content is the same.
 2. **Arrivals are synthetic.** The real runs were sequential. Contention comes from re-timing arrivals as a Poisson process (`simulator/trace_loader.py:load_trace`).
-3. **One workload family.** MAARA on HumanEval. Task sizes vary little (critical-path CV 0.61, §40), which is why PLAS loses. A heavy-tailed workload may rank the rules differently. **Being tested** on TraceLab (real Claude Code/Codex turns, CV 1.53; DECISIONS §37, FINDINGS §41): the development map points the same way with weaker effects; the sealed test E1 is pending. TraceLab carries its own threat: KV reuse across a human's turns is not modelled (OPEN_ISSUES §33).
+3. **One workload family.** MAARA on HumanEval. Task sizes vary little (critical-path CV 0.61, §40), which is why PLAS loses. A heavy-tailed workload may rank the rules differently. **Being tested** on TraceLab (real Claude Code/Codex turns, CV 1.53; DECISIONS §37, FINDINGS §41): on the sealed test E1 the latency headline holds in 12 of 30 cells, short of G1's 15, and on p95 slowdown program-fcfs is worse in 12 while PLAS, LSF and EDF beat it in 17–18. With a heavy tail the best rule depends on the metric. TraceLab carries its own threat: KV reuse across a human's turns is not modelled (OPEN_ISSUES §33).
 4. **Hidden scheduler.** The engine serves one model per iteration (`_choose_active_model`), and no policy controls it (OPEN_ISSUES §28).
 5. **Batching law.** Decode time is 1 + (n−1)c. The GPU results are a sensitivity analysis inside that law, not GPU measurements. G2 was never measured, because the card failed with Xid 79 (DECISIONS §34).
 6. **Correlated cells.** Cells share traces and seeds, and there is no multiple-comparison correction. Cell counts show consistency, not independent confirmations.
@@ -98,4 +98,4 @@ Built 2026-10-24 (figure 4 rebuilt on the fixed engine and figure 7 added 2026-1
 4. **Retention:** recompute and p95 at 1x vs 8x (§24, §35).
 5. **Cap / qcap heatmap:** batch × load, Mac vs GPU (§34, §37, §39).
 6. **Why PLAS loses:** task-size distribution (CV 0.61) next to the p95 gap (§40).
-7. **TraceLab vs MAARA:** program-fcfs vs FCFS by load, rule counts vs program-fcfs, and the two task-size distributions (§41). Drawn from the development map until E1 lands.
+7. **TraceLab vs MAARA:** program-fcfs vs FCFS by load, rule counts vs program-fcfs, and the two task-size distributions (§41). Drawn from the sealed map E1 (20 seeds).
