@@ -1,5 +1,5 @@
 """
-Report-quality figures for Milestone 3 (six PNG + PDF files, plus a printed audit table).
+Report-quality figures for Milestone 3 (seven PNG + PDF files, plus a printed audit table).
 
     ./venv/bin/python -m experiments.plot_m3 [--results results/] [--out results/figures/m3] [--only 1,2]
 
@@ -101,11 +101,13 @@ CAPTIONS = {
         "RTX 5060 Ti rates. This is a sensitivity analysis inside the simulator's batching law, not GPU "
         "measurements. The Mac sweep has no c = 0.03 run."),
     "fig4_retention": (
-        "Figure 4 (FINDINGS 24, 35). Recompute seconds (top) and p95 task latency (bottom) for keep-all, "
-        "ski-rental and evict-now, FCFS scheduler, batch 4, util 0.8. Left: 1x context, holdout_qwen "
-        "(FINDINGS 24, 20 seeds, KV 512 MB). Middle: 1x, sealed final_qwen, three KV headrooms (FINDINGS 35, "
-        "20 seeds). Right: 8x context, holdout_qwen, three headrooms (FINDINGS 35, 10 seeds, simulator-only "
-        "scale). Bars are seed means. Note the different y scales per column."),
+        "Figure 4 (FINDINGS 24, 35; fixed engine, DECISIONS 8 item 11). Recompute seconds (top) and p95 task "
+        "latency (bottom) for keep-all, ski-rental and evict-now, FCFS scheduler, batch 4, util 0.8. All "
+        "numbers are from the engine after the KV-accounting fix (DECISIONS 8 item 11). Left: 1x context, "
+        "holdout_qwen (20 seeds, KV 512 MB). Middle: 1x, sealed final_qwen, three KV headrooms (20 seeds); "
+        "this column is the owner-approved correction rerun, and the pre-fix numbers are kept in FINDINGS 35. "
+        "Right: 8x context, holdout_qwen, three headrooms (10 seeds, simulator-only scale). Bars are seed "
+        "means. Note the different y scales per column."),
     "fig5_cap": (
         "Figure 5 (FINDINGS 34, 37, 39). p95 change against program-fcfs (%), batch x load, for the "
         "concurrency cap (program-fcfs-cap) and the self-lifting cap (program-fcfs-qcap), holdout_qwen, "
@@ -119,6 +121,11 @@ CAPTIONS = {
         "so attained-service ordering has little to exploit. Right: p95 change of PLAS against "
         "program-fcfs at load 1.0, by batch, Mac costs (S1) and simulated GPU (S2), with the paired 95% CI "
         "as % of program-fcfs p95. Open bar = n.s."),
+    "fig7_tracelab": (
+        "Figure 7 (FINDINGS 41). TraceLab (real Claude Code/Codex sessions mapped to the simulator) against "
+        "MAARA, simulated, costs from public data for a 16 GB RTX 5060 Ti (simulated, not measured), c = 0.3, "
+        "capacity load axis = arrival rate / saturation throughput. Caption is completed at run time with the "
+        "TraceLab file used."),
 }
 
 
@@ -411,14 +418,14 @@ def _paired(a, b):
 def fig4(results, out):
     pols = ["keep-all", "ski-rental", "evict-now"]
     cols = []  # (title, [(group label, {pol: (recompute, p95, per_seed_rec, per_seed_p95)})])
-    f24 = _load(results, "finding24_measured.json")
+    f24 = _load(results, "bugfix_check/finding24.json")
     row = next(r for r in f24["rows"] if abs(r["batch_decode_coeff"] - 0.841) < 1e-9)
     ret = row["retention"]
     g = {p: (ret["by_policy"][p]["recompute_seconds"], ret["by_policy"][p]["p95_task_latency_s"],
              ret["per_seed"][p]["recompute_seconds"], ret["per_seed"][p]["p95_task_latency_s"]) for p in pols}
-    cols.append(("1x holdout\n512 MB (§24)", [("", g)]))
-    for title, rel in (("1x sealed final_qwen (§35)", "sealed/retention_headroom_final_qwen.json"),
-                       ("8x holdout_qwen (§35)", "retention_headroom_8x.json")):
+    cols.append(("1x holdout\n512 MB (§24, fixed)", [("", g)]))
+    for title, rel in (("1x sealed final_qwen (§35, fixed)", "sealed/retention_headroom_final_qwen_fixed.json"),
+                       ("8x holdout_qwen (§35, fixed)", "bugfix_check/retention_headroom_8x.json")):
         d = _load(results, rel)
         grp = []
         for c in d["cells"]:
@@ -601,9 +608,213 @@ def fig6(results, out):
     return _save(fig, out, "fig6_plas"), ok
 
 
-FIGS = {1: fig1, 2: fig2, 3: fig3, 4: fig4, 5: fig5, 6: fig6}
+# --- figure 7: TraceLab vs MAARA -------------------------------------------
+
+TRACELAB_E1 = "tracelab/E1_sealed_c0.3.json"
+TRACELAB_D1 = "tracelab/D1_dev_c0.3.json"
+MAARA_S2 = "plas_taskdl/S2_gpu_public.json"
+_FIG7_CAPTION = (
+    "Figure 7 (FINDINGS 41). TraceLab (real Claude Code/Codex sessions, one user turn = a chain of LLM rounds "
+    "and tool nodes) against MAARA (holdout_qwen, 20 seeds, plas_taskdl/S2_gpu_public.json). MAARA runs at "
+    "1,024 MB KV with estimate-basis deadlines, TraceLab at 8,192 MB with task-basis deadlines; the deadline "
+    "basis affects LSF and EDF only. Both are "
+    "simulated with costs from public data for a 16 GB RTX 5060 Ti (simulated, not measured), c = 0.3, "
+    "capacity load axis = arrival rate / saturation throughput. TraceLab file: {rel} ({kind}, {n} seeds). "
+    "(a) p95 change of program-fcfs vs FCFS (filled = CI below zero, open = n.s.); where batch 16 is "
+    "seed-for-seed identical to batch 8 (KV budget caps concurrency) it is drawn but labelled as such. "
+    "(b) Cells where PLAS, LSF, EDF are better/worse/tied vs program-fcfs, paired 95% CI; latency from "
+    "stored CIs, slowdown (TraceLab only) from per-seed paired CIs; identical batch-16 cells are excluded "
+    "from the counts. (c) Task size: MAARA holdout_qwen critical path vs TraceLab development-set "
+    "(tracelab_dev) lone-replay time, always the development set whichever file feeds (a) and (b); "
+    "CV = population std / mean; log x-axis.")
+RULES7 = ("plas", "lsf", "edf")
+
+
+def _dup_batches(data):
+    """{batch: earlier batch it duplicates} when every per-seed p95 of every policy is identical."""
+    dup = {}
+    for b in data["batches"]:
+        for a in data["batches"]:
+            if a["max_batch"] >= b["max_batch"] or a["max_batch"] in dup:
+                continue
+            same = len(a["cells"]) == len(b["cells"]) and all(
+                ca["load"] == cb["load"] and all(
+                    ca["policies"].get(k, {}).get("per_seed", {}).get("p95_task_latency_s")
+                    == v["per_seed"]["p95_task_latency_s"] for k, v in cb["policies"].items())
+                for ca, cb in zip(sorted(a["cells"], key=lambda c: c["load"]),
+                                  sorted(b["cells"], key=lambda c: c["load"])))
+            if same:
+                dup[b["max_batch"]] = a["max_batch"]
+                break
+    return dup
+
+
+def _tracelab_iso():
+    """Lone-replay (isolated service) seconds of every tracelab_dev task; engine call, development data only."""
+    from simulator.engine import Engine, EngineConfig
+    from simulator.workload import CostModel
+    from simulator.workload_sources import resolve_workload
+    cost = CostModel.from_profile("gpu_5060ti_public")
+    tasks = resolve_workload("tracelab_dev", 1, 0.01)
+    eng = Engine(tasks, cost, EngineConfig(kv_budget_mb=8192.0, max_batch=4, prefill_chunk_tokens=512))
+    return [eng._isolated_service_s(t) for t in tasks]
+
+
+def fig7(results, out, tracelab=None):
+    from experiments.common import paired_ci
+    rel = tracelab or (TRACELAB_E1 if os.path.exists(os.path.join(results, TRACELAB_E1)) else TRACELAB_D1)
+    tl, ma = _load(results, rel), _load(results, MAARA_S2)
+    prm = tl["manifest"]["params"]
+    kind = "SEALED, scored" if prm["trace_set"] == "tracelab_sealed" else "DEVELOPMENT, not the scored result"
+    nseed = len(prm["seeds"])
+    print(f"\n== Figure 7: TraceLab vs MAARA ==\nTraceLab file {rel}: {kind}; trace_set {prm['trace_set']}; "
+          f"{nseed} seeds; batches {[b['max_batch'] for b in tl['batches']]}")
+    print(f"MAARA file {MAARA_S2}: {len(ma['manifest']['params']['seeds'])} seeds")
+    runs = [(f"MAARA holdout_qwen ({len(ma['manifest']['params']['seeds'])} seeds)", ma),
+            (f"TraceLab {'sealed' if prm['trace_set'] == 'tracelab_sealed' else 'dev'} ({nseed} seeds)", tl)]
+    dups = {id(d): _dup_batches(d) for _, d in runs}
+    fig = plt.figure(figsize=(6.8, 6.2), facecolor=SURFACE)
+    gs = fig.add_gridspec(2, 2, height_ratios=[1, 1], hspace=0.5, wspace=0.28)
+    # (a)
+    axes = [fig.add_subplot(gs[0, 0])]
+    axes.append(fig.add_subplot(gs[0, 1], sharey=axes[0]))
+    print("(a) program-fcfs vs FCFS, p95 change (% of FCFS mean p95)")
+    print("workload   batch  load   pct [lo, hi]            class")
+    for ax, (title, d) in zip(axes, runs):
+        for b in d["batches"]:
+            mb = b["max_batch"]
+            pts = []
+            for c in sorted(b["cells"], key=lambda c: c["load"]):
+                pol = c["policies"]
+                if "program-fcfs" not in pol or "fcfs" not in pol:
+                    continue
+                ci = pol["program-fcfs"]["p95_vs_fcfs"]
+                m, lo, hi = pct(ci, pol["fcfs"]["p95_task_latency_s"])
+                k = classify(ci)
+                pts.append((c["load"], m, lo, hi, k))
+                print(f"{title.split()[0]:10s} {mb:5d} {c['load']:5.2f}  {m:+6.1f} [{lo:+6.1f}, {hi:+6.1f}]  {k}"
+                      + ("  (duplicates batch %d)" % dups[id(d)][mb] if mb in dups[id(d)] else ""))
+            if not pts:
+                continue
+            col = BATCH_COL[mb]
+            same = dups[id(d)].get(mb)
+            lbl = f"batch {mb} (\u2261 batch {same})" if same else f"batch {mb}"
+            x = [p[0] for p in pts]
+            ax.plot(x, [p[1] for p in pts], "--" if same else "-", color=col, lw=1.4, label=lbl,
+                    zorder=1 if same else 2)
+            sig = [p for p in pts if p[4] == "better"]
+            ns = [p for p in pts if p[4] == "tied"]
+            bad = [p for p in pts if p[4] == "worse"]
+            ax.plot([p[0] for p in sig], [p[1] for p in sig], "o", ms=4.2, color=col, zorder=3)
+            ax.plot([p[0] for p in ns], [p[1] for p in ns], "o", ms=4.2, mfc=SURFACE, mec=col, mew=1.0, zorder=3)
+            ax.plot([p[0] for p in bad], [p[1] for p in bad], "^", ms=5, color=WORSE, zorder=3)
+        ax.axhline(0, color=MUTED, lw=0.8)
+        ax.set_xscale("log")
+        ax.set_xticks([0.5, 0.75, 1, 1.5, 2], ["0.5", "0.75", "1", "1.5", "2"])
+        ax.minorticks_off()
+        ax.set_title("(a) " + title if ax is axes[0] else title, fontsize=7.5, color=INK, loc="left")
+        ax.set_xlabel(LOAD_CAP, fontsize=7, color=INK)
+        _style(ax)
+        ax.legend(loc="lower left", fontsize=6.3, frameon=False, handlelength=1.6)
+    axes[0].set_ylabel("p95 vs FCFS (%)\n(negative = faster)", fontsize=7.5, color=INK)
+    plt.setp(axes[1].get_yticklabels(), visible=False)
+    axes[1].plot([], [], "o", ms=4.2, mfc=SURFACE, mec=MUTED, label="open = n.s.")
+    axes[1].plot([], [], "o", ms=4.2, color=MUTED, label="filled = CI < 0")
+    h, lab = axes[1].get_legend_handles_labels()
+    axes[1].legend(h, lab, loc="lower left", fontsize=6.3, frameon=False, handlelength=1.6)
+
+    # (b)
+    print("(b) vs program-fcfs, cells better / worse / tied (batch-16 duplicates excluded)")
+    rows = []  # (rule, label, counts, n_excluded)
+    for rule in RULES7:
+        for lbl, d, metric in (("MAARA latency", ma, "p95_task_latency_s"), ("TraceLab latency", tl, "p95_task_latency_s"),
+                               ("TraceLab slowdown", tl, "p95_slowdown")):
+            n = {"better": 0, "worse": 0, "tied": 0}
+            excl = 0
+            for b in d["batches"]:
+                for c in b["cells"]:
+                    pol = c["policies"]
+                    if rule not in pol or "program-fcfs" not in pol:
+                        continue
+                    if b["max_batch"] in dups[id(d)]:
+                        excl += 1
+                        continue
+                    if metric == "p95_task_latency_s":
+                        ci = pol[rule]["p95_vs_program"]
+                    else:
+                        if "p95_slowdown" not in pol[rule]["per_seed"]:
+                            continue
+                        ci = paired_ci(pol[rule]["per_seed"]["p95_slowdown"], pol["program-fcfs"]["per_seed"]["p95_slowdown"])
+                    n[classify(ci)] += 1
+            if sum(n.values()):
+                rows.append((rule, lbl, n))
+                print(f"  {LABEL[rule]:5s} {lbl:18s} {n['better']:3d} / {n['worse']:3d} / {n['tied']:3d}  "
+                      f"(of {sum(n.values())} cells; {excl} duplicate cells excluded)")
+    ax = fig.add_subplot(gs[1, 0])
+    y, ticks, last = 0.0, [], None
+    for rule, lbl, n in rows:
+        if last is not None and rule != last:
+            y += 0.6
+        last = rule
+        left = 0
+        for k, col in (("better", BETTER), ("tied", TIED), ("worse", WORSE)):
+            if n[k]:
+                ax.barh(y, n[k], left=left, color=col, height=0.7, edgecolor=SURFACE, lw=1.0)
+                if n[k] >= 3:
+                    ax.text(left + n[k] / 2, y, str(n[k]), ha="center", va="center", fontsize=6.5,
+                            color="white" if k != "tied" else INK)
+            left += n[k]
+        ax.text(left + 0.8, y, f"{n['better']} / {n['worse']} / {n['tied']}", va="center", fontsize=6.3,
+                color=MUTED)
+        ticks.append((y, f"{LABEL[rule]} {lbl.replace('latency', 'p95')}", rule))
+        y += 1
+    ax.set_ylim(y - 0.4, -0.6)
+    ax.set_xlim(0, 50)
+    ax.set_yticks([t[0] for t in ticks], [t[1] for t in ticks])
+    ax.tick_params(axis="y", labelsize=6.3, length=0)
+    ax.set_xlabel("cells (paired 95% CI); right of bar: better / worse / tied", fontsize=7, color=INK)
+    ax.set_title("(b) rule vs program-fcfs", fontsize=7.5, color=INK, loc="left")
+    _style(ax, grid=None)
+    ax.spines["left"].set_visible(False)
+    ax.legend(handles=[Patch(color=BETTER, label="better"), Patch(color=TIED, label="tied"),
+                       Patch(color=WORSE, label="worse")], loc="upper center", bbox_to_anchor=(0.5, -0.2),
+              ncol=3, fontsize=6.5, frameon=False)
+
+    # (c)
+    maara = critical_paths()
+    tlv = _tracelab_iso()
+    print("(c) task size, seconds (CV = population std / mean)")
+    print("workload                         n    mean  median     min     max   CV(pop)  CV(sample)")
+    stats = []
+    for lbl, v in (("MAARA holdout_qwen critical path", maara), ("TraceLab dev lone-replay", tlv)):
+        cv = statistics.pstdev(v) / statistics.mean(v)
+        stats.append((lbl, v, cv))
+        print(f"{lbl:32s} {len(v):4d} {statistics.mean(v):7.1f} {statistics.median(v):7.1f} {min(v):7.1f} "
+              f"{max(v):7.1f}   {cv:6.2f}      {statistics.stdev(v) / statistics.mean(v):6.2f}")
+    ax = fig.add_subplot(gs[1, 1])
+    lo, hi = min(min(maara), min(tlv)), max(max(maara), max(tlv))
+    bins = np.geomspace(lo * 0.98, hi * 1.02, 22)
+    for (lbl, v, cv), col, nm in zip(stats, ("#9ba0a6", "#2f5d62"), ("MAARA", "TraceLab dev")):
+        w = np.full(len(v), 100.0 / len(v))
+        ax.hist(v, bins=bins, weights=w, color=col, alpha=0.62, edgecolor=SURFACE, lw=0.6,
+                label=f"{nm}: n {len(v)}, median {statistics.median(v):.0f} s, CV {cv:.2f}")
+        ax.axvline(statistics.median(v), ymax=0.62, color=col, lw=1, ls="--")
+    ax.set_xscale("log")
+    ax.set_xlabel("task size: critical path / lone-replay time (s, log)", fontsize=7, color=INK)
+    ax.set_ylabel("share of tasks (%)", fontsize=7.5, color=INK)
+    ax.set_title("(c) task-size distribution", fontsize=7.5, color=INK, loc="left")
+    ax.legend(loc="upper right", fontsize=6.3, frameon=False)
+    _style(ax)
+    ax.set_ylim(0, 1.6 * ax.get_ylim()[1])
+    CAPTIONS[NAMES[7]] = _FIG7_CAPTION.format(rel=rel, kind=kind.split(",")[0].lower(), n=nseed)
+    fig.text(0.01, -0.03, f"simulated, public-data costs for a 16 GB RTX 5060 Ti (not measured); c = 0.3; capacity load axis; "
+             f"TraceLab: {rel} ({kind.split(',')[0].lower()}, {nseed} seeds)", fontsize=6, color=MUTED)
+    return _save(fig, out, "fig7_tracelab")
+
+
+FIGS = {1: fig1, 2: fig2, 3: fig3, 4: fig4, 5: fig5, 6: fig6, 7: fig7}
 NAMES = {1: "fig1_headline", 2: "fig2_league", 3: "fig3_sensitivity", 4: "fig4_retention",
-         5: "fig5_cap", 6: "fig6_plas"}
+         5: "fig5_cap", 6: "fig6_plas", 7: "fig7_tracelab"}
 
 
 def main():
@@ -611,10 +822,12 @@ def main():
     ap.add_argument("--results", default=DEFAULT_RESULTS, help="directory holding the result JSONs (read-only)")
     ap.add_argument("--out", default=DEFAULT_OUT, help="where PNG/PDF are written")
     ap.add_argument("--only", default="", help="comma list of figure numbers, e.g. 1,3")
+    ap.add_argument("--tracelab", default=None, help="figure 7 TraceLab map, relative to --results "
+                    f"(default {TRACELAB_E1} if it exists, else {TRACELAB_D1})")
     args = ap.parse_args()
     which = [int(x) for x in args.only.split(",") if x] or sorted(FIGS)
     for n in which:
-        res = FIGS[n](args.results, args.out)
+        res = FIGS[n](args.results, args.out, args.tracelab) if n == 7 else FIGS[n](args.results, args.out)
         paths = res[0] if isinstance(res, tuple) else res
         print("\nCAPTION:", CAPTIONS[NAMES[n]])
         print("wrote", *paths, sep="\n  ")

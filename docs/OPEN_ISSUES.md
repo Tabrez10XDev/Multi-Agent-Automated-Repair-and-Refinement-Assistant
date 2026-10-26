@@ -8,7 +8,7 @@ What is not settled, not validated, or known to be wrong. Read this before trust
 > resolve. They are not sequential within a file. The other parts live in
 > `ARCHITECTURE.md`, `DECISIONS.md`, `FINDINGS.md` and `OPEN_ISSUES.md`.
 
-## Status index (2026-10-24)
+## Status index (2026-10-25)
 
 | § | issue | status | next action |
 |---|---|---|---|
@@ -27,13 +27,15 @@ What is not settled, not validated, or known to be wrong. Read this before trust
 | 24 | `issue_parser` recall gap | **open**; the holdout logs are lost, but the `final` server log is being captured to `~/ollama_final_A.log` | copy that log somewhere durable, then compare per call |
 | 25 | Scoping reuse with a match-time guard | **not needed**: the holdout traces have 0% cross-run reuse | none |
 | 26 | "Ski-rental never fires" | **superseded** by §27 and FINDINGS §24–25 | none |
-| 27 | No operating point where ski-rental beats keep-all | **open, lower impact**: none at 1x (sealed) or 8x (holdout), FINDINGS §35 | optional: 16x |
+| 27 | No operating point where ski-rental beats keep-all | **open, lower impact**: on the fixed engine, none at 8x (holdout); at 1x (sealed) only `ski-rental-pred` in 1 of 6 p95 cells, FINDINGS §35 | optional: 16x |
 | 28 | Batch-cap labels counted the wrong thing | **qualified** (2026-10-23): FINDINGS §29 and §31 carry a caveat with resident-count numbers; capacity-axis maps (§33, §36–40) record residents | none; the hidden one-model-per-iteration scheduler goes in the writeup |
 | 29 | Deadlines carry almost no per-task size | **resolved** (2026-10-24): with task-sized deadlines LSF and EDF still never beat `program-fcfs` on p95 (0 of 40), FINDINGS §40 | none |
 | 30 | Busy load axis not comparable across batch sizes | **resolved for the coefficient question**: capacity-axis maps on Mac and G1 GPU rates, FINDINGS §36–38 | none |
-| 31 | KV leak in admission (DECISIONS §8 item 11) | **fixed** (`4049013`); dev re-check: scheduling 1,440/1,440 verdicts unchanged; retention directions hold but ski-rental's 8x p95 penalty disappears (FINDINGS §35 correction) | owner: rerun the sealed 1x retention run, or report it as pre-fix |
+| 31 | KV leak in admission (DECISIONS §8 item 11) | **closed** (2026-10-25): fixed in `4049013`; dev re-check left scheduling verdicts unchanged (1,440/1,440); the sealed 1x retention run was rerun on the fixed engine, and R1 now fails in 1 of 6 p95 cells (FINDINGS §35) | none |
+| 32 | Lone-replay memo filled memory (DECISIONS §8 item 12) | **closed** (`87f952b`) | none |
+| 33 | TraceLab: KV reuse across a human's turns not modelled | **open, a stated threat** (DECISIONS §37) | report it with FINDINGS §41 |
 
-**Still open and relevant: 5** — 9.5, 14, 24, 27, 31.
+**Still open and relevant: 5** — 9.5, 14, 24, 27, 33.
 
 ---
 
@@ -580,6 +582,15 @@ not enough to make the rule fire.
 
 ## 27. The live-rent band is set by concurrency, not by KV budget
 
+> **Update (2026-10-25), fixed engine (DECISIONS §8 item 11; §31 here).** The
+> 2026-10-22 numbers below are pre-fix. At 8x, ski-rental now ties keep-all
+> on p95 (+42.7 / −0.1 / −28.1 s, none significant) and recomputes +22.6 to
+> +56.2 s more. On the sealed 1x rerun, `ski-rental-pred` is significantly
+> better than keep-all on p95 in one cell (headroom 0.25, −11.2 s
+> [−18.2, −4.2]), so R1 fails there (FINDINGS §35). One cell of six, with
+> no multiple-comparison correction, is not an operating point where
+> ski-rental reliably wins; the question stays open, and 16x is untested.
+
 > **Update (2026-10-22).** The 8x headroom grid completed (holdout, 10
 > seeds; FINDINGS §35). Retention now matters (evict-now +10-11% p95), but
 > ski-rental is still no better than keep-all: +171.2 s and +95.7 s on p95 at
@@ -759,3 +770,34 @@ FINDINGS §33–35, "+9.9 to +16.6 s more recompute") predates the fix. Its
 direction is expected to hold and its magnitude to shrink, as on the dev set.
 Rerunning a sealed result is the owner's call (DECISIONS §26); until then it
 is quoted as pre-fix.
+
+**Closed 2026-10-25.** The owner approved a rerun of the sealed 1x run on the
+fixed engine under the original freeze (DECISIONS §8 item 11), to
+`results/sealed/retention_headroom_final_qwen_fixed.json`. As predicted,
+ski-rental's direction held and its magnitude shrank: it ties keep-all on
+p95 and recomputes +4.1 to +6.7 s more (was +9.9 to +16.6). Not predicted:
+`ski-rental-pred` is significantly better than keep-all on p95 in one cell
+(headroom 0.25, −11.2 s [−18.2, −4.2]), so pre-registered R1 now fails in 1
+of 6 p95 cells (FINDINGS §35). Both files are kept and both are reported.
+
+## 32. Lone-replay memo filled memory (TraceLab D1)
+
+**Closed** (2026-10-25, `87f952b`; DECISIONS §8 item 12). The memo behind the
+p95-slowdown denominator (`_ISOLATED_CACHE`, `Engine._isolated_service_s`)
+was keyed on full node reprs. On TraceLab each key set was about 28 MB and
+none ever repeated, so the 8 workers of the first D1 grew to about 5 GB each
+and the machine swapped (15 of 40 cells in 16.5 h). Results were not
+affected; the run was stopped and redone. The key is now a SHA-256 digest of
+the same text, tested in `tests/simulator/test_slowdown.py`. Two side lessons
+for long runs: stopping a map's parent leaves its multiprocessing workers
+orphaned (kill them by PID), and a map saves nothing until it finishes.
+
+## 33. TraceLab: KV reuse across a human's turns is not modelled
+
+**Open, stated as a threat** (DECISIONS §37 amendment, plumbing check). Each
+sampled turn is a separate program, and no turn's predecessor in the same
+session is in the 80-turn sample, so a turn's first round recomputes its
+whole history: 2.04M of 9.48M recorded prefix tokens (21.5%) can never hit.
+Retention results on TraceLab (E3, G4) therefore understate reuse, and
+scheduling results see more prefill than a real server would. Not corrected;
+report it with FINDINGS §41.

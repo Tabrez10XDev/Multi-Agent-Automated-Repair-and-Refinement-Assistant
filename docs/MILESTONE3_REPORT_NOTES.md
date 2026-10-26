@@ -30,8 +30,8 @@ The two textbook mechanisms the project set out to test are negative results:
 | SJF vs `program-fcfs`, sealed | 0/68/12 (+5% to +34% worse at batch 2–4) | §33 addendum |
 | PLAS (Autellix) vs `program-fcfs` | 0 better in 80 cells (S1 Mac, S2 GPU); +91/+67/+23/+1% at load 1.0 (Mac). Also worse than FCFS (P2 failed) | §40, DECISIONS §36 |
 | Task-sized deadlines | LSF and EDF still 0 better of 40; fewer misses at batch 2 only, for a +5 to +22% worse tail | §40 |
-| Retention at 1x, sealed | Recompute under 1% of makespan; ski-rental ties keep-all on p95 and recomputes 9.9–16.6 s more | §24, §33–35 |
-| Retention at 8x, holdout | evict-now +222/+235/+241 s p95 (+10–11%); ski-rental +171*/+96*/−2 s and 118–164 s more recompute | §35 |
+| Retention at 1x, sealed | Recompute under 1% of makespan. Fixed engine: ski-rental ties keep-all on p95 and recomputes 4.1–6.7 s more (pre-fix 9.9–16.6); `ski-rental-pred` is better on p95 in 1 of 6 cells (−11.2 s at headroom 0.25), so R1 failed in that cell | §24, §35 (correction note) |
+| Retention at 8x, holdout | evict-now +222/+235/+241 s p95 (+10–11%). Fixed engine: ski-rental +43/−0/−28 s p95 (none significant; pre-fix +171*/+96*/−2) and +23 to +56 s more recompute (pre-fix 118–164) | §35 (correction note) |
 | Concurrency cap, sealed (S3) | batch 4–16: 38/15/7 of 60. Batch 16: 10/0/0 on both traces (−10 to −16% qwen, −20 to −33% llama). Batch 4 overload +3 to +6% worse | §34 |
 | Cap on GPU costs | Never a net gain below batch 16 | §37 |
 | Self-lifting cap (qcap) | Dominates the cap (0 worse / 25 better of 160) but failed its "safe" test Q1 (3/5/6 worse cells). Development result only | §39, DECISIONS §35 |
@@ -44,6 +44,8 @@ Hypothesis scorecard (all pre-registered and committed before the runs):
 - **H1–H4** (DECISIONS §33/§34): held in every pass.
 - **Q1** failed; **Q2** held; **Q3** held in 2 of 3 runs (DECISIONS §35).
 - **P1** held; **P2** failed; **T1** and **T2** held (DECISIONS §36).
+- **R1** (DECISIONS §31) held pre-fix; on the fixed-engine rerun it **failed in 1 of 6** p95 cells (FINDINGS §35).
+- **G1–G4** (TraceLab, DECISIONS §37): pending the sealed runs E1/E3 (FINDINGS §41).
 
 ## 3. Method points the report must state
 
@@ -59,12 +61,13 @@ Hypothesis scorecard (all pre-registered and committed before the runs):
 
 1. **Seeds vary arrival times, not tasks.** The 20 seeds re-time a fixed set of traces; task content is the same.
 2. **Arrivals are synthetic.** The real runs were sequential. Contention comes from re-timing arrivals as a Poisson process (`simulator/trace_loader.py:load_trace`).
-3. **One workload family.** MAARA on HumanEval. Task sizes vary little (critical-path CV 0.61, §40), which is why PLAS loses. A heavy-tailed workload may rank the rules differently.
+3. **One workload family.** MAARA on HumanEval. Task sizes vary little (critical-path CV 0.61, §40), which is why PLAS loses. A heavy-tailed workload may rank the rules differently. **Being tested** on TraceLab (real Claude Code/Codex turns, CV 1.53; DECISIONS §37, FINDINGS §41): the development map points the same way with weaker effects; the sealed test E1 is pending. TraceLab carries its own threat: KV reuse across a human's turns is not modelled (OPEN_ISSUES §33).
 4. **Hidden scheduler.** The engine serves one model per iteration (`_choose_active_model`), and no policy controls it (OPEN_ISSUES §28).
 5. **Batching law.** Decode time is 1 + (n−1)c. The GPU results are a sensitivity analysis inside that law, not GPU measurements. G2 was never measured, because the card failed with Xid 79 (DECISIONS §34).
 6. **Correlated cells.** Cells share traces and seeds, and there is no multiple-comparison correction. Cell counts show consistency, not independent confirmations.
 7. **CPU stages.** RAG and pytest timings are Mac-measured, even in GPU runs.
-8. **Remaining open issues** (OPEN_ISSUES index): 9.5 model-switch cost assumed 0; 14 MAARA write-up caveats; 24 `issue_parser` cache recall gap; 27 no point where ski-rental wins (16x untested).
+8. **Remaining open issues** (OPEN_ISSUES index): 9.5 model-switch cost assumed 0; 14 MAARA write-up caveats; 24 `issue_parser` cache recall gap; 27 no point where ski-rental wins (16x untested); 33 TraceLab inter-turn reuse not modelled.
+9. **Engine bugs found late.** A KV-accounting leak (fixed 2026-10-24) changed the retention numbers but no scheduling verdict; both versions are reported (DECISIONS §8 item 11, FINDINGS §35).
 
 ## 5. Corrections owed to the Milestone 2 brief
 
@@ -73,6 +76,7 @@ These are left unedited in the submitted brief; correct them in the Milestone 3 
 - **"The cap is the next lever / make it load-aware"** was tried (§39). It isn't safe, and it never helps on GPU costs.
 - **GPU wording.** It's simulated, not measured, apart from the G1 rates.
 - **pass@1.** Quote 75.0% vs 48.9% as the 92-problem figure, and +24.0 points as the 146-problem paired gap (§28). The brief mixed the two.
+- **Retention numbers** in the brief predate the KV-accounting fix. Quote the fixed-engine values (FINDINGS §24, §35 correction notes).
 
 ## 6. Related work to cover (verify each citation before use)
 
@@ -87,10 +91,11 @@ These are left unedited in the submitted brief; correct them in the Milestone 3 
 
 ## 7. Figures the report needs (input to the visualization refactor)
 
-Built 2026-10-24: `make figures-m3` writes figures 1–6 below to `results/figures/m3/` (`experiments/plot_m3.py`; sources in that folder's README). Older figures live in `results/figures/regime/` (`experiments/plot_regime.py`, busy-axis maps from §29–31) and `results/figures/original/`. None yet cover the capacity-axis, sealed, sweep, qcap or PLAS results. Needed:
+Built 2026-10-24 (figure 4 rebuilt on the fixed engine and figure 7 added 2026-10-25): `make figures-m3` writes figures 1–7 below to `results/figures/m3/` (`experiments/plot_m3.py`; sources in that folder's README). Older figures live in `results/figures/regime/` (`experiments/plot_regime.py`, busy-axis maps from §29–31) and `results/figures/original/`. None yet cover the capacity-axis, sealed, sweep, qcap or PLAS results. Needed:
 1. **Headline:** p95 change vs FCFS against load, one line per batch, sealed qwen and llama (§33).
 2. **Baseline league table:** cells better/worse/tied vs `program-fcfs` for every rule, including SJF and PLAS (§33, §40).
 3. **Sensitivity:** headline effect vs batching coefficient, Mac and GPU rates (§36–38).
 4. **Retention:** recompute and p95 at 1x vs 8x (§24, §35).
 5. **Cap / qcap heatmap:** batch × load, Mac vs GPU (§34, §37, §39).
 6. **Why PLAS loses:** task-size distribution (CV 0.61) next to the p95 gap (§40).
+7. **TraceLab vs MAARA:** program-fcfs vs FCFS by load, rule counts vs program-fcfs, and the two task-size distributions (§41). Drawn from the development map until E1 lands.

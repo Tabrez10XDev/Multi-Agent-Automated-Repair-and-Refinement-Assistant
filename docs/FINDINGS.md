@@ -37,8 +37,8 @@ measurements and are unaffected.
 | 21. Retry-loop state discard | current | With a llama coder, 19.5% of within-task same-model handoffs discard reusable state, 92% of them coder→coder retries. With a qwen coder it is 1.4%. That retry rate is the cause is unproven: it is confounded with the model. |
 | 22. Held-out validation | current; hit rate refined by §28 | About **1 call in 6** hits Ollama's cache on the 54 holdout problems (16.9%, 17.8%); over all unseen traces including `final` it is about 1 in 8 (§28), almost all of it partial prefix reuse. Hit recall held out is 80–81% against 94–97% on the fit traces, and all of the shortfall is in `issue_parser`. |
 | 23. LSF buys tail latency | **retracted**, superseded by §27 | Measured at ~2.2x the intended load. The 14.8% p95 win and the "oracle is worse" result are void. |
-| 24. Retention cannot move latency | current, *sim* | Recompute is **under 1% of makespan** (keep-all 0.7% over 20 paired seeds at 0.841), so retention is a GPU-work mechanism, not a latency one. No deployable policy differs from keep-all on p95. Evict-now is significantly worse on both p95 (+36.9s) and recompute (+111.9s). Use the 20-seed table at the head of §24. The older table below it (0.8–1.1%, keep-all 13.4s) is **seed 1 only** at 0.15. The 0.6% in DECISIONS §28 is the separate 10-seed OPEN_ISSUES §9.3 sweep. |
-| 25. Ski-rental negative result | current, *sim*; numbers are seed 1 only | Ski-rental holds 4.5 MB less than keep-all yet pays 20.2s more rent and 5.0s more recompute. Releasing shifts rent onto the remaining holders rather than removing it. The figures are the same single run as §24's older table. Over 20 seeds at 0.841, ski-rental recomputes +10.2s [+4.8, +15.6] more than keep-all, ties it on p95, and the conclusion holds (§24). |
+| 24. Retention cannot move latency | current, *sim* | Recompute is **under 1% of makespan** (keep-all 0.7% over 20 paired seeds at 0.841), so retention is a GPU-work mechanism, not a latency one. No deployable policy differs from keep-all on p95. Evict-now is significantly worse on both p95 (+36.9s) and recompute (+111.9s). Use the 20-seed table at the head of §24. The older table below it (0.8–1.1%, keep-all 13.4s) is **seed 1 only** at 0.15. The 0.6% in DECISIONS §28 is the separate 10-seed OPEN_ISSUES §9.3 sweep. **Fixed engine (DECISIONS §8 item 11):** every verdict reproduces; ski-rental's extra recompute is +4.4 s [+1.7, +7.1] (was +10.2), evict-now unchanged. |
+| 25. Ski-rental negative result | current, *sim*; numbers are seed 1 only | Ski-rental holds 4.5 MB less than keep-all yet pays 20.2s more rent and 5.0s more recompute. Releasing shifts rent onto the remaining holders rather than removing it. The figures are the same single run as §24's older table. Over 20 seeds at 0.841, ski-rental recomputes +10.2s [+4.8, +15.6] more than keep-all, ties it on p95, and the conclusion holds (§24). On the fixed engine the extra recompute is +4.4 s [+1.7, +7.1]; the conclusion still holds. |
 | 26. Belady loses to LRU | current, *sim*; numbers are seed 1 only | Belady recomputes 29.4s against LRU's 13.4s, because eviction here is bulk and block sizes differ. `offline-belady` is not a valid minimum-recompute reference. Same single run as §24's older table, and not yet rerun over multiple seeds. |
 | 27. Scheduler table, corrected | current, *sim*; holds at its point, bounded by §29 | **No scheduling rule differs significantly** from arrival order on p95, at batch 8 or 16, nor does the oracle (paired CIs, 20 seeds). The scheduler has a choice on only 0.3–0.4% of admissions. Still tied at 0.841 (DECISIONS §28). |
 | 28. Sealed `final` set | current | On 92 unseen problems pass@1 is 75.0% (qwen coder) against 48.9% (llama coder). Over all 146 unseen problems it is 78.1% against 54.1%, a paired gap of +24.0 points [+15.0, +33.0]; this is a coder-model comparison. The frozen cache rule recalls 77% and 97% of hits, 86% pooled over every unseen trace. Hit rate over the unseen traces is about 1 call in 8 (12.8%). The policy drivers are not yet run on it (sealed, DECISIONS §26). |
@@ -46,6 +46,8 @@ measurements and are unaffected.
 | 30. Per-task deadlines | current, *sim*, 0.841 | With heterogeneous deadlines (3 classes, size-scaled), LSF, EDF and Dynamo-style client priority never beat oldest-task-first (`program-fcfs`) on p95, in any of 40 cells. They are worse in about 70% of cells, and they only move misses from the tight class to the loose one. The supported scheduling claim is program-level ordering. |
 | 31. What-if: efficient batching | *sim*, what-if 0.15, not measured | HYPOTHETICAL coefficient 0.15. LSF still never beats `program-fcfs` on p95 (0 of 40 cells; worse in 22). Its tight-class gains (up to 14 points at batch 2) are paid for by the loose class. At batch 8–16 the scheduler rarely has a choice (cap-binding labels qualified by OPEN_ISSUES §28). Verdict: freeze `program-fcfs`. Deadlines were recalibrated to a fixed FCFS miss rate. |
 | 32. Sealed `final_qwen`, partial | current, *sim*, 0.841, **out of sample**, 5 of 40 cells | On 91 unseen tasks at batch 2, `program-fcfs` cuts p95 by 14-33% against FCFS in all 5 cells (loads 0.71-1.15), and LSF is significantly worse than `program-fcfs` in all 5 (+18 to +57 s). Pre-registered S1 and S2 hold; S3 untestable at batch 2. Batches 4-16 not yet run. |
+| 35. Retention at 8x; sealed 1x contrast | **corrected 2026-10-25** on the fixed engine (DECISIONS §8 item 11) | 8x holdout: evict-now +222/+235/+241 s p95 (significant); ski-rental ties keep-all on p95 (was significantly worse at two budgets) and recomputes more. Sealed 1x rerun: ski-rental ties keep-all on p95 and recomputes +4.1 to +6.7 s more; **R1 fails in 1 of 6 p95 cells** (`ski-rental-pred` −11.2 s at headroom 0.25). Both versions are in §35. |
+| 41. TraceLab public workload | development only (D1, 5 seeds); sealed E1/E3 pending | `program-fcfs` vs FCFS 4 better / 0 worse / 36 tied on p95. Batch 8 ≡ batch 16 (KV caps concurrency at 6). Sealed size CV 1.53, so G2 applies. |
 
 ---
 
@@ -860,6 +862,14 @@ FCFS — inside the live-rent band (OPEN_ISSUES §27).
 
 ### The decisive number: recompute is ~1% of makespan
 
+> **Corrected 2026-10-24 (DECISIONS §8 item 11, KV-accounting leak).** Rerun
+> on the fixed engine with the same command
+> (`results/bugfix_check/finding24.json`): keep-all and evict-now are
+> unchanged, and every verdict below reproduces. Ski-rental vs keep-all is
+> +0.1 s [−4.8, +4.9] on p95 and **+4.4 s [+1.7, +7.1]** on recompute (was
+> +10.2 [+4.8, +15.6]); offline-ref is +1.2 [−7.1, +9.4] and +9.5 [+4.6,
+> +14.5]. The table below is the pre-fix run.
+
 > **Regenerated 2026-10-07: 20 paired seeds, measured `batch_decode_coeff`
 > 0.841 (DECISIONS §28).** The table below this note is a **single seed**:
 > rerunning the current code at 0.15 with seed 1 reproduces it exactly
@@ -1553,7 +1563,9 @@ untested out of sample.
 
 > **Current (2026-10-22).** Supersedes §32. Runs 1 and 3 of DECISIONS §31,
 > each run once from freeze commit `f4c889b`, clean tree, reported as they
-> came out.
+> came out. The 2026-10-24 KV-accounting fix (DECISIONS §8 item 11) leaves
+> these scheduling verdicts unchanged (the dev re-check reproduced 1,440 of
+> 1,440); the sealed retention run (run 2) was corrected, see §35.
 
 **Setup.** As §32: `scheduling_map --slo-mix
 tight:1.0:0.3,standard:2.0:0.4,loose:4.0:0.3`, 20 paired seeds, KV 1024 MB,
@@ -1669,6 +1681,27 @@ batcher is untested; that is H3 of DECISIONS §33.
 > reproduces every verdict, with ski-rental's extra recompute down from
 > +10.2 s [4.8, 15.6] to +4.4 s [1.7, 7.1]. The sealed 1x contrast quoted
 > below predates the fix and has not been rerun (owner's decision, §26).
+>
+> **Sealed 1x rerun, 2026-10-24** (owner-approved correction, DECISIONS §8
+> item 11; same command and freeze `f4c889b`, 20 seeds;
+> `results/sealed/retention_headroom_final_qwen_fixed.json`). It supersedes
+> the contrast paragraph below, which is kept as the pre-fix record. Budgets
+> differ because headroom mode sizes them from the fixed engine's peak.
+> Paired change against keep-all, seconds [95% CI], * excludes zero:
+>
+> | headroom | KV MB pre → fixed | ski-rental p95 pre → fixed | ski-rental recompute pre → fixed | `ski-rental-pred` p95, fixed | evict-now p95, fixed |
+> |---|---|---|---|---|---|
+> | 0.25 | 418 → 452 | +1.1 → −6.7 [−13.7, +0.2] | +15.9* → +4.1 [+0.4, +7.9]* | **−11.2 [−18.2, −4.2]*** | +23.1* |
+> | 0.5 | 466 → 500 | −2.8 → +0.3 [−5.4, +6.0] | +16.6* → +6.4 [+3.3, +9.4]* | −2.6 [−9.8, +4.7] | +36.5* |
+> | 1.0 | 563 → 597 | +3.5 → −2.5 [−9.3, +4.2] | +9.9* → +6.7 [+3.5, +9.9]* | −5.5 [−12.0, +1.0] | +45.3* |
+>
+> `ski-rental-pred` recomputes +3.6 [−0.3, +7.5], +3.9*, +5.4* more than
+> keep-all; LRU equals keep-all in every cell. **R1 rescored: it fails on
+> p95 in 1 of 6 cells** (`ski-rental-pred`, headroom 0.25), about the rate
+> chance alone gives without a multiple-comparison correction, but scored as
+> written. It holds on recompute: no variant recomputes less than keep-all.
+> Keep-all still recomputes least in every cell; the claim "no retention
+> policy beats keep-all on p95 on the sealed set" no longer holds.
 
 > **Preliminary (2026-10-22).** Holdout (fitting) set, 10 seeds, as
 > DECISIONS §31 requires for 8x. Not sealed. 8x is a simulator-only context
@@ -1696,6 +1729,8 @@ Contrast, the sealed 1x run (DECISIONS §31 run 2,
 Ski-rental ties keep-all on p95 (−2.8 to +3.5 s) but recomputes +9.9 to
 +16.6 s more in every cell. Ski-rental-pred does the same (+9.3 to +17.1 s).
 **R1 holds:** neither variant is better than keep-all on recompute or on p95.
+*(Pre-fix; superseded by the sealed rerun in the note above: R1 fails in 1
+of 6 p95 cells.)*
 
 1. **At 8x, retention matters.** Dropping everything (evict-now) costs 10–11%
    on p95 and 648–828 s of recompute. At 1x it cost about 8–12% on p95 with
@@ -2044,3 +2079,73 @@ first remains the best rule for tail latency on this workload. No other
 ordering rule beats it in any of the 120 cells here. The cap variants are
 `program-fcfs` plus a concurrency limit, and are covered in §39. The headline's comparison set is now
 FCFS, SJF, EDF, LSF (online and oracle), the hint-priority rule and PLAS.
+
+## 41. TraceLab public workload: development map D1 (sealed E1/E3 pending)
+
+> **Development result (2026-10-25), not scored.** DECISIONS §37 and its
+> amendments. The pre-registered hypotheses G1–G4 are scored only on the
+> sealed maps E1 and E3, which are running at freeze `9297ff0`; this section
+> gets a "Sealed" part when they finish. Nothing below may be quoted as a
+> test of G1–G4.
+
+**Workload.** TraceLab v0.0.2 (uw-syfi/TraceLab, CC BY 4.0): real Claude
+Code and Codex sessions. One user turn is one program, a chain of LLM rounds
+(at `qwen2.5-coder:7b` rates, context capped at 32,768 tokens) with a CPU
+tool node after each round that called tools. Users are split by hash into
+dev and sealed; 80 turns per split. Dev: 25 users, 345 rounds; sealed: 27
+users, 590 rounds. Adapter `simulator/adapters/tracelab.py`, derived data
+`data/external/tracelab/`. KV reuse across a human's turns is not modelled
+(OPEN_ISSUES §33).
+
+**D1 setup.** `scheduling_map --trace-set tracelab_dev --load-axis capacity
+--kv-mb 8192 --retention lru --batches 2 4 8 16 --seeds 5 --slo-mix
+tight:1.0:0.3,standard:2.0:0.4,loose:4.0:0.3 --deadline-basis task --profile
+gpu_5060ti_public` (c = 0.3), at `87f952b`, clean tree, 13,311 s. Output
+`results/tracelab/D1_dev_c0.3.{json,log}`. The first attempt was stopped by
+the memo bug (OPEN_ISSUES §32); 5 seeds instead of 20 is the owner's time
+cut, recorded before the freeze.
+
+Cells better / worse / tied (paired 95% CI over 5 seeds), on p95 task
+latency | p95 slowdown, by batch 2 / 4 / 8 / 16:
+
+| comparison | batch 2 | batch 4 | batch 8 | batch 16 | batches 2–8, of 30 |
+|---|---|---|---|---|---|
+| `program-fcfs` vs FCFS | 1/0/9 \| 1/0/9 | 1/0/9 \| 0/1/9 | 1/0/9 \| 0/1/9 | 1/0/9 \| 0/1/9 | 3/0/27 \| 1/2/27 |
+| PLAS vs `program-fcfs` | 0/0/10 \| 0/0/10 | 0/0/10 \| 1/0/9 | 0/0/10 \| 1/0/9 | 0/0/10 \| 1/0/9 | 0/0/30 \| 2/0/28 |
+| LSF vs `program-fcfs` | 0/0/10 \| 3/0/7 | 0/0/10 \| 1/0/9 | 0/0/10 \| 1/0/9 | 0/0/10 \| 1/0/9 | 0/0/30 \| 5/0/25 |
+| EDF vs `program-fcfs` | 0/1/9 \| 3/0/7 | 1/0/9 \| 1/0/9 | 0/0/10 \| 1/0/9 | 0/0/10 \| 1/0/9 | 1/1/28 \| 5/0/25 |
+| SJF vs `program-fcfs` | 0/1/9 \| 0/0/10 | 0/0/10 \| 1/0/9 | 0/0/10 \| 1/0/9 | 0/0/10 \| 1/0/9 | 0/1/29 \| 2/0/28 |
+| LSF-oracle vs `program-fcfs` | 0/0/10 \| 2/0/8 | 0/0/10 \| 1/0/9 | 0/0/10 \| 1/0/9 | 0/0/10 \| 1/0/9 | 0/0/30 \| 4/0/26 |
+
+`program-fcfs-cap` and `program-fcfs-qcap` equal `program-fcfs` seed for
+seed in all 40 cells (the cap never binds). `program-fcfs` vs FCFS, change
+in p95 (% of FCFS p95; * significant), loads 0.5 / 0.6 / 0.7 / 0.8 / 0.9 /
+1.0 / 1.1 / 1.25 / 1.5 / 2.0:
+
+| batch | change in p95 |
+|---|---|
+| 2 | −2, +0, +2, −15, −20, −21, −35, −55, −65, −66* |
+| 4 | +0, +0, −3, −4, −4, −5, −2, +1, −8, −23* |
+| 8 and 16 | +0, +0, −0, −2, +2, −3, +20, +3, −7, −9* |
+
+1. **Batch 16 is batch 8.** At 8,192 MB the KV budget holds at most 6
+   requests (`max_resident` 6), so the two batches give identical results
+   seed for seed. E1 runs batches 2/4/8 only (DECISIONS §37 amendment).
+2. **The direction matches MAARA, the strength does not, at 5 seeds.**
+   `program-fcfs` is ahead of FCFS at batch 2 from load 0.8 (−15% to −66%),
+   but the 5-seed intervals are wide: only load 2.0 separates in each
+   batch. At batches 4–8 the effects are −2% to −9%, with one +20% (n.s.)
+   cell. A few very long turns set the tail: sealed lone-replay times have
+   median 42.5 s and max 833.7 s.
+3. **Size-based rules gain on slowdown, not latency.** No rule beats
+   `program-fcfs` on p95 latency (EDF in 1 cell), but LSF and EDF are better
+   on p95 slowdown in 5 of 30 cells and PLAS in 2. That is consistent
+   with size-based (SRPT-type) theory under high size variance, and it is
+   what G2 tests.
+4. **Size variance is high.** The sealed split's lone-replay CV is **1.53**
+   (MAARA: 0.61), computed under the freeze before any policy run, so G2
+   applies (DECISIONS §37). The dev split's is 2.25 (median 22.8 s, max
+   975.8 s; population SD, as for the sealed figure). Figure 7 (c) draws the
+   dev distribution against MAARA's.
+
+**Sealed (E1, E3): pending.**

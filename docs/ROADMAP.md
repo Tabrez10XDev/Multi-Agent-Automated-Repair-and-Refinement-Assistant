@@ -1,12 +1,12 @@
 # Milestone 2 roadmap
 
-Status as of 2026-10-24. One line per workstream; detail lives in the linked
+Status as of 2026-10-25. One line per workstream; detail lives in the linked
 sections of FINDINGS / OPEN_ISSUES / DECISIONS.
 
 | # | Workstream | Status |
 |---|---|---|
 | 1 | Ollama prompt-cache baseline | **done** (FINDINGS §20, §22, §28) |
-| 2 | Retention comparison | **done**: 1x sealed and 8x holdout; keep-all/LRU best everywhere (FINDINGS §24-25, §35) |
+| 2 | Retention comparison | **done**: 1x sealed and 8x holdout; keep-all/LRU best on recompute everywhere. Corrected 2026-10-25 on the fixed engine: ski-rental ties keep-all on p95, and `ski-rental-pred` beats it in 1 sealed cell (R1 failed there) (FINDINGS §24-25, §35) |
 | 3 | Better output-length estimator | **closed on evidence**: the oracle estimator does not help LSF, and LSF loses to `program-fcfs` (FINDINGS §29-30) |
 | 4 | RTX 5060 Ti 16 GB | **closed** (owner, 2026-10-23): G1 rates measured, then the card failed (Xid 79). Simulated from public data: `gpu_5060ti_public`, c = 0.3 (DECISIONS §34, FINDINGS §38) |
 | 6 | Stronger baselines: Autellix's PLAS, size-carrying deadlines | **done**: PLAS is never better than `program-fcfs` (0 of 80 cells, worse in 59); LSF/EDF still lose with task deadlines (FINDINGS §40) |
