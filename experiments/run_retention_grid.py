@@ -150,6 +150,36 @@ def _headroom_job(args):
     return {k: rep[k] for k in HEADROOM_METRICS}
 
 
+# Grid mode runs its seeds in a pool too (DECISIONS 37, 2026-10-26): each run is
+# deterministic in its arguments, so the order runs finish in cannot change a
+# number. Workers return only these metrics, never the engine.
+GRID_METRICS = ("recompute_seconds", "total_rent_s", "p50_task_latency_s",
+                "p95_task_latency_s", "p95_slowdown", "mean_slowdown",
+                "retention_controlled_decisions", "cold_misses",
+                "prefix_hit_rate", "deadline_miss_rate", "rent_active_tick_frac",
+                "makespan_s", "gpu_busy_frac")
+
+
+def _grid_job(args):
+    (pol, sched, scale, seed, kv, rate, batch, trace_set, profile) = args
+    cost = CostModel.from_profile(profile)
+    tok, cpu = StageTokens.from_measured(), CpuStageSeconds.from_measured()
+    try:
+        _, rep = run_one(pol, sched, scale, seed, kv, rate, cost, tok, cpu,
+                         trace_set=trace_set, batch=batch)
+    except RuntimeError as e:
+        return {"error": str(e)[:200]}
+    return {k: rep[k] for k in GRID_METRICS}
+
+
+def _hindsight_job(args):
+    (scale, seed, kv, rate, batch, trace_set, profile) = args
+    cost = CostModel.from_profile(profile)
+    tok, cpu = StageTokens.from_measured(), CpuStageSeconds.from_measured()
+    return hindsight_denominator(scale, seed, kv, rate, cost, tok, cpu,
+                                 trace_set=trace_set, batch=batch)
+
+
 def headroom_main(args):
     from concurrent.futures import ProcessPoolExecutor
     from experiments.run_scheduler_table import paired_ci
@@ -333,7 +363,8 @@ def main():
                          "working set added to the active peak, e.g. 0.25,0.5,1.0. "
                          "Runs FCFS only, one util, paired CIs vs keep-all")
     ap.add_argument("--util", type=float, default=0.8, help="headroom mode only")
-    ap.add_argument("--workers", type=int, default=4, help="headroom mode only")
+    ap.add_argument("--workers", type=int, default=4,
+                    help="processes running seeds in parallel (both modes)")
     ap.add_argument("--profile", default=DEFAULT_PROFILE, choices=sorted(PROFILES),
                     help="hardware profile the cost model is built from "
                          "(simulator/workload.py PROFILES)")
@@ -359,6 +390,9 @@ def main():
     # caller had asked to be larger.
     n_seeds = 2 if args.quick else args.seeds
 
+    from concurrent.futures import ProcessPoolExecutor
+    pool = ProcessPoolExecutor(max_workers=args.workers)
+
     t0 = time.time()
     cells, total_runs = [], 0
     print(f"trace={args.trace_set}  scales={scales}  utils={utils}  "
@@ -374,6 +408,7 @@ def main():
         "kv_mb_at_1x": args.kv_mb, "kv_mb_rule": "kv_mb_at_1x * max(1, scale // 2)",
         "max_batch": args.batch, "cache_mode": cache_mode,
         "retentions": POLICIES, "schedulers": ["fcfs", "lsf"],
+        "workers": args.workers,
         "estimator": "online", "seeds": n_seeds, "seeds_16x": args.seeds_16x,
         "prefill_chunk_tokens": chunk, "sigma": default_of(run_one, "sigma"),
         "lam": default_of(run_one, "lam"),
@@ -435,10 +470,9 @@ def main():
                           "prefill_chunk_tokens": chunk}
             check_consistent("hindsight_denominator", hind_under, run_config,
                              ("arrival_rate",))
-            hind = st.fmean([hindsight_denominator(scale, s, kv, rate, cost, tok,
-                                                   cpu, trace_set=args.trace_set,
-                                                   batch=args.batch)
-                             for s in seeds]) or float("nan")
+            hind = st.fmean(pool.map(_hindsight_job, [
+                (scale, s, kv, rate, args.batch, args.trace_set, args.profile)
+                for s in seeds])) or float("nan")
             hind_cal = manifest.record(Calibration(
                 "hindsight_denominator", hind, hind_under,
                 target="mean over seeds of min(rebuild, rent) per block key "
@@ -459,25 +493,21 @@ def main():
             print(f"  {'retention':<17}{'sched':<6}{'p50':>8}{'p95':>9}"
                   f"{'gpu_recomp':>12}{'| rent':>9}{'ratio':>8}{'ctrl':>7}"
                   f"{'rent-act':>10}")
+            # Every row of the cell is queued at once; rows print in order.
+            futs = {(pol, sched): [pool.submit(_grid_job, (
+                        pol, sched, scale, s, kv, rate, args.batch,
+                        args.trace_set, args.profile)) for s in seeds]
+                    for pol in POLICIES for sched in ("fcfs", "lsf")}
             for pol in POLICIES:
                 for sched in ("fcfs", "lsf"):
-                    rs = []
-                    for s in seeds:
-                        try:
-                            eng, rep = run_one(pol, sched, scale, s, kv, rate,
-                                               cost, tok, cpu,
-                                               trace_set=args.trace_set,
-                                               batch=args.batch)
-                            rs.append((eng, rep))
-                            total_runs += 1
-                        except RuntimeError as e:
-                            print(f"  {pol:<17}{sched:<6} ERROR {str(e)[:50]}",
-                                  flush=True)
-                            rs = []
-                            break
-                    if not rs:
+                    rs = [f.result() for f in futs[(pol, sched)]]
+                    bad = [r["error"] for r in rs if "error" in r]
+                    if bad:
+                        print(f"  {pol:<17}{sched:<6} ERROR {bad[0][:50]}",
+                              flush=True)
                         continue
-                    m = lambda k: st.fmean([r[k] for _, r in rs])  # noqa: E731
+                    total_runs += len(rs)
+                    m = lambda k: st.fmean([r[k] for r in rs])  # noqa: E731
                     ctrl = m("retention_controlled_decisions")
                     cost_s = m("recompute_seconds") + m("total_rent_s")
                     ratio = cost_s / hind if hind and hind == hind else float("nan")
@@ -498,6 +528,10 @@ def main():
                         "cold_misses": m("cold_misses"),
                         "prefix_hit_rate": m("prefix_hit_rate"),
                         "deadline_miss_rate": m("deadline_miss_rate"),
+                        "makespan_s": m("makespan_s"),
+                        "gpu_busy_frac": m("gpu_busy_frac"),
+                        # Seed order 1..n, for paired CIs (DECISIONS 24).
+                        "per_seed": {k: [r[k] for r in rs] for k in GRID_METRICS},
                     })
                     print(f"  {pol:<17}{sched:<6}"
                           f"{m('p50_task_latency_s'):>8.1f}"
@@ -507,6 +541,7 @@ def main():
                           f"{m('rent_active_tick_frac'):>9.1%}", flush=True)
             print(f"  [cell done at {time.time()-t0:.0f}s]\n", flush=True)
 
+    pool.shutdown()
     out = {"trace_set": args.trace_set, "scales": scales, "utils": utils,
            "max_batch": args.batch, "kv_mb_at_1x": args.kv_mb,
            "engine_runs": total_runs, "elapsed_s": round(time.time() - t0, 1),

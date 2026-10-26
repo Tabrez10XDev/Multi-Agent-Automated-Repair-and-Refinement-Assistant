@@ -1405,3 +1405,20 @@ already did. E3 reruns as amended on 2026-10-25 plus `--rate-bracket
 tasks/s step), after E1 finishes. Retention policies, utils, seeds and G4
 are unchanged; this is calibration, not a policy, so the freeze stays
 `9297ff0`.
+
+*Amendment 2026-10-26, owner's decision, during E3 and before any util-0.8
+row:* the E3 rerun at `45632a0` was stopped after 4 h 55 min, 7 of 12 rows
+into the util-0.6 cell (log kept outside the repo,
+`~/maara_runs/E3_serial_partial.log`). The ski-rental rows ran at up to
+about 2 h each, serially, which projected a finish on 2026-10-27 midday.
+Grid mode now runs seeds in a process pool (`--workers`, as headroom mode
+already did), and each grid cell also records `makespan_s`,
+`gpu_busy_frac` and per-seed values of every reported metric. G4 needs the
+makespan, which the grid did not record, and the exploratory ski-rental vs
+keep-all comparison needs per-seed values for paired CIs. Each run is
+deterministic in its arguments, so the pool cannot change a number. Golden
+check, `--quick` on holdout_qwen: the serial code at `45632a0`, the new
+code with `--workers 1` and with `--workers 4` agree on every field of all
+12 rows (65 s, 65 s, 28 s). The util-0.6 means already printed were seen;
+the rerun reproduces them exactly, and G4 is scored at util 0.8, which no
+attempt reached. E3 reruns with `--workers 6`; nothing else changes.
