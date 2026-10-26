@@ -620,7 +620,9 @@ _FIG7_CAPTION = (
     "basis affects LSF and EDF only. Both are "
     "simulated with costs from public data for a 16 GB RTX 5060 Ti (simulated, not measured), c = 0.3, "
     "capacity load axis = arrival rate / saturation throughput. TraceLab file: {rel} ({kind}, {n} seeds). "
-    "(a) p95 change of program-fcfs vs FCFS (filled = CI below zero, open = n.s.); where batch 16 is "
+    "(a) p95 change of program-fcfs vs FCFS (filled = CI below zero, open = n.s., triangle = CI above "
+    "zero): p95 task latency for both workloads, from stored CIs, and TraceLab p95 slowdown (right; "
+    "per-seed paired CI, % of FCFS mean p95 slowdown; S2 has no slowdown), on its own y-axis; where batch 16 is "
     "seed-for-seed identical to batch 8 (KV budget caps concurrency) it is drawn but labelled as such. "
     "(b) Cells where PLAS, LSF, EDF are better/worse/tied vs program-fcfs, paired 95% CI; latency from "
     "stored CIs, slowdown (TraceLab only) from per-seed paired CIs; identical batch-16 cells are excluded "
@@ -675,12 +677,15 @@ def fig7(results, out, tracelab=None):
     dups = {id(d): _dup_batches(d) for _, d in runs}
     fig = plt.figure(figsize=(6.8, 6.2), facecolor=SURFACE)
     gs = fig.add_gridspec(2, 2, height_ratios=[1, 1], hspace=0.5, wspace=0.28)
-    # (a)
-    axes = [fig.add_subplot(gs[0, 0])]
-    axes.append(fig.add_subplot(gs[0, 1], sharey=axes[0]))
+    # (a): latency for both workloads, then TraceLab slowdown on its own axis
+    top = gs[0, :].subgridspec(1, 3, wspace=0.12)
+    axes = [fig.add_subplot(top[0, 0])]
+    axes.append(fig.add_subplot(top[0, 1], sharey=axes[0]))
+    axes.append(fig.add_subplot(top[0, 2]))
+    panels = [(t, d, "p95_task_latency_s") for t, d in runs] + [(runs[1][0], tl, "p95_slowdown")]
     print("(a) program-fcfs vs FCFS, p95 change (% of FCFS mean p95)")
-    print("workload   batch  load   pct [lo, hi]            class")
-    for ax, (title, d) in zip(axes, runs):
+    print("workload   metric    batch  load   pct [lo, hi]            class")
+    for ax, (title, d, metric) in zip(axes, panels):
         for b in d["batches"]:
             mb = b["max_batch"]
             pts = []
@@ -688,11 +693,15 @@ def fig7(results, out, tracelab=None):
                 pol = c["policies"]
                 if "program-fcfs" not in pol or "fcfs" not in pol:
                     continue
-                ci = pol["program-fcfs"]["p95_vs_fcfs"]
-                m, lo, hi = pct(ci, pol["fcfs"]["p95_task_latency_s"])
+                if metric == "p95_task_latency_s":
+                    ci = pol["program-fcfs"]["p95_vs_fcfs"]
+                else:
+                    ci = paired_ci(pol["program-fcfs"]["per_seed"][metric], pol["fcfs"]["per_seed"][metric])
+                m, lo, hi = pct(ci, pol["fcfs"][metric])
                 k = classify(ci)
                 pts.append((c["load"], m, lo, hi, k))
-                print(f"{title.split()[0]:10s} {mb:5d} {c['load']:5.2f}  {m:+6.1f} [{lo:+6.1f}, {hi:+6.1f}]  {k}"
+                print(f"{title.split()[0]:10s} {metric[4:8]:8s} {mb:5d} {c['load']:5.2f}  "
+                      f"{m:+6.1f} [{lo:+6.1f}, {hi:+6.1f}]  {k}"
                       + ("  (duplicates batch %d)" % dups[id(d)][mb] if mb in dups[id(d)] else ""))
             if not pts:
                 continue
@@ -707,21 +716,25 @@ def fig7(results, out, tracelab=None):
             bad = [p for p in pts if p[4] == "worse"]
             ax.plot([p[0] for p in sig], [p[1] for p in sig], "o", ms=4.2, color=col, zorder=3)
             ax.plot([p[0] for p in ns], [p[1] for p in ns], "o", ms=4.2, mfc=SURFACE, mec=col, mew=1.0, zorder=3)
-            ax.plot([p[0] for p in bad], [p[1] for p in bad], "^", ms=5, color=WORSE, zorder=3)
+            ax.plot([p[0] for p in bad], [p[1] for p in bad], "^", ms=5, mfc=WORSE, mec=col, mew=0.8, zorder=3)
         ax.axhline(0, color=MUTED, lw=0.8)
         ax.set_xscale("log")
         ax.set_xticks([0.5, 0.75, 1, 1.5, 2], ["0.5", "0.75", "1", "1.5", "2"])
         ax.minorticks_off()
-        ax.set_title("(a) " + title if ax is axes[0] else title, fontsize=7.5, color=INK, loc="left")
-        ax.set_xlabel(LOAD_CAP, fontsize=7, color=INK)
+        name = title.replace(" holdout_qwen", "").replace(" sealed", "").replace(" dev", "")
+        ax.set_title(("(a) " if ax is axes[0] else "") + name + (", p95 slowdown" if metric == "p95_slowdown"
+                     else ", p95 latency"), fontsize=7, color=INK, loc="left")
+        ax.set_xlabel(LOAD_CAP.replace(" (arrival rate / saturation throughput)", ""), fontsize=7, color=INK)
         _style(ax)
-        ax.legend(loc="lower left", fontsize=6.3, frameon=False, handlelength=1.6)
-    axes[0].set_ylabel("p95 vs FCFS (%)\n(negative = faster)", fontsize=7.5, color=INK)
+        ax.tick_params(labelsize=6.5)
+    axes[0].set_ylabel("p95 vs FCFS (%)\n(negative = better)", fontsize=7.5, color=INK)
+    axes[0].legend(loc="lower left", fontsize=6.0, frameon=False, handlelength=1.6)
     plt.setp(axes[1].get_yticklabels(), visible=False)
     axes[1].plot([], [], "o", ms=4.2, mfc=SURFACE, mec=MUTED, label="open = n.s.")
     axes[1].plot([], [], "o", ms=4.2, color=MUTED, label="filled = CI < 0")
-    h, lab = axes[1].get_legend_handles_labels()
-    axes[1].legend(h, lab, loc="lower left", fontsize=6.3, frameon=False, handlelength=1.6)
+    axes[1].plot([], [], "^", ms=5, color=WORSE, label="triangle = CI > 0")
+    axes[1].legend(*axes[1].get_legend_handles_labels(), loc="lower left", fontsize=6.0, frameon=False,
+                   handlelength=1.6)
 
     # (b)
     print("(b) vs program-fcfs, cells better / worse / tied (batch-16 duplicates excluded)")

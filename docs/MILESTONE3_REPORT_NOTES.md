@@ -98,4 +98,4 @@ Built 2026-10-24 (figure 4 rebuilt on the fixed engine and figure 7 added 2026-1
 4. **Retention:** recompute and p95 at 1x vs 8x (§24, §35).
 5. **Cap / qcap heatmap:** batch × load, Mac vs GPU (§34, §37, §39).
 6. **Why PLAS loses:** task-size distribution (CV 0.61) next to the p95 gap (§40).
-7. **TraceLab vs MAARA:** program-fcfs vs FCFS by load, rule counts vs program-fcfs, and the two task-size distributions (§41). Drawn from the sealed map E1 (20 seeds).
+7. **TraceLab vs MAARA:** program-fcfs vs FCFS by load (latency for both, slowdown for TraceLab), rule counts vs program-fcfs, and the two task-size distributions (§41). Drawn from the sealed map E1 (20 seeds).
