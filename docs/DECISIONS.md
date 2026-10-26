@@ -1380,3 +1380,9 @@ time, each justified by D1's structure, not by which policy won:
 
 **This commit is the TraceLab policy freeze.** E1, E3 and G2's CV run with
 `MAARA_POLICIES_FROZEN` set to its hash, which a later amendment records.
+
+*Amendment 2026-10-25, before any sealed policy run:* the freeze is
+`9297ff0`. G2's CV, computed under it before any policy run: lone-replay
+time of the 80 sealed turns at batch 4, c = 0.3, 8,192 MB
+(`Engine._isolated_service_s`), mean 127.3 s, SD 194.2 s (population),
+median 42.5 s, max 833.7 s: **CV 1.53, at least 1.0, so G2 applies.**
