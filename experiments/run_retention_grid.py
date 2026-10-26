@@ -337,6 +337,13 @@ def main():
     ap.add_argument("--profile", default=DEFAULT_PROFILE, choices=sorted(PROFILES),
                     help="hardware profile the cost model is built from "
                          "(simulator/workload.py PROFILES)")
+    ap.add_argument("--rate-bracket", type=float, nargs=2, default=None,
+                    metavar=("LO", "HI"),
+                    help="grid mode: arrival-rate bisection bracket in tasks/s "
+                         "(default calibrate_rate's 0.005 8.0, sized for MAARA). "
+                         "TraceLab saturates near 0.01/s, so the default's first "
+                         "probes run ~400x overloaded and 12 halvings leave a "
+                         "0.002/s step, about 20%% of capacity (DECISIONS 37)")
     args = ap.parse_args()
     if args.headrooms:
         return headroom_main(args)
@@ -387,13 +394,16 @@ def main():
             # default is recorded as what it is (the FINDINGS 23 failure).
             rate_call = (util, scale, seeds[0], kv, cost, tok, cpu)
             rate_kw = {"trace_set": args.trace_set, "batch": args.batch}
+            if args.rate_bracket:
+                rate_kw.update(lo=args.rate_bracket[0], hi=args.rate_bracket[1])
             rb = bound_args(calibrate_rate, *rate_call, **rate_kw)
             rate_under = {"trace_set": rb["trace_set"], "scale": rb["scale"],
                           "util": rb["target_util"], "kv_mb": rb["kv_mb"],
                           "max_batch": rb["batch"], "cache_mode": cache_mode,
                           "seed": rb["seed"], "scheduler": "fcfs",
                           "retention": "keep-all",
-                          "prefill_chunk_tokens": chunk}
+                          "prefill_chunk_tokens": chunk,
+                          "rate_bracket": [rb["lo"], rb["hi"]]}
             check_consistent("arrival_rate", rate_under, run_config, ("util",))
 
             el = time.time() - t0
@@ -405,6 +415,9 @@ def main():
                 "arrival_rate", rate, rate_under,
                 target=f"GPU busy fraction {util} under FCFS/keep-all",
                 achieved=busy, also_check=("util",)))
+            if busy is None or abs(busy - util) > 0.05:
+                print(f"  WARNING: calibration achieved busy {busy} against "
+                      f"target {util}; check --rate-bracket", flush=True)
             run_config["arrival_rate"] = rate
             print(f"[{time.time()-t0:6.0f}s] [{scale}x util {util:.0%}] "
                   f"rate={rate:.4f}/s; measuring hindsight...", flush=True)

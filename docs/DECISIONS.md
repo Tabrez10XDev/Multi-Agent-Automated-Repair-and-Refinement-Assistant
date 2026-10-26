@@ -1386,3 +1386,22 @@ time, each justified by D1's structure, not by which policy won:
 time of the 80 sealed turns at batch 4, c = 0.3, 8,192 MB
 (`Engine._isolated_service_s`), mean 127.3 s, SD 194.2 s (population),
 median 42.5 s, max 833.7 s: **CV 1.53, at least 1.0, so G2 applies.**
+
+*Amendment 2026-10-26, owner's decision, during E1 and before any E3
+result:* the first E3 attempt was stopped at 5 h 21 min, still in its
+first arrival-rate calibration with no output (log kept outside the repo,
+`~/maara_runs/E3_aborted_calibration.log`). Grid mode bisected over
+`calibrate_rate`'s default bracket, 0.005 to 8.0 tasks/s, which is sized
+for MAARA. TraceLab sealed saturates near 0.0096 tasks/s at batch 8 (E1's
+calibration), so the first probes ran about 400x, 200x and 100x
+overloaded, and 12 halvings leave a 0.002 tasks/s step, about 20% of
+capacity, enough to put the util-0.6 cell near 0.8. No policy result was
+produced, so the sealed set is not spent. Fix: grid mode takes
+`--rate-bracket LO HI` (default unchanged, so committed grid results
+reproduce), records the bracket in the arrival-rate calibration, and
+warns when achieved busy misses the target by over 0.05, as headroom mode
+already did. E3 reruns as amended on 2026-10-25 plus `--rate-bracket
+0.0005 0.02` (about 0.05x to 2x saturation; 12 halvings give a 5e-6
+tasks/s step), after E1 finishes. Retention policies, utils, seeds and G4
+are unchanged; this is calibration, not a policy, so the freeze stays
+`9297ff0`.
