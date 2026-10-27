@@ -2279,9 +2279,9 @@ Mean slowdown at load 1.5, smallest to largest fifth of task size:
 | | PLAS | 1.97 | 2.45 | 3.24 | 3.28 | 2.52 |
 | | LSF | 2.55 | 2.49 | 3.05 | 2.95 | 2.31 |
 
-11. **On MAARA every rule trades one size for another.** `program-fcfs`
-    (and LSF/EDF) roughly double the smallest fifth's slowdown compared with
-    FCFS, but lower it for medium and large tasks; PLAS does the reverse. With
+11. **On MAARA every rule trades one size for another.** `program-fcfs`,
+    LSF and EDF raise the smallest fifth's slowdown 1.4–2.2× over FCFS but
+    lower it for the three largest fifths; PLAS does the reverse. With
     task sizes this even (CV 0.61), the trade nets out in `program-fcfs`'s
     favour on p95 latency.
 12. **On TraceLab `program-fcfs` hurts every size but the largest,** most
