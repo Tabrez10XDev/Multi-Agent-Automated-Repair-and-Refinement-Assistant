@@ -166,6 +166,7 @@ class ChainEstimator:
     def __init__(self, cost: CostModel, tok=None, cpu=None, constants=None,
                  noise_sigma: float = 0.0, seed: int = 0):
         c = constants or load_dev_constants()
+        self._constants = c
         self.cost, self.tok, self.cpu = cost, tok, cpu
         self.noise_sigma = noise_sigma
         self._rng = random.Random(seed)
@@ -226,6 +227,11 @@ class ChainEstimator:
         further = max(0.0, self.mean_residual_rounds(j) - 1.0)
         est = self.mean_tool + further * (self.mean_round_cost(model) + self.mean_tool)
         return est * self.noise_factor(req_id)
+
+    def gittins_prior(self, cost):
+        """The Gittins prior from the frozen dev constants (DECISIONS 38)."""
+        from simulator.gittins import tracelab_prior
+        return tracelab_prior(cost, self._constants)
 
     def estimate_task_total(self, model: str = CODER_MODEL) -> float:
         n = sum(self.r_counts.values())

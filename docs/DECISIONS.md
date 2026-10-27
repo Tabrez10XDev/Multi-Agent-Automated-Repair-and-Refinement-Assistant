@@ -1545,3 +1545,17 @@ task's request j must give the same order up to j.
 **Expert checkpoints**, at the owner's request. A separate expert review
 runs after the code (before dev runs), before the freeze, and before
 conclusions are written. Any disagreement goes to the owner.
+
+*Amendment 2026-10-27, during implementation and before any dev run:*
+- **MAARA's fit prior is small.** It has 15 tasks: 11 with 3 LLM calls, 3
+  with 5 and 1 with 10. A fixed pooling threshold of 30 would pool every
+  state.
+- **Rule:** the threshold is min(30, ⌈0.2 × prior tasks⌉). That is 30 for
+  TraceLab (36,853 turns) and 3 for MAARA.
+- **The MAARA index is therefore coarse.** It is a sanity check with no
+  hypothesis, so this is reported, not fixed.
+- **Prior costs as built.** TraceLab: w = 17.85 s cold and 8.28 s cached,
+  tool 8.42 s, mean size 145.2 s. The guard's limit is X × 145.2 s. MAARA:
+  mean size 5.6 s under `gpu_5060ti_public`.
+- **Policy names:** `gittins`, `gittins-sd`, and
+  `{gittins, gittins-sd, plas}-guard-x{2,4,8}`.

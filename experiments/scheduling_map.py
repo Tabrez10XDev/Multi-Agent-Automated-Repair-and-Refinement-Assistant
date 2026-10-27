@@ -60,6 +60,7 @@ from experiments.common import (calibrate_rate, calibrate_slack, paired_ci,
 from experiments.manifest import (Calibration, Manifest, bound_args, check_consistent,
                                   default_of)
 from simulator.engine import EngineConfig
+from simulator.policies import GITTINS_SCHEDULERS
 from simulator.trace_loader import TRACE_SET_EXCLUSIONS
 from simulator.workload import (DEFAULT_PROFILE, PROFILES, CostModel, CpuStageSeconds,
                                 StageTokens, parse_rate_overrides)
@@ -74,7 +75,9 @@ POLICIES = [("fcfs", "online", "fcfs"), ("sjf", "online", "sjf"),
             ("plas", "online", "plas"),
             ("hint-priority", "online", "hint-priority"),
             ("program-fcfs-cap", "online", "program-fcfs-cap"),
-            ("program-fcfs-qcap", "online", "program-fcfs-qcap")]
+            ("program-fcfs-qcap", "online", "program-fcfs-qcap")] + [
+            # DECISIONS 38: Gittins over requests completed, and the guards.
+            (c.name, "online", c.name) for c in GITTINS_SCHEDULERS]
 BASELINES = ("fcfs", "program-fcfs")
 CALIBRATED_UTILS = [0.6, 0.7, 0.8, 0.9]
 OVERLOAD_MULTIPLES = [1.1, 1.25, 1.5, 1.75, 2.2, 3.0]

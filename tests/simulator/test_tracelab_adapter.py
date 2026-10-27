@@ -429,9 +429,9 @@ def test_scheduling_map_skips_excluded_policies_and_records_them(monkeypatch):
                                       "gpu_5060ti_public"])
     with pytest.raises(Stop):
         sm.main()
-    assert "hint-priority" not in seen["policies"] and len(seen["policies"]) == 9
+    assert "hint-priority" not in seen["policies"] and len(seen["policies"]) == len(sm.POLICIES) - 1
     assert seen["excluded_policies"] == ["hint-priority"]
-    # a MAARA run keeps all ten policies and gains no new manifest key
+    # a MAARA run keeps every policy and gains no new manifest key
     seen.clear()
     monkeypatch.setattr(sys, "argv", ["scheduling_map", "--trace-set", "holdout_qwen"])
     with pytest.raises(Stop):

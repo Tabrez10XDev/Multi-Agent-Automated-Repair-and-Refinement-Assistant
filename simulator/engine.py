@@ -308,6 +308,11 @@ class Engine:
         self.scheduler = scheduler or FCFSScheduler()
         self.estimator = estimator
         self.hints = hints
+        # A scheduler that needs a prior (gittins, DECISIONS 38) builds it once
+        # here from the estimator's development data; nothing else changes.
+        bind = getattr(self.scheduler, "bind", None)
+        if bind is not None:
+            bind(cost, estimator)
         self.do_trace = trace
         self.trace_log = []
         # task_id -> absolute deadline, set once when the task arrives.
@@ -429,6 +434,7 @@ class Engine:
         self.task_arrival = {t.task_id: t.arrival_time for t in tasks}
         # GPU time each task's finished requests have had (PLAS, DECISIONS 36).
         self.task_attained = {}
+        self.task_requests_done = {}
         self.task_slo = {}          # task_id -> (class name, priority rank)
         if self.cfg.deadline_basis not in ("estimate", "task"):
             raise ValueError(f"deadline_basis {self.cfg.deadline_basis!r}")
@@ -872,6 +878,7 @@ class Engine:
             priority=0, deadline=self.task_deadline.get(n.task_id),
             task_arrival_s=self.task_arrival.get(n.task_id, 0.0),
             task_attained_s=self.task_attained.get(n.task_id, 0.0),
+            task_requests_done=self.task_requests_done.get(n.task_id, 0),
             slo_class=self.task_slo.get(n.task_id, (None, 0))[0],
             slo_priority=self.task_slo.get(n.task_id, (None, 0))[1],
             # true_output and node are handed over so an ORACLE estimator can
@@ -1210,6 +1217,7 @@ class Engine:
                 tid = r.node.task_id
                 self.task_attained[tid] = (self.task_attained.get(tid, 0.0)
                                            + r.finished_at - r.started_at)
+                self.task_requests_done[tid] = self.task_requests_done.get(tid, 0) + 1
                 self.running.remove(r)
                 self.pinned_bytes -= r.private_bytes
                 for k in r.held_blocks:

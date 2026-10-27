@@ -105,6 +105,9 @@ class ReqView:
     # Observable, not oracle: GPU wall-clock (admission to completion) of the
     # task's finished requests so far. Past service, never remaining work.
     task_attained_s: float = 0.0
+    # Observable, not oracle: how many of the task's requests have finished.
+    # The Gittins state (DECISIONS 38); a count of the past only.
+    task_requests_done: int = 0
 
     def __getattr__(self, name):
         # Only reached when normal dataclass lookup fails.
@@ -251,6 +254,11 @@ class ExecutionEstimator:
         if stage == "apply_and_test":
             return self.cpu.pytest_seconds
         return self.service_s(model, self._typical_prompt(stage), stage, attempt_index)
+
+    def gittins_prior(self, cost):
+        """MAARA's Gittins prior, from the fit traces (DECISIONS 38)."""
+        from simulator.gittins import maara_prior
+        return maara_prior(cost)
 
     def remaining_s(self, stage: str, attempt_index: int, model: str,
                     req_id=None, node=None) -> float:
@@ -567,12 +575,94 @@ class StaticPriorityScheduler(Scheduler):
             views, key=lambda v: (self._RANK.get(v.stage, 9), v.enqueued_at, v.req_id))]
 
 
+class GittinsScheduler(Scheduler):
+    """
+    Program-level Gittins index over requests completed (DECISIONS 38,
+    simulator/gittins.py). Every request of a task carries the task's index;
+    the highest index goes first, then the oldest task.
+
+    The prior comes from the run's estimator (`gittins_prior`), which builds it
+    from development data only, so the engine calls `bind` once at start-up.
+    Unbound (no estimator, or one without a prior) it orders by fewest requests
+    completed, the index's shape under a decreasing hazard.
+
+    `GUARD_X` adds the tail guard: the single oldest task whose time in system
+    exceeds GUARD_X x the prior's mean size goes first. One task, not all of
+    them: promoting every overdue task is `program-fcfs` in overload.
+    """
+    name = "gittins"
+    WEIGHT = "latency"
+    GUARD_X = None
+
+    def __init__(self):
+        self.table = None
+        self.mean_size = None
+
+    def bind(self, cost, estimator):
+        from simulator.gittins import GittinsTable, pooling_threshold
+        prior = getattr(estimator, "gittins_prior", None)
+        if prior is None:
+            return
+        r_counts, work, tool_s = prior(cost)
+        self.table = GittinsTable(r_counts, work, tool_s, weight=self.WEIGHT,
+                                  min_count=pooling_threshold(sum(r_counts.values())))
+        self.mean_size = self.table.mean_size
+
+    def _primary(self, v):
+        if self.table is None:
+            return v.task_requests_done
+        return -self.table.index(v.task_requests_done)
+
+    def _promoted(self, views, now):
+        if self.GUARD_X is None or self.mean_size is None:
+            return None
+        limit = self.GUARD_X * self.mean_size
+        overdue = [v for v in views if now - v.task_arrival_s > limit]
+        if not overdue:
+            return None
+        return min(overdue, key=lambda v: (v.task_arrival_s, v.task_id)).task_id
+
+    def order(self, views, now):
+        top = self._promoted(views, now)
+        return [v.req_id for v in sorted(
+            views, key=lambda v: (v.task_id != top, self._primary(v),
+                                  v.task_arrival_s, v.enqueued_at, v.req_id))]
+
+
+class GittinsSlowdownScheduler(GittinsScheduler):
+    """`gittins` with each task's finish weighted by 1 / its size: targets mean
+    slowdown. A heuristic, not proven optimal (DECISIONS 38)."""
+    name = "gittins-sd"
+    WEIGHT = "slowdown"
+
+
+class PLASGuardScheduler(GittinsScheduler):
+    """PLAS (attained GPU wall time, then task age) with the same tail guard:
+    the ablation that separates the guard from the index (DECISIONS 38).
+    Registered only guarded (`plas-guard-x<X>`); unguarded it is `plas`."""
+    name = "plas"
+
+    def _primary(self, v):
+        return v.task_attained_s
+
+
+def _guarded(base, x):
+    return type(f"{base.__name__}X{x}", (base,),
+                {"name": f"{base.name}-guard-x{x}", "GUARD_X": float(x)})
+
+
+GITTINS_SCHEDULERS = [GittinsScheduler, GittinsSlowdownScheduler] + [
+    _guarded(b, x) for b in (GittinsScheduler, GittinsSlowdownScheduler,
+                             PLASGuardScheduler) for x in (2, 4, 8)]
+
+
 SCHEDULERS = {c.name: c for c in [
     FCFSScheduler, SJFScheduler, EDFScheduler, LeastSlackFirstScheduler,
     StaticPriorityScheduler, ProgramFCFSScheduler, HintPriorityScheduler,
     ProgramLASScheduler,
     AdaptiveCapProgramFCFS,
     BacklogLiftedCapProgramFCFS,
+    *GITTINS_SCHEDULERS,
 ]}
 
 
