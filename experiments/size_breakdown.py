@@ -9,7 +9,10 @@ every task's latency and lone-replay time, so slowdown can be read by size.
 Each cell reuses the saturation throughput and slack factor stored in its map
 (`tracelab/D1_dev_c0.3.json`, `plas_taskdl/S2_gpu_public.json`) rather than
 recalibrating, so it is the same operating point. Golden check: each run's p95
-task latency must equal the map's per-seed value; the run stops otherwise.
+task latency must equal the map's per-seed value; the run stops otherwise. S2
+predates the KV-leak fix (DECISIONS 8 item 11), which moved some LSF and EDF
+values, so on MAARA only the policies the fix left alone are held to it; every
+difference is recorded in the output.
 
     ./venv/bin/python -m experiments.size_breakdown --workers 6
 """
@@ -29,11 +32,12 @@ from simulator.workload import CostModel, CpuStageSeconds, StageTokens
 _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROFILE = "gpu_5060ti_public"
 POLICIES = ("fcfs", "program-fcfs", "plas", "lsf", "edf")
-# label: (map file, trace_set, kv_mb, deadline_basis); retention and SLO mix are
-# read from the map's manifest.
+# label: (map file, trace_set, kv_mb, deadline_basis, policies held to the map's
+# p95); retention and SLO mix are read from the map's manifest.
 WORKLOADS = {
-    "MAARA": ("plas_taskdl/S2_gpu_public.json", "holdout_qwen", 1024.0, "estimate"),
-    "TraceLab dev": ("tracelab/D1_dev_c0.3.json", "tracelab_dev", 8192.0, "task"),
+    "MAARA": ("plas_taskdl/S2_gpu_public.json", "holdout_qwen", 1024.0, "estimate",
+              ("fcfs", "program-fcfs", "plas")),
+    "TraceLab dev": ("tracelab/D1_dev_c0.3.json", "tracelab_dev", 8192.0, "task", POLICIES),
 }
 
 
@@ -78,7 +82,8 @@ def main():
     args = ap.parse_args()
     seeds = list(range(1, args.seeds + 1))
     manifest = Manifest.start("size_breakdown", params={
-        "workloads": {k: list(v) for k, v in WORKLOADS.items()}, "policies": POLICIES,
+        "workloads": {k: [list(x) if isinstance(x, tuple) else x for x in v]
+                      for k, v in WORKLOADS.items()}, "policies": POLICIES,
         "batch": args.batch, "loads": args.loads, "seeds": seeds,
         "hardware_profile": PROFILE,
         "calibration": "saturation and slack read from each map, not recalibrated",
@@ -86,7 +91,7 @@ def main():
     t0 = time.time()
     cells = []
     with ProcessPoolExecutor(max_workers=args.workers) as pool:
-        for wl, (rel, trace_set, kv, basis) in WORKLOADS.items():
+        for wl, (rel, trace_set, kv, basis, strict) in WORKLOADS.items():
             for load in args.loads:
                 c = _cell(args.results, rel, args.batch, load)
                 jobs = {(pol, sd): pool.submit(_job, (
@@ -97,14 +102,18 @@ def main():
                     for sd in seeds:
                         r = jobs[(pol, sd)].result()
                         want = c["p95"][pol][sd - 1]
-                        if abs(r["p95_task_latency_s"] - want) > 1e-6 * max(1.0, want):
+                        same = abs(r["p95_task_latency_s"] - want) <= 1e-6 * max(1.0, want)
+                        if not same and pol in strict:
                             raise SystemExit(f"golden check failed: {wl} load {load} "
                                              f"{pol} seed {sd}: p95 "
                                              f"{r['p95_task_latency_s']} vs map {want}")
                         cells.append({"workload": wl, "load": load, "policy": pol,
-                                      "seed": sd, **r})
+                                      "seed": sd, "map_p95_task_latency_s": want,
+                                      "matches_map": same, **r})
+                off = [x for x in cells[-len(POLICIES) * len(seeds):] if not x["matches_map"]]
                 print(f"[{time.time() - t0:6.0f}s] {wl} load {load}: "
-                      f"{len(POLICIES) * len(seeds)} runs, p95 matches the map",
+                      f"{len(POLICIES) * len(seeds)} runs; p95 differs from the map in "
+                      f"{len(off)} (" + ", ".join(sorted({x['policy'] for x in off})) + ")",
                       flush=True)
     out = {"cells": cells, "elapsed_s": round(time.time() - t0, 1),
            "manifest": manifest.to_dict()}

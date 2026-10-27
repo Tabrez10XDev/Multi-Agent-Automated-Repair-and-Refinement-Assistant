@@ -1435,3 +1435,13 @@ is not used. Tasks are grouped into size quintiles per workload. Reported
 as development, in FINDINGS §41 and figure 8; it explains G1/G2 and tests
 nothing. `run_scheduler_one` is split so the engine is reachable after
 `run()` (`scheduler_engine`); its behaviour is unchanged.
+
+*Amendment 2026-10-27, before any size-breakdown result:* the first run
+stopped at its golden check: MAARA LSF, load 1.0, seed 1, p95 120.10 s vs
+the map's 126.76 s. S2 was run at `a95585d`, before the KV-leak fix
+(`1a2d0cc`, §8 item 11), which changed some LSF and EDF values. FCFS,
+`program-fcfs` and PLAS matched. On MAARA the check now holds only those
+three to the map; LSF and EDF run on today's engine and every difference
+from S2 is recorded per run. TraceLab dev (D1, `87f952b`, after the fix)
+keeps the full check. Separately: figure 7's MAARA comparator is this same
+pre-fix S2 map; its verdict counts are not rechecked here (OPEN_ISSUES §31).
