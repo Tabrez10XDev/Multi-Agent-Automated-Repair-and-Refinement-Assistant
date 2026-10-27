@@ -1422,3 +1422,16 @@ code with `--workers 1` and with `--workers 4` agree on every field of all
 12 rows (65 s, 65 s, 28 s). The util-0.6 means already printed were seen;
 the rerun reproduces them exactly, and G4 is scored at util 0.8, which no
 attempt reached. E3 reruns with `--workers 6`; nothing else changes.
+
+*Amendment 2026-10-27, owner's request, after all four hypotheses were
+scored; exploratory, no prediction:* per-task slowdown by task size.
+`experiments/size_breakdown.py` replays batch 4 at capacity loads 1.0 and
+1.5, seeds 1-5, for FCFS, `program-fcfs`, PLAS, LSF and EDF, on MAARA
+(`holdout_qwen`, the S2 map's setup) and TraceLab **dev** (D1's setup), and
+keeps each task's latency and lone-replay time. Saturation and slack are
+read from the S2 and D1 maps, not recalibrated, and each run's p95 must
+equal the map's per-seed value or the run stops. The sealed TraceLab split
+is not used. Tasks are grouped into size quintiles per workload. Reported
+as development, in FINDINGS §41 and figure 8; it explains G1/G2 and tests
+nothing. `run_scheduler_one` is split so the engine is reachable after
+`run()` (`scheduler_engine`); its behaviour is unchanged.

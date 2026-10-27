@@ -97,6 +97,17 @@ def run_retention_one(policy, sched, scale, seed, kv_mb, arrival_rate, cost, tok
 def run_scheduler_one(sched, estimator_name, scale, seed, kv_mb, rate, slack,
                       retention, cost, tok, cpu, trace_set, batch=16, chunk=512,
                       sigma=0.5, slo=None, deadline_basis="estimate"):
+    return scheduler_engine(sched, estimator_name, scale, seed, kv_mb, rate, slack,
+                            retention, cost, tok, cpu, trace_set, batch=batch,
+                            chunk=chunk, sigma=sigma, slo=slo,
+                            deadline_basis=deadline_basis).run()
+
+
+def scheduler_engine(sched, estimator_name, scale, seed, kv_mb, rate, slack,
+                     retention, cost, tok, cpu, trace_set, batch=16, chunk=512,
+                     sigma=0.5, slo=None, deadline_basis="estimate"):
+    """The engine run_scheduler_one runs, unrun, for callers that need per-task
+    results after run() (experiments/size_breakdown.py)."""
     tasks = build(scale, seed, rate, cost, tok, cpu, trace_set=trace_set)
     est = make_estimator(trace_set, cost, tok, cpu, name=estimator_name)
     eng = Engine(tasks, cost,
@@ -108,7 +119,7 @@ def run_scheduler_one(sched, estimator_name, scale, seed, kv_mb, rate, slack,
                  scheduler=SCHEDULERS[sched](),
                  estimator=est,
                  hints=HintBuilder(sigma=sigma, seed=seed))
-    return eng.run()
+    return eng
 
 
 def calibrate_rate(target_util, scale, seed, kv_mb, cost, tok, cpu,
