@@ -834,8 +834,10 @@ CAPTIONS["fig8_size"] = (
     "lone-replay time) of each task-size fifth, MAARA (holdout_qwen) against TraceLab development set "
     "(tracelab_dev), batch 4, capacity loads 1.0 and 1.5, seeds 1-5, simulated 16 GB RTX 5060 Ti costs "
     "from public data (not measured), c = 0.3. Fifths are cut on lone-replay time within each workload; "
-    "the x labels give each fifth's size range. Same operating points as the S2 and D1 maps (each run's "
-    "p95 equals the map's). Development data, no prediction; log y-axis.")
+    "the x labels give each fifth's size range. Same operating points as the S2 and D1 maps: every TraceLab "
+    "run and every MAARA FCFS, program-fcfs and PLAS run reproduces its map's p95 exactly; MAARA LSF and EDF "
+    "run on the engine after the KV-leak fix, so they differ from S2, which predates it. Development data, "
+    "no prediction; log y-axis.")
 
 
 def fig8(results, out):
@@ -869,6 +871,8 @@ def fig8(results, out):
             for q in range(5):
                 print(f"    fifth {q + 1} ({ticks[q]:>10s}) " + "  ".join(f"{rows[r][q]:12.2f}" for r in RULES8))
             ax.set_yscale("log")
+            ax.set_yticks([1.5, 2, 3, 4, 6, 10, 15], ["1.5", "2", "3", "4", "6", "10", "15"])
+            ax.minorticks_off()
             ax.set_xticks(range(5), ticks, fontsize=6.3)
             ax.set_title(f"{wl}, load {load:g}", fontsize=7.5, color=INK, loc="left")
             _style(ax)

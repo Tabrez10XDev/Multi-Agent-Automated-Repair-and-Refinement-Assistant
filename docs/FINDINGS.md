@@ -2255,3 +2255,37 @@ Retention policies vs keep-all, paired 95% CI over 20 seeds (* significant):
     what retention can save. "offline-ref" is the driver's
     rent-aware hindsight reference, not Belady over recompute, so it is not
     a lower bound on recompute here.
+
+### Exploratory: slowdown by task size (2026-10-27, development data)
+
+DECISIONS §37 amendments of 2026-10-27, figure 8. `experiments/size_breakdown.py`
+at `b8be2b8`, clean tree, 100 runs, 120 s: batch 4, capacity loads 1.0 and
+1.5, seeds 1-5, MAARA `holdout_qwen` against TraceLab **dev**, same operating
+points as S2 and D1. Every TraceLab run, and every MAARA FCFS,
+`program-fcfs` and PLAS run, reproduces its map's p95 exactly. MAARA LSF and
+EDF differ from S2 (18 of 20 runs), because S2 predates the KV-leak fix.
+Means over tasks and seeds, no CIs: read as a picture, not a test.
+
+Mean slowdown at load 1.5, smallest to largest fifth of task size:
+
+| workload | rule | fifth 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|---|
+| MAARA (3–7 s … 19–39 s) | FCFS | 5.99 | 4.26 | 5.91 | 7.33 | 6.72 |
+| | `program-fcfs` | 10.16 | 4.57 | 4.57 | 6.22 | 4.37 |
+| | PLAS | 2.72 | 4.33 | 9.29 | 6.93 | 8.77 |
+| | LSF | 13.02 | 4.73 | 4.89 | 6.56 | 4.42 |
+| TraceLab dev (11–12 s … 81–976 s) | FCFS | 3.37 | 3.24 | 3.49 | 3.62 | 2.55 |
+| | `program-fcfs` | 7.28 | 5.65 | 5.03 | 4.14 | 2.45 |
+| | PLAS | 1.97 | 2.45 | 3.24 | 3.28 | 2.52 |
+| | LSF | 2.55 | 2.49 | 3.05 | 2.95 | 2.31 |
+
+11. **On MAARA every rule trades one size for another.** `program-fcfs`
+    (and LSF/EDF) roughly double the smallest fifth's slowdown compared with
+    FCFS, but lower it for medium and large tasks; PLAS does the reverse. With
+    task sizes this even (CV 0.61), the trade nets out in `program-fcfs`'s
+    favour on p95 latency.
+12. **On TraceLab `program-fcfs` hurts every size but the largest,** most
+    for the smallest (7.3 vs FCFS 3.4 at load 1.5). The size- and
+    deadline-aware rules are at or below FCFS in every fifth. This is the
+    per-task picture behind G1 failing and G2 holding. At load 1.0 the
+    pattern is the same but compressed (all rules 1.4–2.3).
