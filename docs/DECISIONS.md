@@ -1445,3 +1445,103 @@ three to the map; LSF and EDF run on today's engine and every difference
 from S2 is recorded per run. TraceLab dev (D1, `87f952b`, after the fix)
 keeps the full check. Separately: figure 7's MAARA comparator is this same
 pre-fix S2 map; its verdict counts are not rechecked here (OPEN_ISSUES §31).
+
+## 38. Program-level Gittins scheduler with a tail guard, pre-registered
+
+Set 2026-10-27, owner's decision, before any code or run of the policy.
+Purpose: FINDINGS §41 showed that no fixed rule works on both workloads.
+`program-fcfs` wins on MAARA (task-size CV 0.61) but is worse than FCFS on
+p95 slowdown in 12 of 30 sealed TraceLab cells (CV 1.53). PLAS fixes
+slowdown but is worse than `program-fcfs` on p95 latency in 12. The aim is
+one rule that follows the workload's size pattern. Basis: the Gittins
+index (Aalto, Ayesta & Righter 2009; Scully et al. 2021). Prior art:
+Autellix PLAS (§36) and Hermes (2025), which applies Gittins to LLM
+applications. Claimed here is an evaluation on real agent turns, not a new
+algorithm.
+
+**Design**, after an expert review (session record):
+- **The index runs on requests completed, not seconds.** A task's state is
+  k = its completed requests: rounds on TraceLab, LLM calls on MAARA. The
+  prior is the frozen distribution of R, requests per task, with work
+  w_j for request j. index(k) = max over m > k of
+  (S[k] − S[m]) / (C[m] − C[k]), where S[j] = #(R > j) and
+  C[j] = Σ_{i<j} S[i]·w_i. Requests, not seconds, because
+  `task_attained_s` is wall time under batching (stretched up to 2.5x at 6
+  resident) and depends on the policy, while R does neither. Tool and CPU
+  time between requests is not service.
+- **Variants.**
+  - `gittins`: the index above, which minimises mean latency.
+  - `gittins-sd`: the numerator is weighted by 1/size, to target mean
+    slowdown. It is a heuristic, not proven optimal.
+  - Size of a task with r requests: Σ_{j<r} w_j + r × mean tool time.
+  - Ties go to oldest task. States k with S[k] < 30 share the index of the
+    last k with S[k] ≥ 30.
+- **Priors.** Both are frozen and computed before any run.
+  - **TraceLab:** `dev_constants.json` (36,853 dev turns), already frozen
+    under §37. w_0 is a cold round, prefill of mean prefix + append, then
+    mean decode; w_j for j ≥ 1 is a cached round, prefill of the append
+    only. Under `gpu_5060ti_public` that is 17.9 s and 8.3 s, with tool
+    time 8.4 s per round.
+  - **MAARA:** the fit traces (`original`), restricted to the configuration
+    of `holdout_qwen` and disjoint from its problems. w_j is the mean
+    batch-1 cost of each task's j-th LLM call.
+- **Tail guard.** `+guard` variants put first the single oldest task whose
+  time in system exceeds X × E[S], where E[S] is the prior's mean size.
+  Only one is promoted per decision, because promoting every overdue task
+  collapses to `program-fcfs` in overload.
+- **Ablation.** `plas-guard` is PLAS with the same guard.
+- **Dropped after review.**
+  - Ranking by KV memory. 81% of dev rounds and 87% of sealed rounds sit
+    at the 32,768-token cap, so every request needs about the same KV, and
+    the budget never binds at batches 2 and 4.
+  - Online relearning of the prior. Recent completions over-represent
+    short tasks, and the policy feeds back into its own data.
+  - Context-size conditioning and index-based eviction are deferred.
+
+**No oracle field is read.** The new ReqView field `task_requests_done`
+counts a task's finished requests. Tests cover the forbidden-field guard
+and a future-perturbation check: two traces that differ only after a
+task's request j must give the same order up to j.
+
+**Development (TraceLab dev, not scored).**
+- The run: `scheduling_map --trace-set tracelab_dev`, set up as D1 (§37):
+  8,192 MB, LRU, capacity axis, SLO mix, task deadline basis,
+  `gpu_5060ti_public`, at batches 2/4/8 and 5 seeds.
+- Policies: fcfs, program-fcfs, plas, `gittins`, `gittins-sd`, and
+  `plas-guard`, `gittins-guard` and `gittins-sd-guard` at X ∈ {2, 4, 8}.
+- `size_breakdown` with the chosen policy, and a MAARA `holdout_qwen` map
+  as a sanity check with no hypothesis.
+- **Selection rule, fixed now.** For each guarded Gittins variant, take L
+  as the mean over the 30 cells of its mean p95 latency ÷ `program-fcfs`'s,
+  and D as the same for p95 slowdown. Choose the variant and X with the
+  smallest max(L, D); a tie goes to the smaller X, then `gittins`.
+  `plas-guard` runs at the chosen X. Nothing else is tuned on the dev
+  results.
+
+**Sealed test E4 on a fresh split, `tracelab_sealed2`.**
+- **What the split is.**
+  - `build_tracelab.py --fresh-sealed 80` takes the next 80 turns of the
+    sealed users, by the §37 sample hash.
+  - It skips the 80 turns already used and every session they belong to.
+  - It writes only `sealed2.jsonl.gz` and must leave the committed files
+    byte-identical.
+  - `tracelab_sealed2` is gated by `MAARA_POLICIES_FROZEN` like
+    `tracelab_sealed`.
+  - It is reported as "same users, new turns".
+- **The run.** As E1 (§37): batches 2/4/8, 20 seeds. Policies: fcfs,
+  program-fcfs, plas, `plas-guard` and the chosen guarded Gittins variant.
+- **Runtime rule.** A one-cell timing probe on dev. If the map projects
+  over 16 h, N is halved, decided from wall time only.
+- **Hypotheses**, on the chosen variant, paired 95% CI, better = `hi < 0`:
+  - **H1:** better than `program-fcfs` on p95 slowdown in at least 15 of 30
+    cells, and worse in at most 2.
+  - **H2:** worse than `program-fcfs` on p95 latency in at most 2 cells.
+    PLAS was worse in 12 on E1.
+  - **H3:** better than `plas-guard` on mean slowdown in at least 5 cells.
+    This tests whether the index adds anything beyond the guard.
+- The freeze commit comes after the dev selection and before sealed2 is
+  built. A later amendment records its hash.
+
+**Expert checkpoints**, at the owner's request. A separate expert review
+runs after the code (before dev runs), before the freeze, and before
+conclusions are written. Any disagreement goes to the owner.
