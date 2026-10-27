@@ -190,3 +190,55 @@ def test_future_output_lengths_do_not_change_earlier_decisions(name):
     early_b = [x for x in rec_b if x[0] < first_last_start]
     assert early_a and early_a == early_b
     assert not math.isnan(first_last_start)
+
+
+# --- added after the E-2 code review ----------------------------------------
+
+def test_zero_work_or_empty_prior_is_refused():
+    with pytest.raises(ValueError):
+        GittinsTable({1: 1, 2: 1}, [0.0])
+    with pytest.raises(ValueError):
+        GittinsTable({0: 5}, [1.0])
+
+
+def test_guarded_variant_without_a_prior_refuses_to_run():
+    with pytest.raises(RuntimeError):
+        SCHEDULERS["gittins-guard-x4"]().order([view(1, 1)], now=0.0)
+
+
+def test_tracelab_estimator_binds_the_frozen_prior():
+    from experiments.common import make_estimator
+    cost = CostModel.from_profile("gpu_5060ti_public")
+    est = make_estimator("tracelab_dev", cost, StageTokens.from_measured(),
+                         CpuStageSeconds.from_measured())
+    s = SCHEDULERS["gittins-guard-x4"]()
+    s.bind(cost, est)
+    assert s.mean_size == pytest.approx(145.2, abs=0.1)
+
+
+def test_maara_prior_is_the_fifteen_fit_tasks():
+    from simulator.gittins import maara_prior
+    r_counts, work, tool = maara_prior(CostModel.from_profile("gpu_5060ti_public"))
+    assert r_counts == {3: 11, 5: 3, 10: 1}
+    assert len(work) == 10 and all(w > 0 for w in work)
+
+
+def test_every_view_sees_the_count_of_requests_finished_so_far():
+    tasks = _tasks()
+    cost, tok, cpu = CostModel(), StageTokens.from_measured(), CpuStageSeconds.from_measured()
+    sched = SCHEDULERS["gittins"]()
+    seen = []
+    inner = sched.order
+
+    def order(views, now):
+        seen.extend((v.task_id, v.task_requests_done, now) for v in views)
+        return inner(views, now)
+    sched.order = order
+    eng = Engine(tasks, cost, EngineConfig(kv_budget_mb=2048.0, max_batch=4),
+                 retention=RETENTIONS["lru"](), scheduler=sched,
+                 estimator=ESTIMATORS["online"](cost, tok, cpu))
+    eng.run()
+    for tid, done, now in seen:
+        assert done == sum(1 for r in eng.requests
+                           if r.node.task_id == tid and r.finished_at is not None
+                           and r.finished_at <= now)

@@ -1559,3 +1559,29 @@ conclusions are written. Any disagreement goes to the owner.
   mean size 5.6 s under `gpu_5060ti_public`.
 - **Policy names:** `gittins`, `gittins-sd`, and
   `{gittins, gittins-sd, plas}-guard-x{2,4,8}`.
+
+*Amendment 2026-10-27, after the E-2 code review (verdict: go, with small
+fixes) and before any dev run:*
+- **Fixes.**
+  - The table refuses zero work and empty priors, which would otherwise
+    make a NaN sort key.
+  - A guarded variant with no prior raises instead of silently running
+    unguarded.
+  - The MAARA prior's memo is keyed on the full cost model.
+  - New tests: the real TraceLab bind (mean size 145.2 s), the MAARA prior
+    counts {3: 11, 5: 3, 10: 1}, and that every view's
+    `task_requests_done` equals the requests finished by then.
+- **Judgement calls the reviewer left to the owner, taken as defaults.**
+  - **The guard looks only at tasks with a queued request.** A task in a
+    tool phase has nothing to promote, so the oldest overdue task that is
+    queued goes first.
+  - **MAARA work.** w_j uses the full (uncached) prompt prefill, and tool
+    time is CPU seconds per LLM call (0.034 s).
+  - **Pooled MAARA state.** States k ≥ 5 pool at index 0.535, so MAARA's
+    one 10-call task moves ahead of new tasks after call 5. The sanity
+    report says so.
+  - **The MAARA prior is fixed to `single_agent`,** the config of
+    `holdout_qwen`. It is not valid for `holdout_llama`.
+  - **No committed golden test.** Golden equality with the pre-change code
+    is checked by hand: a `--quick` map gave 0 mismatches over every
+    existing policy.

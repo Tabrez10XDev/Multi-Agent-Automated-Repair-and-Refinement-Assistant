@@ -114,7 +114,12 @@ def test_attained_service_is_past_gpu_time_and_bounded_by_latency():
 def test_every_scheduler_returns_a_permutation(name):
     vs = [view(i, enqueued_at=float(i), deadline=100.0 - i,
                est_remaining_s=float(10 - i)) for i in range(1, 6)]
-    order = SCHEDULERS[name]().order(vs, now=0.0)
+    sched = SCHEDULERS[name]()
+    if hasattr(sched, "bind"):          # as the engine does (DECISIONS 38)
+        cost = CostModel()
+        sched.bind(cost, ExecutionEstimator(cost, StageTokens.from_measured(),
+                                            CpuStageSeconds.from_measured()))
+    order = sched.order(vs, now=0.0)
     assert sorted(order) == [v.req_id for v in sorted(vs, key=lambda v: v.req_id)]
 
 

@@ -623,6 +623,10 @@ class GittinsScheduler(Scheduler):
         return min(overdue, key=lambda v: (v.task_arrival_s, v.task_id)).task_id
 
     def order(self, views, now):
+        if self.GUARD_X is not None and self.table is None:
+            # A guarded variant without a prior would silently run unguarded.
+            raise RuntimeError(f"{self.name} needs a prior: bind it to an "
+                               f"estimator with gittins_prior")
         top = self._promoted(views, now)
         return [v.req_id for v in sorted(
             views, key=lambda v: (v.task_id != top, self._primary(v),
@@ -639,7 +643,9 @@ class GittinsSlowdownScheduler(GittinsScheduler):
 class PLASGuardScheduler(GittinsScheduler):
     """PLAS (attained GPU wall time, then task age) with the same tail guard:
     the ablation that separates the guard from the index (DECISIONS 38).
-    Registered only guarded (`plas-guard-x<X>`); unguarded it is `plas`."""
+    Registered only guarded (`plas-guard-x<X>`). Its base name is "plas" so
+    that `_guarded` produces `plas-guard-x<X>`; the unguarded class must never
+    be registered, because it would shadow ProgramLASScheduler."""
     name = "plas"
 
     def _primary(self, v):

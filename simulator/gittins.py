@@ -49,6 +49,11 @@ class GittinsTable:
             if r >= 1 and c > 0:
                 n[r] = c
         w = np.array([work[min(j, len(work) - 1)] for j in range(r_max)], dtype=float)
+        # Zero work makes C flat, and the index inf or NaN: a NaN sort key
+        # gives an undefined order, so refuse it here.
+        if n.sum() <= 0 or not np.all(w > 0) or tool_s < 0:
+            raise ValueError("GittinsTable needs tasks with R >= 1, positive work "
+                             "and non-negative tool time")
         # S[j] = tasks with more than j requests; S[r_max] = 0.
         self.S = n[::-1].cumsum()[::-1] - n
         self.C = np.concatenate(([0.0], np.cumsum(self.S[:-1] * w)))
@@ -106,7 +111,7 @@ def maara_prior(cost, fit_set="original", config="single_agent"):
     call in node order, tool_s the mean CPU seconds per call."""
     from simulator.trace_loader import load_trace, resolve_trace_set
     from simulator.workload import Kind
-    key = (fit_set, config, cost.profile, cost.batch_decode_coeff)
+    key = (fit_set, config, repr(cost))        # every cost field, overrides included
     if key not in _MAARA_PRIOR:
         r_counts, by_j, cpu_s, calls = {}, {}, 0.0, 0
         for path in resolve_trace_set(fit_set):
