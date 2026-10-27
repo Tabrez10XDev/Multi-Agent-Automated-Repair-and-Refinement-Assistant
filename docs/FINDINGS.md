@@ -47,7 +47,7 @@ measurements and are unaffected.
 | 31. What-if: efficient batching | *sim*, what-if 0.15, not measured | HYPOTHETICAL coefficient 0.15. LSF still never beats `program-fcfs` on p95 (0 of 40 cells; worse in 22). Its tight-class gains (up to 14 points at batch 2) are paid for by the loose class. At batch 8–16 the scheduler rarely has a choice (cap-binding labels qualified by OPEN_ISSUES §28). Verdict: freeze `program-fcfs`. Deadlines were recalibrated to a fixed FCFS miss rate. |
 | 32. Sealed `final_qwen`, partial | current, *sim*, 0.841, **out of sample**, 5 of 40 cells | On 91 unseen tasks at batch 2, `program-fcfs` cuts p95 by 14-33% against FCFS in all 5 cells (loads 0.71-1.15), and LSF is significantly worse than `program-fcfs` in all 5 (+18 to +57 s). Pre-registered S1 and S2 hold; S3 untestable at batch 2. Batches 4-16 not yet run. |
 | 35. Retention at 8x; sealed 1x contrast | **corrected 2026-10-25** on the fixed engine (DECISIONS §8 item 11) | 8x holdout: evict-now +222/+235/+241 s p95 (significant); ski-rental ties keep-all on p95 (was significantly worse at two budgets) and recomputes more. Sealed 1x rerun: ski-rental ties keep-all on p95 and recomputes +4.1 to +6.7 s more; **R1 fails in 1 of 6 p95 cells** (`ski-rental-pred` −11.2 s at headroom 0.25). Both versions are in §35. |
-| 41. TraceLab public workload | sealed E1 scored (20 seeds); E3 (G4) pending; D1 is development | **G1 fails**: `program-fcfs` beats FCFS on p95 latency in 12 of 30 cells (needed 15) and is worse on p95 slowdown in 12. **G2 holds** (PLAS better on slowdown in 17). **G3 holds** (LSF, EDF better on latency in 0). Heavy tail (CV 1.53) reverses the ranking on slowdown. Batch 8 ≡ batch 16. |
+| 41. TraceLab public workload | sealed E1 and E3 scored (20 seeds); D1 is development | **G1 fails**: `program-fcfs` beats FCFS on p95 latency in 12 of 30 cells (needed 15) and is worse on p95 slowdown in 12. **G2 holds** (PLAS better on slowdown in 17). **G3 holds** (LSF, EDF better on latency in 0). Heavy tail (CV 1.53) reverses the ranking on slowdown. **G4 holds**: keep-all recompute is 6.8% of makespan at util 0.8 (MAARA under 1%), yet every early-release policy is worse than keep-all. Batch 8 ≡ batch 16. |
 
 ---
 
@@ -2080,7 +2080,7 @@ ordering rule beats it in any of the 120 cells here. The cap variants are
 `program-fcfs` plus a concurrency limit, and are covered in §39. The headline's comparison set is now
 FCFS, SJF, EDF, LSF (online and oracle), the hint-priority rule and PLAS.
 
-## 41. TraceLab public workload: D1 development map, sealed E1 (G1–G3); E3 pending
+## 41. TraceLab public workload: D1 development map, sealed E1 (G1–G3) and E3 (G4)
 
 > **Development result (2026-10-25), not scored.** DECISIONS §37 and its
 > amendments. The pre-registered hypotheses G1–G4 are scored only on the
@@ -2203,7 +2203,55 @@ On p95 slowdown against `program-fcfs`, from load 1.0 up, PLAS is −54% to
    (c = 0.3), 80 turns, Poisson re-timing, no inter-turn KV reuse
    (OPEN_ISSUES §33), task-basis deadlines.
 
-### Sealed E3: G4 pending
+### Sealed E3: G4 scored (2026-10-26)
 
-The first E3 attempt was stopped in calibration (DECISIONS §37 amendment
-2026-10-26); the rerun started at 09:15 on 2026-10-26 at `45632a0`.
+**Setup.** `run_retention_grid --trace-set tracelab_sealed --kv-mb 8192
+--scales 1 --batch 8 --seeds 20 --profile gpu_5060ti_public --rate-bracket
+0.0005 0.02 --workers 6`, `MAARA_POLICIES_FROZEN=9297ff0`, at `8045bdc`,
+clean tree, 480 runs, 30,091 s. Output
+`results/tracelab/E3_sealed_retention.{json,log}`. Two earlier attempts were
+stopped, one in calibration and one for time (DECISIONS §37 amendments
+2026-10-26); the six util-0.6 rows they share with this run match it
+exactly. Calibration on seed 1: rate 0.00679/s at busy 0.600 and 0.00931/s
+at busy 0.801. Over the 20 seeds, mean busy is 0.52 and 0.69 (0.55–0.90
+per seed at util 0.8): the rate is calibrated on one seed, as in every
+grid run, and TraceLab's seeds differ more than MAARA's.
+
+**G4 holds.** At util 0.8, keep-all's recompute is **6.8% of makespan**
+under FCFS (585.6 s of 8,581 s; per-seed mean 7.0%, 95% CI [3.0, 11.0],
+range 0.1–37.2%) and 7.8% under LSF. At util 0.6 it is 1.4% (FCFS) and
+1.7% (LSF). MAARA: under 1% (§24/§33).
+
+Retention policies vs keep-all, paired 95% CI over 20 seeds (* significant):
+
+| util | policy | sched | Δ p95 (s) | Δ recompute (s) |
+|---|---|---|---|---|
+| 0.6 | ski-rental | FCFS | +4.9 [+0.1, +9.7]* | +19.7 [+12.4, +27.1]* |
+| 0.6 | ski-rental | LSF | +6.3 [+0.9, +11.7]* | +19.4 [+11.3, +27.5]* |
+| 0.6 | offline-ref | FCFS | +16.9 [+7.5, +26.2]* | +101.3 [+67.1, +135.5]* |
+| 0.6 | evict-now | FCFS | +902.2 [+769.9, +1034.5]* | +4815.8 [+4695.0, +4936.6]* |
+| 0.8 | ski-rental | FCFS | +20.1 [+2.3, +38.0]* | +56.8 [+10.3, +103.2]* |
+| 0.8 | ski-rental | LSF | +23.0 [+4.4, +41.6]* | +72.1 [+9.3, +134.9]* |
+| 0.8 | offline-ref | FCFS | +28.7 [+2.8, +54.7]* | +93.3 [+56.3, +130.4]* |
+| 0.8 | offline-ref | LSF | +92.8 [−34.0, +219.7] | +217.9 [+45.4, +390.5]* |
+| 0.8 | evict-now | FCFS | +2050.3 [+1720.7, +2379.8]* | +4393.9 [+4059.6, +4728.1]* |
+| 0.8 | evict-now | LSF | +1532.2 [+1310.2, +1754.3]* | +4309.7 [+3956.8, +4662.7]* |
+
+8. **Recompute is no longer negligible, but keep-all is still best.** On
+   real agent turns at 8,192 MB, recompute under keep-all is 6.8–7.8% of
+   makespan at util 0.8, so retention now matters for GPU work. Every
+   policy that releases blocks early is significantly worse than keep-all
+   on recompute in all 8 policy × scheduler × util cells, and on p95 in 7
+   of 8 (ski-rental +4.9 to +23.0 s, offline-ref +15.6 to +92.8 s,
+   evict-now +880 to +2,050 s). The direction matches MAARA (§24, §35),
+   now with significance on latency too.
+9. **LRU equals keep-all** seed for seed in all four cells: with at most 6
+   requests resident, forced evictions take the same blocks either way.
+   **ski-rental-pred equals ski-rental** in every reported metric (rent
+   differs by under 0.0001 s on 2 seeds): its hint never changes a
+   decision here.
+10. **Bounds.** No inter-turn KV reuse (OPEN_ISSUES §33): a real serving
+    system could reuse context across a person's turns, which would raise
+    what retention can save. "offline-ref" is the driver's
+    rent-aware hindsight reference, not Belady over recompute, so it is not
+    a lower bound on recompute here.

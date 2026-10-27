@@ -45,7 +45,7 @@ Hypothesis scorecard (all pre-registered and committed before the runs):
 - **Q1** failed; **Q2** held; **Q3** held in 2 of 3 runs (DECISIONS §35).
 - **P1** held; **P2** failed; **T1** and **T2** held (DECISIONS §36).
 - **R1** (DECISIONS §31) held pre-fix; on the fixed-engine rerun it **failed in 1 of 6** p95 cells (FINDINGS §35).
-- **G1–G3** (TraceLab sealed E1, DECISIONS §37, FINDINGS §41): **G1 failed** (program-fcfs better on p95 latency in 12 of 30, needed 15; worse on p95 slowdown in 12). **G2 held** (PLAS better on slowdown in 17). **G3 held** (LSF, EDF better on latency in 0). **G4** pending E3.
+- **G1–G3** (TraceLab sealed E1, DECISIONS §37, FINDINGS §41): **G1 failed** (program-fcfs better on p95 latency in 12 of 30, needed 15; worse on p95 slowdown in 12). **G2 held** (PLAS better on slowdown in 17). **G3 held** (LSF, EDF better on latency in 0). **G4 held** (E3: keep-all recompute 6.8% of makespan at util 0.8, MAARA under 1%); every early-release policy, ski-rental included, was significantly worse than keep-all on recompute in all 8 cells and on p95 in 7 of 8.
 
 ## 3. Method points the report must state
 
