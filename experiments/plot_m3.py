@@ -1,5 +1,5 @@
 """
-Report-quality figures for Milestone 3 (seven PNG + PDF files, plus a printed audit table).
+Report-quality figures for Milestone 3 (eight PNG + PDF files, plus a printed audit table).
 
     ./venv/bin/python -m experiments.plot_m3 [--results results/] [--out results/figures/m3] [--only 1,2]
 
@@ -825,9 +825,67 @@ def fig7(results, out, tracelab=None):
     return _save(fig, out, "fig7_tracelab")
 
 
-FIGS = {1: fig1, 2: fig2, 3: fig3, 4: fig4, 5: fig5, 6: fig6, 7: fig7}
+# --- figure 8: slowdown by task size, MAARA vs TraceLab ---------------------
+
+SIZE_BREAKDOWN = "tracelab/size_breakdown.json"
+RULES8 = ("fcfs", "program-fcfs", "plas", "lsf", "edf")
+CAPTIONS["fig8_size"] = (
+    "Figure 8 (FINDINGS 41, exploratory, DECISIONS 37 amendment 2026-10-27). Mean slowdown (latency / "
+    "lone-replay time) of each task-size fifth, MAARA (holdout_qwen) against TraceLab development set "
+    "(tracelab_dev), batch 4, capacity loads 1.0 and 1.5, seeds 1-5, simulated 16 GB RTX 5060 Ti costs "
+    "from public data (not measured), c = 0.3. Fifths are cut on lone-replay time within each workload; "
+    "the x labels give each fifth's size range. Same operating points as the S2 and D1 maps (each run's "
+    "p95 equals the map's). Development data, no prediction; log y-axis.")
+
+
+def fig8(results, out):
+    d = _load(results, SIZE_BREAKDOWN)
+    wls = list(dict.fromkeys(c["workload"] for c in d["cells"]))
+    loads = sorted({c["load"] for c in d["cells"]})
+    fig, axes = plt.subplots(len(loads), len(wls), figsize=(6.8, 2.6 * len(loads)), sharey=True,
+                             facecolor=SURFACE, squeeze=False)
+    print("\n== Figure 8: mean slowdown by task-size fifth ==")
+    for j, wl in enumerate(wls):
+        sizes = sorted(t["size_s"] for c in d["cells"] if c["workload"] == wl and c["policy"] == "fcfs"
+                       for t in c["tasks"])
+        edges = [sizes[min(len(sizes) - 1, int(q * len(sizes) / 5))] for q in range(1, 5)]
+        lo_hi = [(min(sizes) if q == 0 else edges[q - 1], max(sizes) if q == 4 else edges[q]) for q in range(5)]
+        ticks = [f"{a:.0f}\u2013{b:.0f} s" for a, b in lo_hi]
+        print(f"{wl}: fifths (s) " + "  ".join(ticks))
+        for i, load in enumerate(loads):
+            ax = axes[i][j]
+            print(f"  load {load}: " + "  ".join(f"{LABEL[r]:>12s}" for r in RULES8))
+            rows = {}
+            for r in RULES8:
+                bucket = [[] for _ in range(5)]
+                for c in d["cells"]:
+                    if c["workload"] == wl and c["load"] == load and c["policy"] == r:
+                        for t in c["tasks"]:
+                            q = sum(t["size_s"] >= e for e in edges)
+                            bucket[q].append(t["latency_s"] / t["size_s"])
+                rows[r] = [statistics.fmean(b) for b in bucket]
+                ax.plot(range(5), rows[r], "-o", color=POLICY[r], lw=1.4 if r != "program-fcfs" else 2.0,
+                        ms=3.5, label=LABEL[r], zorder=3 if r == "program-fcfs" else 2)
+            for q in range(5):
+                print(f"    fifth {q + 1} ({ticks[q]:>10s}) " + "  ".join(f"{rows[r][q]:12.2f}" for r in RULES8))
+            ax.set_yscale("log")
+            ax.set_xticks(range(5), ticks, fontsize=6.3)
+            ax.set_title(f"{wl}, load {load:g}", fontsize=7.5, color=INK, loc="left")
+            _style(ax)
+            if j == 0:
+                ax.set_ylabel("mean slowdown (log)", fontsize=7.5, color=INK)
+            if i == len(loads) - 1:
+                ax.set_xlabel("task size, smallest to largest fifth (lone-replay time)", fontsize=7, color=INK)
+    axes[0][0].legend(loc="upper right", fontsize=6.3, frameon=False, ncol=1)
+    fig.tight_layout()
+    fig.text(0.01, -0.02, "exploratory, development data; simulated public-data costs for a 16 GB RTX 5060 Ti "
+             "(not measured); c = 0.3; batch 4; 5 seeds", fontsize=6, color=MUTED)
+    return _save(fig, out, "fig8_size")
+
+
+FIGS = {1: fig1, 2: fig2, 3: fig3, 4: fig4, 5: fig5, 6: fig6, 7: fig7, 8: fig8}
 NAMES = {1: "fig1_headline", 2: "fig2_league", 3: "fig3_sensitivity", 4: "fig4_retention",
-         5: "fig5_cap", 6: "fig6_plas", 7: "fig7_tracelab"}
+         5: "fig5_cap", 6: "fig6_plas", 7: "fig7_tracelab", 8: "fig8_size"}
 
 
 def main():
