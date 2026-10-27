@@ -1,0 +1,477 @@
+trace=tracelab_dev kv=8192MB retention=lru profile=gpu_5060ti_public coeff=0.3 seeds=5 batches=[2, 4, 8] slo=(('tight', 1.0, 0.3), ('standard', 2.0, 0.4), ('loose', 4.0, 0.3)) deadlines=task load-axis=capacity
+
+=== batch 2 ===
+  saturation throughput = 0.0162 tasks/s; slack calibrated at load 0.8 = 0.0129/s
+  slack_factor = 0.844  (FCFS miss 25.8% at util 0.8)
+  load 0.50 (util None, x0.5)  choice  0.3%  rent>0  2.5%  forced 150473.2  resident max 2  active max/p95 2/2.0  at-cap 19.1% INACTIVE
+    fcfs   p50    25.1  p95   201.6  miss 23.2% (infeasible 19.5%)
+    program-fcfs p95   -4.84 [-18.29, +8.60]   miss  +0.3% [-0.4%, +0.9%]
+    plas       p95   +2.28 [-4.05, +8.61]   miss  +0.0% [+0.0%, +0.0%]
+    gittins    p95   -4.84 [-18.29, +8.60]   miss  +0.3% [-0.4%, +0.9%]
+    gittins-sd p95   -4.84 [-18.29, +8.60]   miss  +0.3% [-0.4%, +0.9%]
+    gittins-guard-x2 p95   -4.84 [-18.29, +8.60]   miss  +0.3% [-0.4%, +0.9%]
+    gittins-guard-x4 p95   -4.84 [-18.29, +8.60]   miss  +0.3% [-0.4%, +0.9%]
+    gittins-guard-x8 p95   -4.84 [-18.29, +8.60]   miss  +0.3% [-0.4%, +0.9%]
+    gittins-sd-guard-x2 p95   -4.84 [-18.29, +8.60]   miss  +0.3% [-0.4%, +0.9%]
+    gittins-sd-guard-x4 p95   -4.84 [-18.29, +8.60]   miss  +0.3% [-0.4%, +0.9%]
+    gittins-sd-guard-x8 p95   -4.84 [-18.29, +8.60]   miss  +0.3% [-0.4%, +0.9%]
+    plas-guard-x2 p95   +2.28 [-4.05, +8.61]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x4 p95   +2.28 [-4.05, +8.61]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x8 p95   +2.28 [-4.05, +8.61]   miss  +0.0% [+0.0%, +0.0%]
+  load 0.60 (util None, x0.6)  choice  0.2%  rent>0  3.5%  forced 150761.4  resident max 2  active max/p95 2/2.0  at-cap 24.3% INACTIVE
+    fcfs   p50    27.8  p95   204.9  miss 23.8% (infeasible 20.0%)
+    program-fcfs p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    plas       p95   +0.00 [+0.00, +0.00]   miss  +0.5% [-0.9%, +1.9%]
+    gittins    p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x4 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x8 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd-guard-x4 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd-guard-x8 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.5% [-0.9%, +1.9%]
+    plas-guard-x4 p95   +0.00 [+0.00, +0.00]   miss  +0.5% [-0.9%, +1.9%]
+    plas-guard-x8 p95   +0.00 [+0.00, +0.00]   miss  +0.5% [-0.9%, +1.9%]
+  load 0.70 (util None, x0.7)  choice  1.6%  rent>0  5.6%  forced 151460.6  resident max 2  active max/p95 2/2.0  at-cap 28.5% INACTIVE
+    fcfs   p50    29.0  p95   219.9  miss 26.5% (infeasible 21.2%)
+    program-fcfs p95   +3.48 [-16.85, +23.82]   miss  -0.3% [-0.9%, +0.4%]
+    plas       p95   +1.22 [-3.68, +6.12]   miss  -0.8% [-3.8%, +2.3%]
+    gittins    p95   -3.13 [-12.42, +6.15]   miss  -1.0% [-4.7%, +2.7%]
+    gittins-sd p95   -4.94 [-18.73, +8.85]   miss  -1.0% [-4.7%, +2.7%]
+    gittins-guard-x2 p95   +8.63 [-27.87, +45.12]   miss  -1.2% [-4.7%, +2.2%]
+    gittins-guard-x4 p95   +8.63 [-27.87, +45.12]   miss  -1.2% [-4.7%, +2.2%]
+    gittins-guard-x8 p95   -3.13 [-12.42, +6.15]   miss  -1.0% [-4.7%, +2.7%]
+    gittins-sd-guard-x2 p95   -4.96 [-18.74, +8.81]   miss  -1.0% [-4.7%, +2.7%]
+    gittins-sd-guard-x4 p95   -4.96 [-18.74, +8.81]   miss  -1.0% [-4.7%, +2.7%]
+    gittins-sd-guard-x8 p95   -4.94 [-18.73, +8.85]   miss  -1.0% [-4.7%, +2.7%]
+    plas-guard-x2 p95   +1.22 [-3.68, +6.11]   miss  -0.8% [-3.8%, +2.3%]
+    plas-guard-x4 p95   +1.22 [-3.68, +6.11]   miss  -0.8% [-3.8%, +2.3%]
+    plas-guard-x8 p95   +1.22 [-3.68, +6.12]   miss  -0.8% [-3.8%, +2.3%]
+  load 0.80 (util None, x0.8)  choice  3.2%  rent>0  7.8%  forced 158696.4  resident max 2  active max/p95 2/2.0  at-cap 33.9% INACTIVE
+    fcfs   p50    31.3  p95   266.0  miss 27.3% (infeasible 22.0%)
+    program-fcfs p95  -39.31 [-106.55, +27.94]   miss  -0.5% [-2.3%, +1.3%]
+    plas       p95  -16.92 [-56.89, +23.04]   miss  -0.0% [-2.2%, +2.2%]
+    gittins    p95  -33.18 [-96.94, +30.57]   miss  -0.8% [-2.8%, +1.3%]
+    gittins-sd p95  -26.27 [-73.23, +20.69]   miss  -0.5% [-1.9%, +0.9%]
+    gittins-guard-x2 p95  -30.21 [-81.99, +21.57]   miss  -0.5% [-1.3%, +0.3%]
+    gittins-guard-x4 p95  -28.74 [-77.72, +20.24]   miss  -0.5% [-1.3%, +0.3%]
+    gittins-guard-x8 p95  -33.18 [-96.94, +30.57]   miss  -0.8% [-2.8%, +1.3%]
+    gittins-sd-guard-x2 p95  -12.29 [-48.49, +23.92]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd-guard-x4 p95  -11.17 [-44.27, +21.93]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd-guard-x8 p95  -24.24 [-66.67, +18.19]   miss  -0.5% [-1.9%, +0.9%]
+    plas-guard-x2 p95   +3.99 [-17.11, +25.09]   miss  +0.2% [-1.4%, +1.9%]
+    plas-guard-x4 p95   +3.99 [-17.11, +25.09]   miss  +0.2% [-1.4%, +1.9%]
+    plas-guard-x8 p95  -16.92 [-56.89, +23.04]   miss  -0.0% [-2.2%, +2.2%]
+  load 0.90 (util None, x0.9)  choice  5.2%  rent>0 12.4%  forced 162055.8  resident max 2  active max/p95 2/2.0  at-cap 39.7%
+    fcfs   p50    33.8  p95   291.3  miss 32.8% (infeasible 24.8%)
+    program-fcfs p95  -56.87 [-152.14, +38.40]   miss  -1.2% [-4.4%, +1.9%]
+    plas       p95  -14.41 [-108.99, +80.18]   miss  -1.7% [-5.8%, +2.3%]
+    gittins    p95  -36.83 [-171.98, +98.33]   miss  -2.2% [-6.1%, +1.6%]
+    gittins-sd p95  -47.40 [-119.08, +24.28]   miss  -2.7% [-6.3%, +0.8%]
+    gittins-guard-x2 p95  -21.35 [-113.69, +70.98]   miss  -0.5% [-1.3%, +0.3%]
+    gittins-guard-x4 p95  -13.21 [-117.51, +91.08]   miss  -1.2% [-3.9%, +1.4%]
+    gittins-guard-x8 p95  -36.83 [-171.98, +98.33]   miss  -2.2% [-6.1%, +1.6%]
+    gittins-sd-guard-x2 p95  -33.82 [-84.77, +17.13]   miss  -1.7% [-4.3%, +0.8%]
+    gittins-sd-guard-x4 p95  -27.50 [-69.95, +14.95]   miss  -1.7% [-4.3%, +0.8%]
+    gittins-sd-guard-x8 p95  -47.40 [-119.08, +24.28]   miss  -2.7% [-6.3%, +0.8%]
+    plas-guard-x2 p95  +10.28 [-47.59, +68.16]   miss  -0.7% [-3.8%, +2.3%]
+    plas-guard-x4 p95  +25.25 [-28.75, +79.25]   miss  -1.0% [-3.0%, +1.0%]
+    plas-guard-x8 p95  -14.41 [-108.99, +80.18]   miss  -1.7% [-5.8%, +2.3%]
+  load 1.00 (util None, x1.0)  choice  6.8%  rent>0 13.6%  forced 164688.0  resident max 2  active max/p95 2/2.0  at-cap 45.5%
+    fcfs   p50    38.3  p95   314.5  miss 36.0% (infeasible 27.0%)
+    program-fcfs p95  -66.66 [-169.34, +36.02]   miss  -1.3% [-2.3%, -0.2%]*
+    plas       p95  -22.05 [-56.86, +12.76]   miss  -3.0% [-7.0%, +1.0%]
+    gittins    p95   -8.01 [-145.81, +129.79]   miss  -3.0% [-5.6%, -0.4%]*
+    gittins-sd p95   -7.58 [-131.69, +116.53]   miss  -2.0% [-4.8%, +0.8%]
+    gittins-guard-x2 p95  -25.21 [-102.51, +52.08]   miss  -1.8% [-2.6%, -0.9%]*
+    gittins-guard-x4 p95   +5.23 [-108.45, +118.91]   miss  -2.3% [-3.5%, -1.0%]*
+    gittins-guard-x8 p95   -8.01 [-145.81, +129.79]   miss  -3.0% [-5.6%, -0.4%]*
+    gittins-sd-guard-x2 p95   -2.37 [-97.56, +92.83]   miss  -1.3% [-3.2%, +0.7%]
+    gittins-sd-guard-x4 p95  +25.75 [-63.52, +115.01]   miss  -1.5% [-3.8%, +0.8%]
+    gittins-sd-guard-x8 p95   -7.58 [-131.69, +116.53]   miss  -2.0% [-4.8%, +0.8%]
+    plas-guard-x2 p95   -4.53 [-35.84, +26.77]   miss  -1.0% [-2.3%, +0.3%]
+    plas-guard-x4 p95  +13.24 [-15.37, +41.84]   miss  -2.3% [-4.3%, -0.2%]*
+    plas-guard-x8 p95  -22.05 [-56.86, +12.76]   miss  -3.0% [-7.0%, +1.0%]
+  load 1.10 (util None, x1.1)  choice  9.2%  rent>0 16.9%  forced 174155.2  resident max 2  active max/p95 2/2.0  at-cap 51.4%
+    fcfs   p50    41.8  p95   387.5  miss 38.8% (infeasible 29.8%)
+    program-fcfs p95 -136.31 [-335.60, +62.99]   miss  -2.8% [-6.9%, +1.4%]
+    plas       p95  -22.82 [-82.06, +36.41]   miss  -4.0% [-10.1%, +2.1%]
+    gittins    p95  -88.99 [-192.76, +14.78]   miss  -5.0% [-11.6%, +1.6%]
+    gittins-sd p95  -56.13 [-123.93, +11.66]   miss  -4.2% [-9.8%, +1.3%]
+    gittins-guard-x2 p95  -81.95 [-175.96, +12.06]   miss  -3.0% [-6.9%, +0.9%]
+    gittins-guard-x4 p95  -64.87 [-134.17, +4.43]   miss  -3.8% [-8.8%, +1.3%]
+    gittins-guard-x8 p95  -88.99 [-192.76, +14.78]   miss  -5.0% [-11.6%, +1.6%]
+    gittins-sd-guard-x2 p95  -56.79 [-135.13, +21.56]   miss  -2.8% [-5.5%, +0.0%]
+    gittins-sd-guard-x4 p95  -26.59 [-53.26, +0.08]   miss  -2.8% [-5.5%, +0.0%]
+    gittins-sd-guard-x8 p95  -56.13 [-123.93, +11.66]   miss  -4.5% [-10.3%, +1.3%]
+    plas-guard-x2 p95  -46.90 [-195.71, +101.91]   miss  -2.3% [-5.4%, +0.9%]
+    plas-guard-x4 p95  +26.08 [-64.85, +117.01]   miss  -3.5% [-8.8%, +1.8%]
+    plas-guard-x8 p95  -22.82 [-82.06, +36.41]   miss  -4.2% [-10.9%, +2.4%]
+  load 1.25 (util None, x1.25)  choice 17.3%  rent>0 28.1%  forced 196011.0  resident max 2  active max/p95 2/2.0  at-cap 60.5%
+    fcfs   p50    53.4  p95   553.8  miss 44.5% (infeasible 33.0%)
+    program-fcfs p95 -304.99 [-680.67, +70.69]   miss  -4.8% [-10.1%, +0.6%]
+    plas       p95 -179.37 [-471.84, +113.10]   miss  -5.5% [-12.3%, +1.3%]
+    gittins    p95 -204.11 [-492.20, +83.98]   miss  -8.0% [-15.7%, -0.3%]*
+    gittins-sd p95 -149.33 [-441.20, +142.54]   miss  -5.8% [-13.2%, +1.7%]
+    gittins-guard-x2 p95 -235.01 [-537.43, +67.40]   miss  -4.8% [-9.5%, -0.0%]*
+    gittins-guard-x4 p95 -181.86 [-481.10, +117.39]   miss  -5.5% [-10.2%, -0.8%]*
+    gittins-guard-x8 p95 -204.56 [-493.81, +84.69]   miss  -7.5% [-15.1%, +0.1%]
+    gittins-sd-guard-x2 p95 -212.91 [-510.87, +85.04]   miss  -4.8% [-9.2%, -0.3%]*
+    gittins-sd-guard-x4 p95 -161.84 [-460.70, +137.01]   miss  -5.5% [-11.2%, +0.2%]
+    gittins-sd-guard-x8 p95 -142.09 [-436.48, +152.30]   miss  -5.3% [-13.0%, +2.5%]
+    plas-guard-x2 p95 -194.88 [-504.71, +114.96]   miss  -2.8% [-7.2%, +1.7%]
+    plas-guard-x4 p95 -165.41 [-486.12, +155.30]   miss  -3.5% [-8.8%, +1.8%]
+    plas-guard-x8 p95 -171.27 [-444.77, +102.23]   miss  -5.5% [-12.7%, +1.7%]
+  load 1.50 (util None, x1.5)  choice 28.1%  rent>0 38.9%  forced 234892.2  resident max 2  active max/p95 2/2.0  at-cap 71.8%
+    fcfs   p50    86.1  p95   814.0  miss 53.5% (infeasible 42.5%)
+    program-fcfs p95 -528.21 [-1149.15, +92.73]   miss  -9.0% [-23.6%, +5.6%]
+    plas       p95 -277.68 [-713.31, +157.94]   miss  -8.5% [-18.0%, +1.0%]
+    gittins    p95 -333.24 [-788.76, +122.27]   miss -11.3% [-23.1%, +0.6%]
+    gittins-sd p95 -305.42 [-755.68, +144.83]   miss  -9.8% [-22.0%, +2.5%]
+    gittins-guard-x2 p95 -419.94 [-978.12, +138.24]   miss  -8.5% [-22.0%, +5.0%]
+    gittins-guard-x4 p95 -341.29 [-836.15, +153.57]   miss  -8.8% [-20.2%, +2.7%]
+    gittins-guard-x8 p95 -285.27 [-732.86, +162.33]   miss -11.0% [-22.2%, +0.2%]
+    gittins-sd-guard-x2 p95 -418.49 [-977.12, +140.14]   miss  -8.8% [-22.1%, +4.6%]
+    gittins-sd-guard-x4 p95 -307.52 [-774.75, +159.72]   miss  -7.8% [-19.8%, +4.3%]
+    gittins-sd-guard-x8 p95 -253.63 [-712.14, +204.89]   miss  -9.2% [-19.7%, +1.2%]
+    plas-guard-x2 p95 -354.76 [-909.73, +200.21]   miss  -0.2% [-8.8%, +8.3%]
+    plas-guard-x4 p95 -234.72 [-632.77, +163.32]   miss  -3.0% [-9.3%, +3.3%]
+    plas-guard-x8 p95 -242.65 [-675.91, +190.61]   miss  -8.8% [-19.3%, +1.8%]
+  load 2.00 (util None, x2.0)  choice 50.6%  rent>0 59.4%  forced 288299.8  resident max 2  active max/p95 2/2.0  at-cap 86.6%
+    fcfs   p50   226.2  p95  1441.6  miss 73.2% (infeasible 60.2%)
+    program-fcfs p95 -953.45 [-1272.13, -634.76]*  miss -13.2% [-18.0%, -8.5%]*
+    plas       p95 -111.39 [-999.61, +776.83]   miss -12.8% [-25.4%, -0.1%]*
+    gittins    p95 -486.14 [-1207.93, +235.65]   miss -19.5% [-29.3%, -9.7%]*
+    gittins-sd p95 -533.91 [-1215.06, +147.24]   miss -19.7% [-26.7%, -12.8%]*
+    gittins-guard-x2 p95 -941.42 [-1253.55, -629.30]*  miss -12.3% [-16.3%, -8.2%]*
+    gittins-guard-x4 p95 -728.27 [-1008.59, -447.94]*  miss -13.7% [-23.7%, -3.8%]*
+    gittins-guard-x8 p95 -670.61 [-964.06, -377.17]*  miss -18.2% [-28.5%, -8.0%]*
+    gittins-sd-guard-x2 p95 -904.01 [-1201.34, -606.68]*  miss -11.2% [-16.5%, -6.0%]*
+    gittins-sd-guard-x4 p95 -733.51 [-986.19, -480.84]*  miss -12.8% [-21.0%, -4.5%]*
+    gittins-sd-guard-x8 p95 -628.18 [-911.34, -345.02]*  miss -17.8% [-27.0%, -8.5%]*
+    plas-guard-x2 p95 -774.40 [-1119.14, -429.66]*  miss  -3.5% [-7.0%, +0.0%]
+    plas-guard-x4 p95 -607.58 [-971.43, -243.72]*  miss  -6.7% [-16.7%, +3.2%]
+    plas-guard-x8 p95 -428.76 [-691.35, -166.17]*  miss -12.8% [-24.7%, -0.8%]*
+
+=== batch 4 ===
+  saturation throughput = 0.0177 tasks/s; slack calibrated at load 0.8 = 0.0142/s
+  slack_factor = 0.844  (FCFS miss 27.5% at util 0.8)
+  load 0.50 (util None, x0.5)  choice  0.0%  rent>0  0.1%  forced 150153.2  resident max 4  active max/p95 4/2.4  at-cap  0.6% INACTIVE
+    fcfs   p50    25.7  p95   198.3  miss 23.5% (infeasible 18.8%)
+    program-fcfs p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    plas       p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins    p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x4 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x8 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd-guard-x4 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd-guard-x8 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x4 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x8 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+  load 0.60 (util None, x0.6)  choice  0.0%  rent>0  0.2%  forced 150633.8  resident max 4  active max/p95 4/3.0  at-cap  1.7% INACTIVE
+    fcfs   p50    28.6  p95   220.4  miss 24.5% (infeasible 18.8%)
+    program-fcfs p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    plas       p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins    p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x4 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x8 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd-guard-x4 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd-guard-x8 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x4 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x8 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+  load 0.70 (util None, x0.7)  choice  0.1%  rent>0  0.7%  forced 155949.0  resident max 4  active max/p95 4/3.2  at-cap  4.5% INACTIVE
+    fcfs   p50    29.7  p95   262.2  miss 26.5% (infeasible 19.5%)
+    program-fcfs p95   -8.40 [-31.74, +14.93]   miss  +0.0% [+0.0%, +0.0%]
+    plas       p95   +0.27 [-0.34, +0.87]   miss  +0.0% [+0.0%, +0.0%]
+    gittins    p95   -2.08 [-7.85, +3.69]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd p95   +0.27 [-0.34, +0.87]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x2 p95  -15.30 [-57.77, +27.17]   miss  -0.3% [-0.9%, +0.4%]
+    gittins-guard-x4 p95  -15.30 [-57.77, +27.17]   miss  -0.3% [-0.9%, +0.4%]
+    gittins-guard-x8 p95   -2.08 [-7.85, +3.69]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd-guard-x2 p95  -14.87 [-56.94, +27.19]   miss  -0.3% [-0.9%, +0.4%]
+    gittins-sd-guard-x4 p95  -14.87 [-56.94, +27.19]   miss  -0.3% [-0.9%, +0.4%]
+    gittins-sd-guard-x8 p95   +0.27 [-0.34, +0.87]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x2 p95  -14.15 [-54.22, +25.92]   miss  -0.3% [-0.9%, +0.4%]
+    plas-guard-x4 p95  -14.15 [-54.22, +25.92]   miss  -0.3% [-0.9%, +0.4%]
+    plas-guard-x8 p95   +0.27 [-0.34, +0.87]   miss  +0.0% [+0.0%, +0.0%]
+  load 0.80 (util None, x0.8)  choice  0.4%  rent>0  1.2%  forced 161685.6  resident max 4  active max/p95 4/3.8  at-cap  7.8% INACTIVE
+    fcfs   p50    31.7  p95   297.3  miss 30.0% (infeasible 20.8%)
+    program-fcfs p95  -13.00 [-49.09, +23.09]   miss  +0.0% [+0.0%, +0.0%]
+    plas       p95  -22.01 [-83.11, +39.09]   miss  -0.7% [-2.8%, +1.3%]
+    gittins    p95   -4.25 [-16.04, +7.55]   miss  -0.3% [-0.9%, +0.4%]
+    gittins-sd p95   -6.85 [-25.86, +12.16]   miss  -0.5% [-1.9%, +0.9%]
+    gittins-guard-x2 p95  -12.48 [-47.14, +22.17]   miss  -0.3% [-0.9%, +0.4%]
+    gittins-guard-x4 p95  -13.34 [-50.36, +23.69]   miss  -0.3% [-0.9%, +0.4%]
+    gittins-guard-x8 p95   -4.25 [-16.04, +7.55]   miss  -0.3% [-0.9%, +0.4%]
+    gittins-sd-guard-x2 p95   -8.48 [-32.04, +15.07]   miss  -0.3% [-0.9%, +0.4%]
+    gittins-sd-guard-x4 p95   -6.37 [-24.07, +11.32]   miss  -0.3% [-0.9%, +0.4%]
+    gittins-sd-guard-x8 p95   -9.09 [-34.32, +16.14]   miss  -0.3% [-0.9%, +0.4%]
+    plas-guard-x2 p95  +12.07 [-21.44, +45.59]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x4 p95  -13.29 [-50.19, +23.61]   miss  -0.7% [-2.8%, +1.3%]
+    plas-guard-x8 p95  -22.01 [-83.11, +39.09]   miss  -0.7% [-2.8%, +1.3%]
+  load 0.90 (util None, x0.9)  choice  1.0%  rent>0  2.0%  forced 169410.0  resident max 4  active max/p95 4/3.8  at-cap 10.8% INACTIVE
+    fcfs   p50    34.6  p95   340.7  miss 33.5% (infeasible 22.2%)
+    program-fcfs p95  -13.60 [-51.13, +23.93]   miss  +0.8% [-2.6%, +4.1%]
+    plas       p95  -24.44 [-78.38, +29.51]   miss  -0.5% [-2.3%, +1.3%]
+    gittins    p95  -37.85 [-122.78, +47.07]   miss  -0.7% [-2.8%, +1.3%]
+    gittins-sd p95  -27.10 [-84.47, +30.28]   miss  -0.5% [-2.3%, +1.3%]
+    gittins-guard-x2 p95  -20.01 [-61.05, +21.02]   miss  -0.2% [-1.9%, +1.4%]
+    gittins-guard-x4 p95  -20.89 [-63.80, +22.01]   miss  -0.2% [-1.9%, +1.4%]
+    gittins-guard-x8 p95  -37.85 [-122.78, +47.07]   miss  -0.7% [-2.8%, +1.3%]
+    gittins-sd-guard-x2 p95  -15.31 [-47.60, +16.98]   miss  +0.3% [-2.1%, +2.6%]
+    gittins-sd-guard-x4 p95  -20.13 [-61.40, +21.14]   miss  -0.5% [-2.3%, +1.3%]
+    gittins-sd-guard-x8 p95  -27.10 [-84.47, +30.28]   miss  -0.5% [-2.3%, +1.3%]
+    plas-guard-x2 p95   -6.18 [-28.96, +16.59]   miss  +0.5% [-2.3%, +3.3%]
+    plas-guard-x4 p95   -5.38 [-28.43, +17.67]   miss  -0.2% [-1.9%, +1.4%]
+    plas-guard-x8 p95  -24.44 [-78.38, +29.51]   miss  -0.5% [-2.3%, +1.3%]
+  load 1.00 (util None, x1.0)  choice  1.3%  rent>0  2.4%  forced 173261.6  resident max 4  active max/p95 4/3.8  at-cap 12.9% INACTIVE
+    fcfs   p50    36.8  p95   374.6  miss 35.0% (infeasible 22.2%)
+    program-fcfs p95  -17.58 [-53.38, +18.21]   miss  +0.7% [-2.3%, +3.8%]
+    plas       p95   -3.43 [-7.70, +0.84]   miss  -0.8% [-1.6%, +0.1%]
+    gittins    p95  -26.26 [-62.38, +9.86]   miss  -0.7% [-2.1%, +0.6%]
+    gittins-sd p95  -19.79 [-46.71, +7.13]   miss  -0.8% [-1.6%, +0.1%]
+    gittins-guard-x2 p95  -23.63 [-64.87, +17.61]   miss  -0.5% [-3.1%, +2.1%]
+    gittins-guard-x4 p95  -29.89 [-74.95, +15.17]   miss  -0.7% [-2.1%, +0.6%]
+    gittins-guard-x8 p95  -26.26 [-62.38, +9.86]   miss  -0.7% [-2.1%, +0.6%]
+    gittins-sd-guard-x2 p95  -18.09 [-50.96, +14.78]   miss  -1.0% [-2.3%, +0.3%]
+    gittins-sd-guard-x4 p95  -20.31 [-48.75, +8.14]   miss  -0.8% [-1.6%, +0.1%]
+    gittins-sd-guard-x8 p95  -19.79 [-46.71, +7.13]   miss  -0.8% [-1.6%, +0.1%]
+    plas-guard-x2 p95   +1.01 [-13.77, +15.79]   miss  +0.0% [-1.1%, +1.1%]
+    plas-guard-x4 p95   -1.81 [-15.55, +11.93]   miss  -0.8% [-1.6%, +0.1%]
+    plas-guard-x8 p95   -3.43 [-7.70, +0.84]   miss  -0.8% [-1.6%, +0.1%]
+  load 1.10 (util None, x1.1)  choice  1.9%  rent>0  3.2%  forced 181147.6  resident max 4  active max/p95 4/3.8  at-cap 16.0% INACTIVE
+    fcfs   p50    37.9  p95   408.4  miss 36.5% (infeasible 23.5%)
+    program-fcfs p95   -8.30 [-27.69, +11.08]   miss  -0.3% [-3.0%, +2.5%]
+    plas       p95  -63.83 [-207.99, +80.33]   miss  -1.8% [-6.1%, +2.6%]
+    gittins    p95  -36.72 [-87.24, +13.81]   miss  -1.0% [-4.9%, +2.9%]
+    gittins-sd p95  -36.41 [-86.60, +13.79]   miss  -1.5% [-5.8%, +2.8%]
+    gittins-guard-x2 p95  -24.86 [-61.86, +12.13]   miss  -0.5% [-2.3%, +1.3%]
+    gittins-guard-x4 p95  -33.31 [-84.04, +17.41]   miss  -1.0% [-4.0%, +2.0%]
+    gittins-guard-x8 p95  -36.72 [-87.24, +13.81]   miss  -1.0% [-4.9%, +2.9%]
+    gittins-sd-guard-x2 p95   -6.85 [-22.03, +8.34]   miss  -1.3% [-3.9%, +1.4%]
+    gittins-sd-guard-x4 p95  -31.42 [-81.09, +18.26]   miss  -1.8% [-5.8%, +2.3%]
+    gittins-sd-guard-x8 p95  -36.41 [-86.60, +13.79]   miss  -1.5% [-5.8%, +2.8%]
+    plas-guard-x2 p95  -51.77 [-203.79, +100.26]   miss  -0.8% [-2.1%, +0.6%]
+    plas-guard-x4 p95  -49.71 [-203.02, +103.60]   miss  -1.8% [-5.1%, +1.6%]
+    plas-guard-x8 p95  -63.83 [-207.99, +80.33]   miss  -1.8% [-6.1%, +2.6%]
+  load 1.25 (util None, x1.25)  choice  3.5%  rent>0  6.0%  forced 202275.2  resident max 4  active max/p95 4/4.0  at-cap 25.9% INACTIVE
+    fcfs   p50    45.7  p95   493.1  miss 42.0% (infeasible 26.2%)
+    program-fcfs p95   +3.43 [-104.68, +111.55]   miss  +0.3% [-3.1%, +3.6%]
+    plas       p95  -22.56 [-67.44, +22.31]   miss  -2.7% [-8.9%, +3.4%]
+    gittins    p95  -37.42 [-100.63, +25.80]   miss  -3.8% [-9.7%, +2.2%]
+    gittins-sd p95  -36.09 [-99.55, +27.37]   miss  -3.8% [-9.2%, +1.7%]
+    gittins-guard-x2 p95   +3.77 [-24.42, +31.96]   miss  -2.0% [-6.5%, +2.5%]
+    gittins-guard-x4 p95  -19.73 [-64.32, +24.86]   miss  -2.5% [-6.7%, +1.7%]
+    gittins-guard-x8 p95  -24.72 [-70.67, +21.23]   miss  -3.5% [-9.0%, +2.0%]
+    gittins-sd-guard-x2 p95  +22.10 [-19.41, +63.61]   miss  -1.0% [-6.9%, +4.9%]
+    gittins-sd-guard-x4 p95  -21.47 [-64.93, +21.99]   miss  -3.2% [-8.0%, +1.5%]
+    gittins-sd-guard-x8 p95  -15.79 [-56.71, +25.12]   miss  -3.8% [-9.2%, +1.7%]
+    plas-guard-x2 p95  +20.36 [-62.70, +103.41]   miss  -1.0% [-5.7%, +3.7%]
+    plas-guard-x4 p95   -5.56 [-51.32, +40.20]   miss  -3.0% [-9.6%, +3.6%]
+    plas-guard-x8 p95  -17.79 [-49.63, +14.04]   miss  -2.5% [-8.2%, +3.2%]
+  load 1.50 (util None, x1.5)  choice 12.1%  rent>0 15.0%  forced 237769.4  resident max 4  active max/p95 4/4.0  at-cap 39.0%
+    fcfs   p50    73.7  p95   665.5  miss 52.0% (infeasible 34.2%)
+    program-fcfs p95  -50.35 [-188.95, +88.24]   miss  +2.5% [-2.4%, +7.4%]
+    plas       p95   -9.31 [-201.27, +182.66]   miss  -4.5% [-11.6%, +2.6%]
+    gittins    p95   -9.41 [-99.65, +80.83]   miss  -4.7% [-11.7%, +2.2%]
+    gittins-sd p95  +12.70 [-134.33, +159.72]   miss  -4.7% [-10.3%, +0.8%]
+    gittins-guard-x2 p95  -43.14 [-100.12, +13.83]   miss  +0.0% [-2.7%, +2.7%]
+    gittins-guard-x4 p95  -46.93 [-117.11, +23.25]   miss  -0.7% [-2.8%, +1.3%]
+    gittins-guard-x8 p95  +13.25 [-102.78, +129.29]   miss  -5.0% [-12.5%, +2.5%]
+    gittins-sd-guard-x2 p95  -31.89 [-95.79, +32.01]   miss  -0.5% [-2.9%, +1.9%]
+    gittins-sd-guard-x4 p95  +28.21 [-7.18, +63.60]   miss  -2.0% [-5.0%, +1.0%]
+    gittins-sd-guard-x8 p95  +16.58 [-104.04, +137.20]   miss  -4.7% [-10.1%, +0.6%]
+    plas-guard-x2 p95  +26.15 [-34.08, +86.39]   miss  +1.8% [-0.6%, +4.1%]
+    plas-guard-x4 p95  +30.97 [-55.52, +117.47]   miss  -1.7% [-5.6%, +2.1%]
+    plas-guard-x8 p95  -24.84 [-306.50, +256.83]   miss  -4.0% [-9.7%, +1.7%]
+  load 2.00 (util None, x2.0)  choice 28.0%  rent>0 31.5%  forced 303905.4  resident max 4  active max/p95 4/4.0  at-cap 64.7%
+    fcfs   p50   200.0  p95  1261.0  miss 75.0% (infeasible 54.5%)
+    program-fcfs p95 -287.76 [-459.56, -115.96]*  miss  -1.8% [-5.6%, +2.1%]
+    plas       p95 +594.82 [-241.12, +1430.76]   miss  -5.2% [-7.6%, -2.9%]*
+    gittins    p95 +303.42 [-452.87, +1059.70]   miss  -5.3% [-8.6%, -1.9%]*
+    gittins-sd p95 +580.73 [-324.11, +1485.57]   miss  -8.2% [-14.1%, -2.4%]*
+    gittins-guard-x2 p95 -154.05 [-432.22, +124.12]   miss  -3.0% [-8.4%, +2.4%]
+    gittins-guard-x4 p95 -233.11 [-521.37, +55.14]   miss  -4.5% [-7.9%, -1.1%]*
+    gittins-guard-x8 p95 -147.01 [-313.73, +19.71]   miss  -4.8% [-7.3%, -2.2%]*
+    gittins-sd-guard-x2 p95 -138.25 [-452.78, +176.27]   miss  -2.8% [-9.8%, +4.3%]
+    gittins-sd-guard-x4 p95 -108.97 [-466.75, +248.81]   miss  -3.3% [-9.8%, +3.3%]
+    gittins-sd-guard-x8 p95  -59.01 [-356.23, +238.22]   miss  -7.5% [-15.8%, +0.8%]
+    plas-guard-x2 p95 -161.96 [-412.31, +88.40]   miss  -0.5% [-5.8%, +4.8%]
+    plas-guard-x4 p95  -64.44 [-452.20, +323.32]   miss  -1.5% [-4.5%, +1.5%]
+    plas-guard-x8 p95   -3.89 [-235.24, +227.45]   miss  -3.5% [-7.0%, +0.0%]
+
+=== batch 8 ===
+  saturation throughput = 0.0183 tasks/s; slack calibrated at load 0.8 = 0.0146/s
+  slack_factor = 0.844  (FCFS miss 28.3% at util 0.8)
+  load 0.50 (util None, x0.5)  choice  0.0%  rent>0  0.1%  forced 150163.6  resident max 4  active max/p95 4/2.6  at-cap  0.0% INACTIVE CAP-NEVER-BINDS
+    fcfs   p50    26.0  p95   199.6  miss 23.8% (infeasible 19.0%)
+    program-fcfs p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    plas       p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins    p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x4 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x8 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd-guard-x4 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd-guard-x8 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x4 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x8 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+  load 0.60 (util None, x0.6)  choice  0.0%  rent>0  0.1%  forced 151996.8  resident max 4  active max/p95 4/3.2  at-cap  0.0% INACTIVE CAP-NEVER-BINDS
+    fcfs   p50    28.5  p95   226.1  miss 25.0% (infeasible 19.0%)
+    program-fcfs p95   +0.00 [+0.00, +0.00]   miss  -0.2% [-0.9%, +0.4%]
+    plas       p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins    p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x4 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x8 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd-guard-x4 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd-guard-x8 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x4 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x8 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+  load 0.70 (util None, x0.7)  choice  0.3%  rent>0  0.1%  forced 160041.6  resident max 4  active max/p95 4/3.4  at-cap  0.0% INACTIVE CAP-NEVER-BINDS
+    fcfs   p50    30.4  p95   266.6  miss 27.3% (infeasible 19.8%)
+    program-fcfs p95   -1.03 [-4.26, +2.21]   miss  +0.0% [+0.0%, +0.0%]
+    plas       p95   -3.75 [-14.16, +6.66]   miss  +0.0% [+0.0%, +0.0%]
+    gittins    p95   -1.14 [-4.49, +2.22]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd p95   -4.71 [-17.77, +8.36]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x2 p95   -5.81 [-18.21, +6.59]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x4 p95   -5.81 [-18.21, +6.59]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x8 p95   -1.14 [-4.49, +2.22]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd-guard-x2 p95   -4.71 [-17.77, +8.36]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd-guard-x4 p95   -4.71 [-17.77, +8.36]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd-guard-x8 p95   -4.71 [-17.77, +8.36]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x2 p95   -3.75 [-14.16, +6.66]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x4 p95   -3.75 [-14.16, +6.66]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x8 p95   -3.75 [-14.16, +6.66]   miss  +0.0% [+0.0%, +0.0%]
+  load 0.80 (util None, x0.8)  choice  0.5%  rent>0  0.2%  forced 167019.0  resident max 4  active max/p95 4/3.6  at-cap  0.0% INACTIVE CAP-NEVER-BINDS
+    fcfs   p50    31.7  p95   304.0  miss 31.0% (infeasible 20.8%)
+    program-fcfs p95   -5.29 [-28.61, +18.02]   miss  +0.5% [-0.9%, +1.9%]
+    plas       p95   -1.81 [-4.98, +1.35]   miss  -0.3% [-0.9%, +0.4%]
+    gittins    p95   -7.90 [-26.34, +10.54]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd p95   -6.94 [-22.77, +8.88]   miss  +0.3% [-0.4%, +0.9%]
+    gittins-guard-x2 p95   -7.10 [-23.36, +9.16]   miss  +0.3% [-0.4%, +0.9%]
+    gittins-guard-x4 p95   -4.86 [-15.06, +5.34]   miss  +0.3% [-0.4%, +0.9%]
+    gittins-guard-x8 p95   -7.90 [-26.34, +10.54]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd-guard-x2 p95  -11.67 [-40.51, +17.17]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd-guard-x4 p95  -11.67 [-40.51, +17.17]   miss  -0.3% [-0.9%, +0.4%]
+    gittins-sd-guard-x8 p95   -6.94 [-22.77, +8.88]   miss  +0.3% [-0.4%, +0.9%]
+    plas-guard-x2 p95   -1.43 [-4.31, +1.46]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x4 p95   +3.15 [-9.63, +15.93]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x8 p95   -1.77 [-4.89, +1.35]   miss  -0.3% [-0.9%, +0.4%]
+  load 0.90 (util None, x0.9)  choice  0.8%  rent>0  0.2%  forced 173125.6  resident max 5  active max/p95 5/3.8  at-cap  0.0% INACTIVE CAP-NEVER-BINDS
+    fcfs   p50    35.1  p95   332.5  miss 33.5% (infeasible 22.2%)
+    program-fcfs p95   +5.55 [-16.92, +28.02]   miss  +1.2% [-1.4%, +3.9%]
+    plas       p95   +9.91 [-17.60, +37.41]   miss  +0.0% [+0.0%, +0.0%]
+    gittins    p95  -28.15 [-99.98, +43.68]   miss  -0.5% [-1.9%, +0.9%]
+    gittins-sd p95  -14.09 [-47.09, +18.91]   miss  -0.3% [-0.9%, +0.4%]
+    gittins-guard-x2 p95  -10.72 [-34.51, +13.08]   miss  +0.7% [-1.3%, +2.8%]
+    gittins-guard-x4 p95  -19.48 [-67.33, +28.37]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x8 p95  -28.15 [-99.98, +43.68]   miss  -0.5% [-1.9%, +0.9%]
+    gittins-sd-guard-x2 p95   -7.40 [-22.33, +7.52]   miss  +0.3% [-0.4%, +0.9%]
+    gittins-sd-guard-x4 p95   -9.54 [-30.14, +11.06]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-sd-guard-x8 p95  -14.09 [-47.09, +18.91]   miss  -0.3% [-0.9%, +0.4%]
+    plas-guard-x2 p95   -5.10 [-19.26, +9.06]   miss  +0.5% [-0.9%, +1.9%]
+    plas-guard-x4 p95   +0.42 [-0.75, +1.59]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x8 p95   +9.91 [-17.60, +37.41]   miss  +0.0% [+0.0%, +0.0%]
+  load 1.00 (util None, x1.0)  choice  1.3%  rent>0  0.2%  forced 176737.6  resident max 5  active max/p95 5/3.8  at-cap  0.0% INACTIVE CAP-NEVER-BINDS
+    fcfs   p50    36.9  p95   366.3  miss 36.0% (infeasible 23.0%)
+    program-fcfs p95  -10.38 [-23.11, +2.35]   miss  +0.5% [-1.3%, +2.3%]
+    plas       p95   -8.32 [-20.22, +3.57]   miss  -1.5% [-4.9%, +1.9%]
+    gittins    p95  -14.85 [-31.81, +2.10]   miss  -1.8% [-5.0%, +1.5%]
+    gittins-sd p95  -17.70 [-38.92, +3.53]   miss  -1.8% [-5.0%, +1.5%]
+    gittins-guard-x2 p95  -18.95 [-41.89, +3.99]   miss  -0.5% [-2.3%, +1.3%]
+    gittins-guard-x4 p95  -21.68 [-48.28, +4.92]   miss  -0.5% [-1.3%, +0.3%]
+    gittins-guard-x8 p95  -14.85 [-31.81, +2.10]   miss  -1.8% [-5.0%, +1.5%]
+    gittins-sd-guard-x2 p95  -20.38 [-50.08, +9.31]   miss  -1.0% [-3.0%, +1.0%]
+    gittins-sd-guard-x4 p95  -20.49 [-46.39, +5.41]   miss  -1.5% [-4.0%, +1.0%]
+    gittins-sd-guard-x8 p95  -17.70 [-38.92, +3.53]   miss  -1.8% [-5.0%, +1.5%]
+    plas-guard-x2 p95  -13.05 [-32.27, +6.16]   miss  +0.3% [-1.4%, +1.9%]
+    plas-guard-x4 p95   -1.33 [-20.50, +17.84]   miss  -1.5% [-4.9%, +1.9%]
+    plas-guard-x8 p95   -8.32 [-20.22, +3.57]   miss  -1.5% [-4.9%, +1.9%]
+  load 1.10 (util None, x1.1)  choice  2.1%  rent>0  0.2%  forced 187144.6  resident max 5  active max/p95 5/4.0  at-cap  0.0% INACTIVE CAP-NEVER-BINDS
+    fcfs   p50    40.8  p95   396.3  miss 37.8% (infeasible 23.0%)
+    program-fcfs p95  +81.19 [-104.94, +267.31]   miss  +1.5% [-2.7%, +5.7%]
+    plas       p95   +1.28 [-24.07, +26.63]   miss  -1.0% [-3.8%, +1.8%]
+    gittins    p95  -27.83 [-56.89, +1.23]   miss  -0.3% [-2.8%, +2.3%]
+    gittins-sd p95   -0.67 [-48.71, +47.38]   miss  -1.5% [-5.8%, +2.8%]
+    gittins-guard-x2 p95   +8.95 [-14.73, +32.62]   miss  +0.0% [-2.2%, +2.2%]
+    gittins-guard-x4 p95  -24.10 [-63.25, +15.04]   miss  -0.3% [-3.8%, +3.3%]
+    gittins-guard-x8 p95  -27.83 [-56.89, +1.23]   miss  -0.3% [-2.8%, +2.3%]
+    gittins-sd-guard-x2 p95   +2.62 [-18.92, +24.15]   miss  +0.0% [-2.2%, +2.2%]
+    gittins-sd-guard-x4 p95  -14.24 [-39.90, +11.42]   miss  -1.2% [-5.9%, +3.4%]
+    gittins-sd-guard-x8 p95  -13.35 [-40.12, +13.41]   miss  -1.5% [-5.8%, +2.8%]
+    plas-guard-x2 p95   +8.46 [-20.10, +37.02]   miss  +0.0% [-2.2%, +2.2%]
+    plas-guard-x4 p95   +4.26 [-17.55, +26.06]   miss  -1.0% [-5.7%, +3.7%]
+    plas-guard-x8 p95   -1.66 [-25.58, +22.25]   miss  -1.2% [-4.7%, +2.2%]
+  load 1.25 (util None, x1.25)  choice  3.9%  rent>0  0.2%  forced 206363.0  resident max 5  active max/p95 5/4.0  at-cap  0.0% INACTIVE CAP-NEVER-BINDS
+    fcfs   p50    48.7  p95   468.1  miss 43.2% (infeasible 26.0%)
+    program-fcfs p95  +13.35 [-24.67, +51.37]   miss  -0.5% [-4.4%, +3.4%]
+    plas       p95   -2.08 [-75.28, +71.13]   miss  -1.3% [-11.0%, +8.5%]
+    gittins    p95  -19.81 [-66.22, +26.60]   miss  -3.8% [-8.1%, +0.6%]
+    gittins-sd p95  -22.99 [-67.47, +21.50]   miss  -3.3% [-8.8%, +2.3%]
+    gittins-guard-x2 p95  +10.58 [-43.50, +64.66]   miss  -1.0% [-5.0%, +3.0%]
+    gittins-guard-x4 p95   -9.55 [-40.48, +21.38]   miss  -3.3% [-7.9%, +1.4%]
+    gittins-guard-x8 p95   -9.60 [-70.75, +51.56]   miss  -4.0% [-8.7%, +0.7%]
+    gittins-sd-guard-x2 p95  +33.18 [-82.44, +148.79]   miss  -2.0% [-5.2%, +1.2%]
+    gittins-sd-guard-x4 p95  -10.16 [-61.65, +41.33]   miss  -3.0% [-8.1%, +2.1%]
+    gittins-sd-guard-x8 p95   -8.26 [-72.58, +56.05]   miss  -3.5% [-9.6%, +2.6%]
+    plas-guard-x2 p95  +54.90 [-20.02, +129.83]   miss  -0.3% [-5.6%, +5.1%]
+    plas-guard-x4 p95  +33.98 [-21.78, +89.73]   miss  -1.0% [-10.4%, +8.4%]
+    plas-guard-x8 p95  +21.32 [-40.38, +83.01]   miss  -0.8% [-9.8%, +8.3%]
+  load 1.50 (util None, x1.5)  choice 12.6%  rent>0  0.2%  forced 254456.2  resident max 5  active max/p95 5/4.4  at-cap  0.0% CAP-NEVER-BINDS
+    fcfs   p50    77.5  p95   710.8  miss 54.5% (infeasible 34.8%)
+    program-fcfs p95  -48.05 [-138.61, +42.51]   miss  +2.8% [-1.8%, +7.3%]
+    plas       p95   -9.98 [-272.55, +252.58]   miss  -5.2% [-13.0%, +2.5%]
+    gittins    p95  -82.69 [-383.94, +218.55]   miss  -5.0% [-11.0%, +1.0%]
+    gittins-sd p95  -72.16 [-432.93, +288.62]   miss  -6.2% [-16.4%, +3.9%]
+    gittins-guard-x2 p95  -22.26 [-63.15, +18.63]   miss  +1.2% [-2.2%, +4.7%]
+    gittins-guard-x4 p95  -38.75 [-145.68, +68.17]   miss  -0.7% [-4.9%, +3.4%]
+    gittins-guard-x8 p95  -38.57 [-245.37, +168.23]   miss  -3.8% [-8.3%, +0.8%]
+    gittins-sd-guard-x2 p95  -25.16 [-63.76, +13.43]   miss  +0.5% [-2.9%, +3.9%]
+    gittins-sd-guard-x4 p95   +4.13 [-63.82, +72.07]   miss  -1.5% [-7.8%, +4.8%]
+    gittins-sd-guard-x8 p95  +35.40 [-139.12, +209.92]   miss  -5.0% [-13.1%, +3.1%]
+    plas-guard-x2 p95  +35.81 [-53.82, +125.44]   miss  +1.0% [-0.3%, +2.3%]
+    plas-guard-x4 p95  +19.00 [-107.39, +145.40]   miss  -2.0% [-5.9%, +1.9%]
+    plas-guard-x8 p95  +13.91 [-194.98, +222.80]   miss  -4.8% [-12.2%, +2.7%]
+  load 2.00 (util None, x2.0)  choice 28.5%  rent>0  0.2%  forced 338479.2  resident max 6  active max/p95 6/4.8  at-cap  0.0% CAP-NEVER-BINDS
+    fcfs   p50   229.0  p95  1400.8  miss 78.0% (infeasible 54.8%)
+    program-fcfs p95 -131.71 [-262.94, -0.48]*  miss  -0.2% [-3.2%, +2.7%]
+    plas       p95 +286.91 [-154.86, +728.67]   miss  -6.5% [-12.6%, -0.4%]*
+    gittins    p95 +281.49 [-16.77, +579.75]   miss  -3.0% [-6.0%, +0.0%]
+    gittins-sd p95 +251.19 [-71.13, +573.52]   miss  -5.5% [-10.0%, -1.0%]*
+    gittins-guard-x2 p95 -105.23 [-343.44, +132.98]   miss  -1.0% [-4.0%, +2.0%]
+    gittins-guard-x4 p95 -106.29 [-426.66, +214.07]   miss  -2.5% [-5.4%, +0.4%]
+    gittins-guard-x8 p95  -77.69 [-348.38, +193.01]   miss  -2.8% [-4.8%, -0.7%]*
+    gittins-sd-guard-x2 p95 -109.08 [-392.10, +173.95]   miss  -1.5% [-4.0%, +1.0%]
+    gittins-sd-guard-x4 p95 -107.09 [-517.70, +303.52]   miss  -3.0% [-5.8%, -0.2%]*
+    gittins-sd-guard-x8 p95  -32.43 [-311.53, +246.67]   miss  -3.7% [-7.2%, -0.3%]*
+    plas-guard-x2 p95 -110.23 [-350.65, +130.20]   miss  -0.5% [-2.9%, +1.9%]
+    plas-guard-x4 p95 -148.39 [-535.82, +239.04]   miss  -2.5% [-6.0%, +1.0%]
+    plas-guard-x8 p95  -25.71 [-228.26, +176.84]   miss  -4.3% [-8.4%, -0.1%]*
+
+=== summary ===
+  batch 2: program-fcfs first separates from fcfs at load 1.00 on miss_vs_fcfs: p95 -66.7s [-169.3, +36.0], miss -1.3% [-2.3%, -0.2%]
+  batch 2: plas first separates from fcfs at load 2.00 on miss_vs_fcfs: p95 -111.4s [-999.6, +776.8], miss -12.8% [-25.4%, -0.1%]
+  batch 2: plas never separates from program-fcfs at any load
+  batch 4: program-fcfs first separates from fcfs at load 2.00 on p95_vs_fcfs: p95 -287.8s [-459.6, -116.0], miss -1.8% [-5.6%, +2.1%]
+  batch 4: plas first separates from fcfs at load 2.00 on miss_vs_fcfs: p95 +594.8s [-241.1, +1430.8], miss -5.2% [-7.6%, -2.9%]
+  batch 4: plas never separates from program-fcfs at any load
+  batch 8: cap never binds at any load (KV-bound: the KV budget, not max_batch, limits concurrency)
+  batch 8: program-fcfs first separates from fcfs at load 2.00 on p95_vs_fcfs: p95 -131.7s [-262.9, -0.5], miss -0.2% [-3.2%, +2.7%]
+  batch 8: plas first separates from fcfs at load 2.00 on miss_vs_fcfs: p95 +286.9s [-154.9, +728.7], miss -6.5% [-12.6%, -0.4%]
+  batch 8: plas first separates from program-fcfs at load 2.00 on miss_vs_program: p95 +418.6s [-133.2, +970.4], miss -6.3% [-12.5%, -0.0%]
+
+elapsed 10478s -> results/tracelab/D2_gittins_dev.json
