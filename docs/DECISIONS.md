@@ -1977,3 +1977,16 @@ before any dev run or dev build:*
     5% of decisions there have a choice. Counting them makes K1–K3 harder to
     pass, not easier.
 - **Warm-up.** The switch may fire at the 30th arrival.
+
+*Amendment 2026-10-28, dev3 built (builder at `c7fdc90`, `--stratified 160
+--split dev --name dev3`, `python -I`):*
+- **Size.** 160 turns, 1,456 rounds, 18 users.
+- **Turn length.** R averages 9.10 with a CV of 1.62.
+- **Pool.** 21,002 turns after the session exclusions. The cap removed 165
+  turns, and 58 picks were skipped for one turn per session.
+- **Heavier than projected.** It is heavier than the plan's estimate (about
+  6.2 rounds per turn), because the session exclusions remove short
+  sessions' turns unevenly. That is a property of the pre-registered
+  sampler, and sealed3 is expected to be similar.
+- **Runtime rule.** The rule (4 × the dev3 map's wall time) decides sealed3's
+  N.
