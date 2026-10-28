@@ -1667,3 +1667,6 @@ and only sealed2's header line has been read):*
 
   `fcfs` and `program-fcfs` are always kept as baselines.
 - **H1–H3 and their thresholds are unchanged.**
+
+*Amendment 2026-10-27:* the freeze commit is `0b2622d3e8f285aaff7fc4297a517ccacaf56a47`. E4 runs with
+`MAARA_POLICIES_FROZEN=0b2622d3e8f285aaff7fc4297a517ccacaf56a47`.
