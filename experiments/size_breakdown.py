@@ -14,7 +14,11 @@ predates the KV-leak fix (DECISIONS 8 item 11), which moved some LSF and EDF
 values, so on MAARA only the policies the fix left alone are held to it; every
 difference is recorded in the output.
 
+`--maps d2` replays the DECISIONS 38 dev maps instead, adding the selected
+Gittins variant; those maps are post-fix, so every policy is held to them.
+
     ./venv/bin/python -m experiments.size_breakdown --workers 6
+    ./venv/bin/python -m experiments.size_breakdown --maps d2 --workers 6
 """
 
 from __future__ import annotations
@@ -39,9 +43,19 @@ WORKLOADS = {
               ("fcfs", "program-fcfs", "plas")),
     "TraceLab dev": ("tracelab/D1_dev_c0.3.json", "tracelab_dev", 8192.0, "task", POLICIES),
 }
+# DECISIONS 38: gittins-guard-x2 is the dev selection rule's choice.
+POLICIES_D2 = ("fcfs", "program-fcfs", "plas", "gittins-guard-x2")
+WORKLOADS_D2 = {
+    "MAARA": ("tracelab/D2_gittins_maara.json", "holdout_qwen", 1024.0, "estimate",
+              POLICIES_D2),
+    "TraceLab dev": ("tracelab/D2_gittins_dev.json", "tracelab_dev", 8192.0, "task",
+                     POLICIES_D2),
+}
+MAPS = {"d1": (WORKLOADS, POLICIES, "size_breakdown.json"),
+        "d2": (WORKLOADS_D2, POLICIES_D2, "size_breakdown_gittins.json")}
 
 
-def _cell(results, rel, batch, load):
+def _cell(results, rel, batch, load, policies):
     with open(os.path.join(results, rel)) as fh:
         d = json.load(fh)
     b = next(x for x in d["batches"] if x["max_batch"] == batch)
@@ -52,7 +66,7 @@ def _cell(results, rel, batch, load):
             "retention": prm["retention"],
             "slo": tuple(tuple(x) for x in prm["slo_classes"]),
             "p95": {p: c["policies"][p]["per_seed"]["p95_task_latency_s"]
-                    for p in POLICIES}}
+                    for p in policies}}
 
 
 def _job(args):
@@ -77,13 +91,16 @@ def main():
     ap.add_argument("--loads", type=float, nargs="+", default=[1.0, 1.5])
     ap.add_argument("--seeds", type=int, default=5)
     ap.add_argument("--workers", type=int, default=4)
-    ap.add_argument("--out", default=os.path.join(_REPO, "results", "tracelab",
-                                                  "size_breakdown.json"))
+    ap.add_argument("--maps", choices=sorted(MAPS), default="d1")
+    ap.add_argument("--out", default=None)
     args = ap.parse_args()
+    workloads, policies, name = MAPS[args.maps]
+    out_path = args.out or os.path.join(_REPO, "results", "tracelab", name)
     seeds = list(range(1, args.seeds + 1))
     manifest = Manifest.start("size_breakdown", params={
         "workloads": {k: [list(x) if isinstance(x, tuple) else x for x in v]
-                      for k, v in WORKLOADS.items()}, "policies": POLICIES,
+                      for k, v in workloads.items()}, "policies": policies,
+        "maps": args.maps,
         "batch": args.batch, "loads": args.loads, "seeds": seeds,
         "hardware_profile": PROFILE,
         "calibration": "saturation and slack read from each map, not recalibrated",
@@ -91,14 +108,14 @@ def main():
     t0 = time.time()
     cells = []
     with ProcessPoolExecutor(max_workers=args.workers) as pool:
-        for wl, (rel, trace_set, kv, basis, strict) in WORKLOADS.items():
+        for wl, (rel, trace_set, kv, basis, strict) in workloads.items():
             for load in args.loads:
-                c = _cell(args.results, rel, args.batch, load)
+                c = _cell(args.results, rel, args.batch, load, policies)
                 jobs = {(pol, sd): pool.submit(_job, (
                             wl, pol, sd, c["rate"], c["slack"], args.batch, kv,
                             c["retention"], trace_set, c["slo"], basis))
-                        for pol in POLICIES for sd in seeds}
-                for pol in POLICIES:
+                        for pol in policies for sd in seeds}
+                for pol in policies:
                     for sd in seeds:
                         r = jobs[(pol, sd)].result()
                         want = c["p95"][pol][sd - 1]
@@ -110,17 +127,17 @@ def main():
                         cells.append({"workload": wl, "load": load, "policy": pol,
                                       "seed": sd, "map_p95_task_latency_s": want,
                                       "matches_map": same, **r})
-                off = [x for x in cells[-len(POLICIES) * len(seeds):] if not x["matches_map"]]
+                off = [x for x in cells[-len(policies) * len(seeds):] if not x["matches_map"]]
                 print(f"[{time.time() - t0:6.0f}s] {wl} load {load}: "
-                      f"{len(POLICIES) * len(seeds)} runs; p95 differs from the map in "
+                      f"{len(policies) * len(seeds)} runs; p95 differs from the map in "
                       f"{len(off)} (" + ", ".join(sorted({x['policy'] for x in off})) + ")",
                       flush=True)
     out = {"cells": cells, "elapsed_s": round(time.time() - t0, 1),
            "manifest": manifest.to_dict()}
-    os.makedirs(os.path.dirname(args.out), exist_ok=True)
-    with open(args.out, "w") as fh:
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    with open(out_path, "w") as fh:
         json.dump(out, fh)
-    print(f"{len(cells)} runs in {out['elapsed_s']:.0f}s -> {args.out}")
+    print(f"{len(cells)} runs in {out['elapsed_s']:.0f}s -> {out_path}")
     return 0
 
 

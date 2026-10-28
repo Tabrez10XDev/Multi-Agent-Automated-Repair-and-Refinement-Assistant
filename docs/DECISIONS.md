@@ -1585,3 +1585,26 @@ fixes) and before any dev run:*
   - **No committed golden test.** Golden equality with the pre-change code
     is checked by hand: a `--quick` map gave 0 mismatches over every
     existing policy.
+
+*Amendment 2026-10-27, dev selection (before the freeze; sealed2 not yet
+built):*
+- **Dev maps** `D2_gittins_dev.json` and `D2_gittins_maara.json` ran at
+  10bac92 with a clean tree (b10cbf9).
+- **The rule picks `gittins-guard-x2`**: L = 1.038, D = 0.908, so
+  max(L, D) = 1.038. Next were `gittins-sd-guard-x2` (1.055) and
+  `gittins-guard-x4` (1.065). `plas-guard` therefore runs at X = 2 in E4.
+- **On dev, H1 looks unlikely to hold.** At 5 seeds, `gittins-guard-x2` is
+  better than `program-fcfs` on p95 slowdown in 1 of 30 cells and worse
+  on p95 latency in 2. No variant had L < 1. The guard trades slowdown
+  gain back for latency.
+- **Owner's call: follow the rule unchanged** (option A). Picking X = 8
+  after seeing dev (D = 0.752, L = 1.069) was rejected as post-hoc. H1–H3
+  and their thresholds stay as written.
+- **MAARA sanity map, no hypothesis.** Every Gittins variant is within
+  0.5% of `program-fcfs` on mean L. The guarded ones are never worse on
+  p95 latency in any of the 40 cells. `plas` is worse in all 40
+  (L = 1.41).
+- **Size breakdown for the chosen policy:** `size_breakdown --maps d2`
+  replays batch 4 at loads 1.0 and 1.5, seeds 1–5, for `fcfs`,
+  `program-fcfs`, `plas` and `gittins-guard-x2` against the D2 maps. Every
+  policy is held to the map's per-seed p95. Exploratory, no prediction.
