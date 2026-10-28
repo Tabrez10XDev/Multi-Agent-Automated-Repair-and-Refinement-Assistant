@@ -1,0 +1,171 @@
+trace=tracelab_sealed2 kv=8192MB retention=lru profile=gpu_5060ti_public coeff=0.3 seeds=20 batches=[2, 4, 8] slo=(('tight', 1.0, 0.3), ('standard', 2.0, 0.4), ('loose', 4.0, 0.3)) deadlines=task load-axis=capacity
+
+=== batch 2 ===
+  saturation throughput = 0.0038 tasks/s; slack calibrated at load 0.8 = 0.0031/s
+  slack_factor = 0.844  (FCFS miss 22.5% at util 0.8)
+  load 0.50 (util None, x0.5)  choice  0.3%  rent>0  1.8%  forced 91263.7  resident max 2  active max/p95 2/2.0  at-cap 19.1% INACTIVE
+    fcfs   p50    42.8  p95  1138.6  miss 20.5% (infeasible 19.1%)
+    program-fcfs p95   +0.00 [+0.00, +0.00]   miss  +0.3% [-0.1%, +0.6%]
+    gittins-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.1% [-0.3%, +0.6%]
+    plas-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.1% [-0.3%, +0.6%]
+  load 0.60 (util None, x0.6)  choice  0.5%  rent>0  2.6%  forced 92291.2  resident max 2  active max/p95 2/2.0  at-cap 22.3% INACTIVE
+    fcfs   p50    45.6  p95  1152.9  miss 21.7% (infeasible 19.6%)
+    program-fcfs p95   -0.26 [-0.80, +0.28]   miss  -0.1% [-0.4%, +0.1%]
+    gittins-guard-x2 p95   -0.26 [-0.80, +0.28]   miss  -0.4% [-0.8%, +0.1%]
+    plas-guard-x2 p95   -0.54 [-1.65, +0.58]   miss  -0.4% [-0.8%, +0.1%]
+  load 0.70 (util None, x0.7)  choice  0.8%  rent>0  3.3%  forced 92270.9  resident max 2  active max/p95 2/2.0  at-cap 24.5% INACTIVE
+    fcfs   p50    46.5  p95  1164.6  miss 22.1% (infeasible 20.2%)
+    program-fcfs p95   -0.28 [-0.80, +0.24]   miss  +0.1% [-0.3%, +0.6%]
+    gittins-guard-x2 p95   +0.69 [-0.76, +2.14]   miss  -0.5% [-1.2%, +0.2%]
+    plas-guard-x2 p95   +0.69 [-0.76, +2.14]   miss  -0.4% [-1.1%, +0.3%]
+  load 0.80 (util None, x0.8)  choice  1.1%  rent>0  4.4%  forced 92753.8  resident max 2  active max/p95 2/2.0  at-cap 28.4% INACTIVE
+    fcfs   p50    46.1  p95  1188.7  miss 23.2% (infeasible 20.8%)
+    program-fcfs p95   -7.49 [-23.17, +8.19]   miss  +0.2% [-0.4%, +0.9%]
+    gittins-guard-x2 p95   -5.23 [-16.19, +5.72]   miss  -0.4% [-1.1%, +0.3%]
+    plas-guard-x2 p95   -5.23 [-16.19, +5.72]   miss  -0.3% [-0.9%, +0.4%]
+  load 0.90 (util None, x0.9)  choice  1.6%  rent>0  5.4%  forced 94474.0  resident max 2  active max/p95 2/2.0  at-cap 32.4% INACTIVE
+    fcfs   p50    50.4  p95  1217.4  miss 25.6% (infeasible 22.2%)
+    program-fcfs p95  -15.01 [-37.23, +7.21]   miss  -0.3% [-1.6%, +1.1%]
+    gittins-guard-x2 p95  -15.01 [-37.23, +7.21]   miss  -0.4% [-1.5%, +0.7%]
+    plas-guard-x2 p95  -15.00 [-37.20, +7.20]   miss  -0.2% [-1.2%, +0.7%]
+  load 1.00 (util None, x1.0)  choice  2.3%  rent>0  6.8%  forced 94746.9  resident max 2  active max/p95 2/2.0  at-cap 35.6% INACTIVE
+    fcfs   p50    58.3  p95  1263.4  miss 26.9% (infeasible 23.0%)
+    program-fcfs p95  -26.83 [-70.99, +17.34]   miss  +1.2% [-0.0%, +2.5%]
+    gittins-guard-x2 p95  -26.53 [-67.45, +14.38]   miss  +1.1% [-0.3%, +2.6%]
+    plas-guard-x2 p95  -22.40 [-55.38, +10.58]   miss  +0.7% [-0.5%, +2.0%]
+  load 1.10 (util None, x1.1)  choice  2.9%  rent>0  8.7%  forced 98987.2  resident max 2  active max/p95 2/2.0  at-cap 39.7% INACTIVE
+    fcfs   p50    55.4  p95  1339.2  miss 28.1% (infeasible 23.6%)
+    program-fcfs p95  -65.63 [-176.18, +44.92]   miss  +0.5% [-1.9%, +2.9%]
+    gittins-guard-x2 p95  -68.52 [-178.59, +41.55]   miss  +0.4% [-1.5%, +2.2%]
+    plas-guard-x2 p95  -71.45 [-186.10, +43.20]   miss  -0.4% [-2.3%, +1.5%]
+  load 1.25 (util None, x1.25)  choice  4.4%  rent>0 10.6%  forced 100588.8  resident max 2  active max/p95 2/2.0  at-cap 43.2% INACTIVE
+    fcfs   p50    60.3  p95  1408.6  miss 30.1% (infeasible 25.2%)
+    program-fcfs p95  -85.98 [-197.99, +26.03]   miss  +0.4% [-1.2%, +2.0%]
+    gittins-guard-x2 p95  -79.40 [-188.64, +29.83]   miss  -0.1% [-1.7%, +1.5%]
+    plas-guard-x2 p95  -73.31 [-175.09, +28.46]   miss  -0.6% [-2.1%, +0.9%]
+  load 1.50 (util None, x1.5)  choice  7.9%  rent>0 14.7%  forced 118879.9  resident max 2  active max/p95 2/2.0  at-cap 48.6%
+    fcfs   p50    69.8  p95  1664.3  miss 35.2% (infeasible 28.7%)
+    program-fcfs p95 -241.71 [-439.56, -43.85]*  miss  +0.9% [-1.5%, +3.2%]
+    gittins-guard-x2 p95 -233.10 [-422.52, -43.68]*  miss  +0.4% [-1.6%, +2.4%]
+    plas-guard-x2 p95 -225.44 [-413.19, -37.70]*  miss  -0.7% [-3.1%, +1.6%]
+  load 2.00 (util None, x2.0)  choice 21.0%  rent>0 25.9%  forced 341766.7  resident max 2  active max/p95 2/2.0  at-cap 58.0%
+    fcfs   p50   128.0  p95  3434.9  miss 60.5% (infeasible 46.0%)
+    program-fcfs p95 -1782.28 [-2491.38, -1073.18]*  miss -16.8% [-23.8%, -9.7%]*
+    gittins-guard-x2 p95 -1775.41 [-2483.82, -1067.00]*  miss -18.1% [-25.1%, -11.1%]*
+    plas-guard-x2 p95 -1765.67 [-2470.37, -1060.97]*  miss -18.5% [-25.2%, -11.8%]*
+
+=== batch 4 ===
+  saturation throughput = 0.0042 tasks/s; slack calibrated at load 0.8 = 0.0033/s
+  slack_factor = 0.844  (FCFS miss 23.3% at util 0.8)
+  load 0.50 (util None, x0.5)  choice  0.0%  rent>0  0.1%  forced 92499.0  resident max 4  active max/p95 4/2.2  at-cap  0.7% INACTIVE
+    fcfs   p50    41.8  p95  1141.8  miss 20.6% (infeasible 17.9%)
+    program-fcfs p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+  load 0.60 (util None, x0.6)  choice  0.0%  rent>0  0.1%  forced 92773.3  resident max 4  active max/p95 4/2.3  at-cap  1.0% INACTIVE
+    fcfs   p50    42.6  p95  1156.5  miss 21.6% (infeasible 18.2%)
+    program-fcfs p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+  load 0.70 (util None, x0.7)  choice  0.0%  rent>0  0.1%  forced 92591.6  resident max 4  active max/p95 4/2.6  at-cap  1.2% INACTIVE
+    fcfs   p50    43.8  p95  1170.4  miss 22.0% (infeasible 18.5%)
+    program-fcfs p95   +0.00 [-0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x2 p95   +0.00 [-0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x2 p95   +0.00 [-0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+  load 0.80 (util None, x0.8)  choice  0.0%  rent>0  0.1%  forced 93349.9  resident max 4  active max/p95 4/2.8  at-cap  1.7% INACTIVE
+    fcfs   p50    45.0  p95  1187.7  miss 23.2% (infeasible 18.4%)
+    program-fcfs p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+  load 0.90 (util None, x0.9)  choice  0.0%  rent>0  0.2%  forced 95001.1  resident max 4  active max/p95 4/3.0  at-cap  2.3% INACTIVE
+    fcfs   p50    46.0  p95  1214.6  miss 25.1% (infeasible 19.4%)
+    program-fcfs p95   +8.92 [-9.75, +27.60]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x2 p95   +1.47 [-1.61, +4.55]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x2 p95   +2.29 [-2.50, +7.07]   miss  +0.0% [+0.0%, +0.0%]
+  load 1.00 (util None, x1.0)  choice  0.1%  rent>0  0.2%  forced 95137.4  resident max 4  active max/p95 4/3.1  at-cap  2.8% INACTIVE
+    fcfs   p50    48.6  p95  1237.0  miss 25.0% (infeasible 19.8%)
+    program-fcfs p95   +7.32 [-8.01, +22.65]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x2 p95   -1.79 [-5.55, +1.96]   miss  -0.1% [-0.4%, +0.1%]
+    plas-guard-x2 p95   -1.51 [-4.66, +1.65]   miss  -0.1% [-0.4%, +0.1%]
+  load 1.10 (util None, x1.1)  choice  0.1%  rent>0  0.4%  forced 97350.2  resident max 4  active max/p95 4/3.3  at-cap  3.9% INACTIVE
+    fcfs   p50    51.3  p95  1267.1  miss 26.1% (infeasible 20.4%)
+    program-fcfs p95   +4.74 [-5.18, +14.65]   miss  -0.1% [-0.4%, +0.1%]
+    gittins-guard-x2 p95   -2.63 [-8.14, +2.88]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x2 p95   +0.46 [-0.50, +1.42]   miss  -0.1% [-0.4%, +0.1%]
+  load 1.25 (util None, x1.25)  choice  0.2%  rent>0  0.8%  forced 104319.9  resident max 4  active max/p95 4/3.4  at-cap  6.1% INACTIVE
+    fcfs   p50    54.8  p95  1352.4  miss 28.0% (infeasible 20.6%)
+    program-fcfs p95   -1.33 [-26.55, +23.90]   miss  +0.1% [-0.5%, +0.7%]
+    gittins-guard-x2 p95  -11.04 [-28.73, +6.64]   miss  -0.4% [-1.3%, +0.6%]
+    plas-guard-x2 p95   -8.95 [-26.63, +8.72]   miss  +0.0% [-0.7%, +0.7%]
+  load 1.50 (util None, x1.5)  choice  1.0%  rent>0  2.0%  forced 132082.6  resident max 4  active max/p95 4/3.8  at-cap 11.9% INACTIVE
+    fcfs   p50    60.7  p95  1540.9  miss 33.6% (infeasible 24.0%)
+    program-fcfs p95  +15.39 [-98.15, +128.92]   miss  +0.7% [-0.3%, +1.8%]
+    gittins-guard-x2 p95   -9.20 [-66.55, +48.16]   miss  +0.4% [-0.1%, +0.8%]
+    plas-guard-x2 p95  -20.11 [-83.23, +43.00]   miss  +0.1% [-0.3%, +0.6%]
+  load 2.00 (util None, x2.0)  choice  8.2%  rent>0 10.4%  forced 358779.2  resident max 4  active max/p95 4/4.0  at-cap 37.0%
+    fcfs   p50   108.0  p95  2867.7  miss 58.0% (infeasible 37.1%)
+    program-fcfs p95 -367.20 [-607.65, -126.74]*  miss  +1.5% [-0.6%, +3.6%]
+    gittins-guard-x2 p95 -368.77 [-607.64, -129.91]*  miss  +1.1% [-0.8%, +3.1%]
+    plas-guard-x2 p95 -381.01 [-610.49, -151.53]*  miss  +0.8% [-1.0%, +2.5%]
+
+=== batch 8 ===
+  saturation throughput = 0.0042 tasks/s; slack calibrated at load 0.8 = 0.0033/s
+  slack_factor = 0.844  (FCFS miss 25.0% at util 0.8)
+  load 0.50 (util None, x0.5)  choice  0.0%  rent>0  0.1%  forced 94136.6  resident max 4  active max/p95 4/2.1  at-cap  0.0% INACTIVE CAP-NEVER-BINDS
+    fcfs   p50    41.6  p95  1141.8  miss 20.8% (infeasible 17.9%)
+    program-fcfs p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+  load 0.60 (util None, x0.6)  choice  0.0%  rent>0  0.1%  forced 94911.8  resident max 4  active max/p95 4/2.3  at-cap  0.0% INACTIVE CAP-NEVER-BINDS
+    fcfs   p50    42.4  p95  1156.1  miss 21.7% (infeasible 18.4%)
+    program-fcfs p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+  load 0.70 (util None, x0.7)  choice  0.0%  rent>0  0.1%  forced 94187.6  resident max 4  active max/p95 4/2.5  at-cap  0.0% INACTIVE CAP-NEVER-BINDS
+    fcfs   p50    43.7  p95  1170.3  miss 22.6% (infeasible 18.4%)
+    program-fcfs p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+  load 0.80 (util None, x0.8)  choice  0.0%  rent>0  0.1%  forced 95849.5  resident max 5  active max/p95 5/2.8  at-cap  0.0% INACTIVE CAP-NEVER-BINDS
+    fcfs   p50    45.0  p95  1188.5  miss 23.5% (infeasible 18.5%)
+    program-fcfs p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x2 p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+  load 0.90 (util None, x0.9)  choice  0.0%  rent>0  0.1%  forced 97739.1  resident max 5  active max/p95 5/3.0  at-cap  0.0% INACTIVE CAP-NEVER-BINDS
+    fcfs   p50    46.6  p95  1215.1  miss 24.5% (infeasible 19.1%)
+    program-fcfs p95   +8.49 [-9.28, +26.27]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x2 p95   +2.67 [-2.92, +8.25]   miss  +0.1% [-0.1%, +0.4%]
+    plas-guard-x2 p95   +1.40 [-1.53, +4.32]   miss  +0.1% [-0.1%, +0.4%]
+  load 1.00 (util None, x1.0)  choice  0.1%  rent>0  0.1%  forced 97671.2  resident max 5  active max/p95 5/3.1  at-cap  0.0% INACTIVE CAP-NEVER-BINDS
+    fcfs   p50    48.6  p95  1238.3  miss 25.0% (infeasible 19.9%)
+    program-fcfs p95  +10.28 [-11.23, +31.79]   miss  +0.0% [+0.0%, +0.0%]
+    gittins-guard-x2 p95   +0.70 [-0.76, +2.15]   miss  +0.0% [+0.0%, +0.0%]
+    plas-guard-x2 p95   +0.05 [-0.06, +0.16]   miss  +0.0% [+0.0%, +0.0%]
+  load 1.10 (util None, x1.1)  choice  0.1%  rent>0  0.1%  forced 102833.9  resident max 5  active max/p95 5/3.2  at-cap  0.0% INACTIVE CAP-NEVER-BINDS
+    fcfs   p50    51.4  p95  1275.0  miss 26.2% (infeasible 20.2%)
+    program-fcfs p95   +4.52 [-4.94, +13.99]   miss  +0.1% [-0.1%, +0.4%]
+    gittins-guard-x2 p95   -2.57 [-7.96, +2.81]   miss  +0.0% [-0.4%, +0.4%]
+    plas-guard-x2 p95   -0.90 [-2.77, +0.98]   miss  +0.0% [-0.4%, +0.4%]
+  load 1.25 (util None, x1.25)  choice  0.2%  rent>0  0.1%  forced 111619.9  resident max 5  active max/p95 5/3.4  at-cap  0.0% INACTIVE CAP-NEVER-BINDS
+    fcfs   p50    53.8  p95  1341.6  miss 28.0% (infeasible 20.9%)
+    program-fcfs p95   +1.67 [-12.51, +15.85]   miss  +0.6% [-0.2%, +1.5%]
+    gittins-guard-x2 p95   -6.94 [-16.67, +2.78]   miss  +0.1% [-0.1%, +0.4%]
+    plas-guard-x2 p95   -8.72 [-19.49, +2.05]   miss  +0.3% [-0.1%, +0.6%]
+  load 1.50 (util None, x1.5)  choice  1.0%  rent>0  0.1%  forced 156123.0  resident max 5  active max/p95 5/3.7  at-cap  0.0% INACTIVE CAP-NEVER-BINDS
+    fcfs   p50    59.8  p95  1604.2  miss 33.6% (infeasible 24.1%)
+    program-fcfs p95  -11.56 [-159.42, +136.30]   miss  +1.0% [-0.6%, +2.6%]
+    gittins-guard-x2 p95  -28.82 [-168.81, +111.18]   miss  +0.6% [-0.3%, +1.5%]
+    plas-guard-x2 p95  -44.15 [-141.23, +52.93]   miss  +0.1% [-0.3%, +0.6%]
+  load 2.00 (util None, x2.0)  choice  7.7%  rent>0  0.1%  forced 381116.4  resident max 5  active max/p95 5/4.0  at-cap  0.0% CAP-NEVER-BINDS
+    fcfs   p50   107.5  p95  2797.5  miss 57.5% (infeasible 37.6%)
+    program-fcfs p95 -274.15 [-515.39, -32.92]*  miss  +1.8% [-0.6%, +4.1%]
+    gittins-guard-x2 p95 -257.30 [-488.29, -26.31]*  miss  +2.0% [-0.4%, +4.4%]
+    plas-guard-x2 p95 -276.80 [-503.50, -50.09]*  miss  +0.6% [-1.1%, +2.4%]
+
+=== summary ===
+  batch 2: program-fcfs first separates from fcfs at load 1.50 on p95_vs_fcfs: p95 -241.7s [-439.6, -43.9], miss +0.9% [-1.5%, +3.2%]
+  batch 4: program-fcfs first separates from fcfs at load 2.00 on p95_vs_fcfs: p95 -367.2s [-607.6, -126.7], miss +1.5% [-0.6%, +3.6%]
+  batch 8: cap never binds at any load (KV-bound: the KV budget, not max_batch, limits concurrency)
+  batch 8: program-fcfs first separates from fcfs at load 2.00 on p95_vs_fcfs: p95 -274.2s [-515.4, -32.9], miss +1.8% [-0.6%, +4.1%]
+
+elapsed 17184s -> results/tracelab/E4_sealed2.json
