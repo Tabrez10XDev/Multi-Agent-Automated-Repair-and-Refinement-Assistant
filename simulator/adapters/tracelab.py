@@ -2,9 +2,9 @@
 TraceLab adapter (DECISIONS 37): a user turn = one Task, a chain DAG.
 
 Reads the DERIVED files written by experiments/build_tracelab.py
-(data/external/tracelab/{dev,sealed}.jsonl.gz), never the raw release. The
-sealed name is registered sealed=True, so the registry's MAARA_POLICIES_FROZEN
-gate runs before this module opens the file.
+(data/external/tracelab/{dev,sealed,sealed2}.jsonl.gz), never the raw release.
+Both sealed names are registered sealed=True, so the registry's
+MAARA_POLICIES_FROZEN gate runs before this module opens the file.
 
 DAG, in round order: an LLM node per round (stage "agent_round", model
 CODER_MODEL, tokens from the clipped values), then a CPU node (stage "tool",
@@ -54,7 +54,8 @@ PROFILE = "gpu_5060ti_public"
 STAGE_LLM, STAGE_TOOL = "agent_round", "tool"
 SEQUENTIAL_MARGIN = (1.25, 1.0)        # x critical path, + seconds
 
-SOURCES = {"tracelab_dev": "dev.jsonl.gz", "tracelab_sealed": "sealed.jsonl.gz"}
+SOURCES = {"tracelab_dev": "dev.jsonl.gz", "tracelab_sealed": "sealed.jsonl.gz",
+           "tracelab_sealed2": "sealed2.jsonl.gz"}      # DECISIONS 38
 
 
 def read_derived(path):
@@ -275,7 +276,7 @@ def _oracle(cost, tok, cpu):
 
 def register():
     for name in SOURCES:
-        register_source(name, load_tracelab, sealed=(name == "tracelab_sealed"),
+        register_source(name, load_tracelab, sealed=name.startswith("tracelab_sealed"),
                         estimator_factory=_online, oracle_factory=_oracle,
                         supports_deadline_basis=("task",),
                         excluded_policies=("hint-priority",))

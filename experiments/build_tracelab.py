@@ -2,6 +2,7 @@
 Build the derived TraceLab workload files (DECISIONS 37).
 
     ./venv/bin/python -I experiments/build_tracelab.py [--n 80] [--raw PATH] [--out DIR]
+    ./venv/bin/python -I experiments/build_tracelab.py --fresh-sealed 80
 
 STDLIB ONLY, NO REPO IMPORTS, run as a path with -I. The raw file is untrusted
 downloaded data: this script only reads it (streamed, never extracted to disk,
@@ -15,6 +16,7 @@ the derived files this writes:
                                              written but the SIMULATOR may only
                                              load it behind MAARA_POLICIES_FROZEN
     data/external/tracelab/dev_constants.json  estimator constants, dev ONLY
+    data/external/tracelab/sealed2.jsonl.gz  --fresh-sealed only (DECISIONS 38)
 
 Each .jsonl.gz: line 1 is a provenance header {"header": {...}}, then one
 compact row per turn. Deterministic: no timestamps or paths in the output, a
@@ -52,6 +54,12 @@ RULES (DECISIONS 37; choices where it is silent are marked CHOICE)
              whole dev population of users, clipped values), not only the 80
              sampled, so the estimator's R distribution is not the sample it
              is later run on. Sealed users never enter it.
+  sealed2    --fresh-sealed N (DECISIONS 38): the sealed users' turns in the
+             same sample-digest order, minus the first --n (the turns E1 ran
+             on) and minus every other turn of their sessions; the first N of
+             what is left. Writes sealed2.jsonl.gz and nothing else, and stops
+             unless the first --n match the committed sealed.jsonl.gz turn for
+             turn and every other file in the output directory is unchanged.
 """
 
 import argparse
@@ -268,15 +276,69 @@ def main():
     ap.add_argument("--raw", default=DEFAULT_RAW)
     ap.add_argument("--out", default=os.path.join(_REPO, "data", "external", "tracelab"))
     ap.add_argument("--n", type=int, default=80, help="turns per split (default 80)")
+    ap.add_argument("--fresh-sealed", type=int, default=None, metavar="N",
+                    help="write only sealed2.jsonl.gz with N new sealed turns")
     args = ap.parse_args()
     raw = os.path.expanduser(args.raw)
     got = sha256_file(raw)
     if got != RAW_SHA256:
         sys.exit(f"SHA-256 mismatch for {raw}: {got} != pre-registered {RAW_SHA256}")
-    build(raw, args.out, args.n)
+    build(raw, args.out, args.n, fresh_sealed=args.fresh_sealed)
 
 
-def build(raw, out_dir, n_req):
+def _dir_hashes(out_dir, skip):
+    return {f: sha256_file(os.path.join(out_dir, f)) for f in sorted(os.listdir(out_dir))
+            if f != skip and os.path.isfile(os.path.join(out_dir, f))}
+
+
+def build_fresh_sealed(pop, header_common, out_dir, n_used, n_new):
+    """DECISIONS 38: sealed2.jsonl.gz, the next n_new sealed turns."""
+    pop.sort(key=lambda t: digest("sample", t["session_id"], t["ordinal"]))
+    used = pop[:n_used]
+    committed = os.path.join(out_dir, "sealed.jsonl.gz")
+    with gzip.open(committed, "rt", encoding="utf-8") as f:
+        f.readline()
+        had = [json.loads(line)["turn"] for line in f if line.strip()]
+    if had != [f"{t['session_id']}#{t['ordinal']}" for t in used]:
+        sys.exit(f"the first {n_used} sealed turns do not match {committed}")
+    used_sessions = {(t["provider"], t["session_id"]) for t in used}
+    rest = pop[n_used:]
+    fresh = [t for t in rest if (t["provider"], t["session_id"]) not in used_sessions]
+    chosen = fresh[:n_new]
+    if len(chosen) < n_new:
+        sys.exit(f"only {len(chosen)} fresh sealed turns, {n_new} requested")
+    rows, agg = [], collections.Counter()
+    for t in chosen:
+        row, st = finish_turn(t)
+        rows.append(row)
+        agg.update(st)
+    users_used = {t["user"] for t in used}
+    users_new = {t["user"] for t in chosen}
+    counts = {
+        "turns_in_split": len(pop), "turns_used_by_sealed": len(used),
+        "turns_skipped_same_session": len(rest) - len(fresh),
+        "sessions_skipped": len(used_sessions),
+        "turns_sampled": len(chosen), "rounds_sampled": agg["rounds"],
+        "users_sampled": len(users_new),
+        "users_sampled_also_in_sealed": len(users_new & users_used),
+        "sampled": dict(sorted(agg.items())),
+        "providers_sampled": dict(sorted(collections.Counter(
+            t["provider"] for t in chosen).items()))}
+    hdr = dict(header_common, split="sealed2", n_turns_requested=n_new,
+               spec="docs/DECISIONS.md sections 37 and 38", n_used_by_sealed=n_used,
+               counts=counts)
+    before = _dir_hashes(out_dir, "sealed2.jsonl.gz")
+    write_gz(os.path.join(out_dir, "sealed2.jsonl.gz"), hdr, rows)
+    if _dir_hashes(out_dir, "sealed2.jsonl.gz") != before:
+        sys.exit("an existing file changed while writing sealed2.jsonl.gz")
+    print(f"sealed2: sampled={len(chosen)} rounds={agg['rounds']} "
+          f"users={len(users_new)} (also in sealed: {len(users_new & users_used)}) "
+          f"skipped_same_session={counts['turns_skipped_same_session']} "
+          f"clipped_rounds={agg['clipped_rounds']} capped={agg['tool_nodes_capped']}")
+    return counts
+
+
+def build(raw, out_dir, n_req, fresh_sealed=None):
     """Everything after the SHA check (tests call this on a hand-built file)."""
 
     counts = collections.Counter({k: 0 for k in (
@@ -306,6 +368,9 @@ def build(raw, out_dir, n_req):
         "tool_cap_s": TOOL_CAP_S, "epoch_fraction": EPOCH_FRAC,
         "turn_ordinal_base": 0,
         "global_counts": dict(sorted(counts.items()))}
+    if fresh_sealed is not None:
+        return build_fresh_sealed(by_split["sealed"], header_common, out_dir, n_req,
+                                  fresh_sealed)
 
     dev_pop = None
     for name in ("dev", "sealed"):

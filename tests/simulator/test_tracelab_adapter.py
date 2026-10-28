@@ -222,6 +222,46 @@ def test_build_is_deterministic_and_splits_users(tmp_path, raw):
     assert consts["n_rounds"] == 7
 
 
+def test_fresh_sealed_skips_used_turns_and_their_sessions(tmp_path, raw):
+    """DECISIONS 38: sealed2 is the next N sealed turns in digest order, with
+    no session shared with sealed, and no other file touched."""
+    other = [row(f"codex:S{s}", i, f"x{s}{i}", 10 * i, 5, 5, USER_FIRST(10 * i),
+                 user=SEALED_USER, provider="codex")
+             for s in range(2, 7) for i in range(3)]
+    p2 = tmp_path / "raw2.jsonl.gz"
+    write_raw(p2, [json.loads(l) for l in gzip.open(raw, "rt")] + other)
+    out = tmp_path / "o"
+    B.build(str(p2), str(out), 2)
+    before = {f: (out / f).read_bytes() for f in os.listdir(out)}
+    counts = B.build(str(p2), str(out), 2, fresh_sealed=3)
+    assert {f: (out / f).read_bytes() for f in before} == before
+    _, sealed = tl.read_derived(str(out / "sealed.jsonl.gz"))
+    h2, fresh = tl.read_derived(str(out / "sealed2.jsonl.gz"))
+    used = {r["session_id"] for r in sealed}
+    assert len(fresh) == 3 and not used & {r["session_id"] for r in fresh}
+    dg = lambda r: hashlib.sha256(
+        f"tracelab-sample:{r['session_id']}:{r['ordinal']}".encode()).hexdigest()
+    rest = sorted((r for s in range(2, 7) for r in [{"session_id": f"codex:S{s}",
+                   "ordinal": i} for i in range(3)] if r["session_id"] not in used),
+                  key=dg)[:3]
+    assert [r["turn"] for r in fresh] == [f"{r['session_id']}#{r['ordinal']}" for r in rest]
+    assert h2["split"] == "sealed2" and counts["turns_used_by_sealed"] == 2
+    assert counts["turns_skipped_same_session"] == 3 * len(used) - 2
+
+
+def test_fresh_sealed_refuses_a_mismatched_sealed_file(tmp_path, raw):
+    other = [row(f"codex:S{s}", i, f"x{s}{i}", 10 * i, 5, 5, USER_FIRST(10 * i),
+                 user=SEALED_USER, provider="codex")
+             for s in range(2, 5) for i in range(3)]
+    p2 = tmp_path / "raw2.jsonl.gz"
+    write_raw(p2, [json.loads(l) for l in gzip.open(raw, "rt")] + other)
+    out = tmp_path / "o"
+    B.build(str(p2), str(out), 2)
+    with pytest.raises(SystemExit):
+        B.build(str(p2), str(out), 3, fresh_sealed=2)
+    assert not (out / "sealed2.jsonl.gz").exists()
+
+
 # -------------------------------------------------------------- the adapter
 
 COST = CostModel.from_profile("gpu_5060ti_public")
@@ -388,6 +428,17 @@ def test_names_are_registered_without_a_flag():
     ws.check_deadline_basis("tracelab_dev", "task")
     with pytest.raises(ValueError):
         ws.check_deadline_basis("tracelab_dev", "estimate")
+
+
+@pytest.mark.parametrize("name", ["tracelab_sealed", "tracelab_sealed2"])
+def test_every_sealed_name_is_registered_sealed(name):
+    assert ws.get_source(name).sealed
+
+
+def test_sealed_gate_refuses_tracelab_sealed2(monkeypatch):
+    monkeypatch.delenv("MAARA_POLICIES_FROZEN", raising=False)
+    with pytest.raises(SealedTraceSet, match="DECISIONS 26"):
+        ws.resolve_workload("tracelab_sealed2", 1, 0.1)
 
 
 def test_sealed_gate_refuses_tracelab_sealed(monkeypatch):
