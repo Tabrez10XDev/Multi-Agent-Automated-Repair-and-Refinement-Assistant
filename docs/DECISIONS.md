@@ -1679,3 +1679,266 @@ the guard's collapse under overload, and the examiner's points are in
 FINDINGS §42; the open question is OPEN_ISSUES §34. §38 is closed. Its
 design is not revised after the fact; the next attempt is a new
 pre-registration, §39.
+
+## 39. A workload-adaptive switch (`kleinrock-switch`), with group-then-share as a challenger, pre-registered
+
+Set 2026-10-28, owner's decision (option B after E4), before any code or run
+of either policy. Purpose: OPEN_ISSUES §34.
+- **The problem.** `program-fcfs` wins MAARA on p95 latency, with a task-size
+  CV of 0.61.
+  - On sealed TraceLab (CV 1.53) it keeps a latency gain over FCFS, but it
+    multiplies p95 slowdown about 4× over active cells.
+  - Size-based rules fix the slowdown. But they are worse than FCFS on p95
+    latency at batches 4/8 under load: PLAS was worse in 9 cells on E1.
+  - §38 failed E4 (FINDINGS §42).
+- **The owner's goal.** At least par with FCFS on TraceLab, without losing
+  the MAARA result.
+
+**Design history** (session record).
+- **E-5a, the expert idea review**, scored seven candidates. It rejected:
+  - a switch to PLAS or to fewest-rounds-first (about 10–20%, because of the
+    latency risk);
+  - an express lane, a service quantum and program-level HRRN (risk to
+    MAARA or to latency);
+  - an overload switch (wrong axis, and endogenous);
+  - a bandit (endogenous, too few observations).
+
+  It ranked the switch to request-level FCFS first (about 70%) and proposed
+  group-then-share. The owner chose the switch as the scored rule and GTS as
+  an exploratory challenger.
+- **E-5b, the statistics review**, said "go with fixes". Its fixes are in
+  the text below.
+- **Owner decisions, 2026-10-28:**
+  - arrival order is shuffled per seed;
+  - K1's bar stays at "better" (hi < 1.00).
+
+**Basis.** The two rules act like two classic queueing disciplines:
+- Request-level FCFS on chain programs (one outstanding request each)
+  interleaves the programs request by request. That is processor sharing
+  with a one-request quantum.
+- `program-fcfs` is FCFS over whole jobs.
+
+In M/G/1, FCFS beats PS on mean response exactly when the squared CV of job
+size is below 1 (Kleinrock 1976), so the switch point is that boundary. §37
+used the same boundary as G2's trigger.
+
+The threshold, the hysteresis and the warm-up are design choices fixed now.
+They are not fitted, but both workloads' CVs were known when they were set.
+
+**What is claimed.** The switch and its signal, evaluated on real agent
+turns. It is not a new ordering: on each workload P is expected to become
+one of the two baselines.
+
+**`kleinrock-switch` (P, scored).**
+- **Arms:** `program-fcfs` (the start) and `fcfs`, both unchanged.
+- **Signal: the CV of R,** requests per task.
+  - R itself does not depend on the policy. But its *estimate*, through
+    censoring and completion timing, does depend on the active arm, so the
+    switch time does too.
+  - §38's feedback objection is therefore narrowed, not removed. The switch
+    time is reported for every run.
+- **Kaplan–Meier over integer R.**
+  - A completed task is an event at its R.
+  - A task with a request queued or running is known to have R ≥ c + 1,
+    where c = `task_requests_done`. It is at risk for j ≤ c.
+  - A task in a tool phase is known only to have R ≥ c, so it is at risk
+    for j ≤ c − 1.
+  - S(j) = P(R > j) = Π_{i≤j} (1 − d_i/n_i).
+  - E[R] = Σ_{j=0}^{m−1} S(j) and E[R²] = Σ_{j=0}^{m−1} (2j+1) S(j), where m
+    is the largest R or c seen (restricted moments).
+  - CV = sqrt(E[R²] − E[R]²) / E[R]. It is recomputed at each task arrival
+    and each task completion.
+- **Switching.**
+  - **Warm-up:** `program-fcfs` until 30 tasks have arrived.
+  - **Hysteresis:** switch to `fcfs` at CV ≥ 1.10, and back at CV ≤ 0.90.
+- **Logging.** Every switch is logged per run (time, task count, CV) and
+  saved per seed in the map.
+- **Golden test.** A run in which P never switches must be identical, field
+  for field, to `program-fcfs`.
+
+**`gts` (group-then-share, exploratory, no hypothesis).**
+- **Sort key.** The task's arrival time while k = `task_requests_done` < Q,
+  and after that the request's own enqueue time. Ties go to enqueue time,
+  then request id.
+- **Q** is the smallest k ≥ 1 with index(k) < index(0) under the frozen §38
+  Gittins prior for the source, scanning k ≤ `k_tail`. If there is none,
+  Q = ∞.
+  - TraceLab: index 0.0260, 0.0511, 0.0272, 0.0162, so Q = 3.
+  - MAARA: no state falls below 0.196, so Q = ∞ and GTS is `program-fcfs`.
+
+**No oracle field is read.** Both rules read `task_arrival_s`,
+`enqueued_at`, `task_requests_done` and a read-only engine notification of
+task arrival and completion. Concurrency is unchanged.
+
+**New sets: `tracelab_dev3` and `tracelab_sealed3`.**
+- **Pools.**
+  - **dev3:** the dev users' turns, minus the 80 turns in `dev.jsonl.gz` and
+    their sessions.
+  - **sealed3:** the sealed users' turns, minus:
+    - the 80 turns in `sealed.jsonl.gz`;
+    - the first 80 fresh turns of §38's sealed2 builder in hash order (40 of
+      them ran in E4, and the aggregate of all 80 was seen);
+    - every session of those 160 turns.
+- **Cap.** R ≤ 116, the smallest r with at least 99.5% of dev turns at or
+  below it (`dev_constants.json`). On dev the cap removes 0.5% of turns but
+  23.5% of rounds, and it cuts the CV of R from 9.2 to 1.94.
+  - The sealed-side turns and rounds it removes are reported.
+  - Claims are worded as "turns of at most 116 rounds".
+  - The cap is conservative for K1, because it drops the giant turns that
+    cause head-of-line blocking.
+- **Strata.**
+  - Sort the capped pool by (R, h), where h =
+    `sha256("tracelab-sample3:" + session + ":" + ordinal)`.
+  - Cut it into N equal-count strata, stratum i being positions
+    [⌊iM/N⌋, ⌊(i+1)M/N⌋).
+  - Take each stratum's turn with the smallest h, skipping any turn whose
+    session already has a picked turn (one turn per session; prefix keys
+    hash the session id). The number of skips is reported.
+  - N = 160. sealed3 gets N = 120 if the runtime rule fires.
+- **The file.** Rows are written **in h order, not stratum order.** Sorted
+  by R, the first 30 arrivals would all be 1-round turns and the switch
+  could never fire.
+  - The builder writes only the new file and leaves every committed file
+    byte-identical. It runs under `python -I`.
+  - sealed3's lone-replay CV is reported before any policy run.
+- **Arrival order is shuffled per seed (owner's decision).**
+  - For these two sources only, the adapter permutes the turns with
+    `random.Random("tracelab-order:" + str(seed))` before Poisson
+    re-timing. The re-timing keeps its own unchanged stream.
+  - The permutation depends on the seed alone, so every policy sees the
+    same order (CRN, §24).
+  - E1, E4 and every existing source are unchanged.
+  - So the 30 warm-up turns differ across seeds.
+- **The gate.** It becomes the explicit set {`tracelab_sealed`,
+  `tracelab_sealed3`}. `tracelab_sealed2`, burned by E4, is reclassified as
+  **development stress data** (owner's decision). It shares users with
+  sealed3, which is disclosed; P is fixed before any run on it.
+- **Disclosure:** "new turns and sessions from the sealed user pool".
+- **`final_qwen` (MAARA)** is a disclosed **second use** of a sealed set.
+  - It was scored once, for §31–§33, and no switching rule has run on it.
+  - It is gated by the new freeze.
+  - Its config is checked before the freeze to be `single_agent`, GTS's
+    MAARA prior.
+
+**Development: go/no-go** (`experiments/go_e5.py`, committed before the dev
+runs).
+- **Maps.**
+  - **dev3 and sealed2** are set up as E4: 8,192 MB, LRU, capacity axis,
+    batches 2/4/8, the SLO mix, task deadline basis, `gpu_5060ti_public`,
+    and 5 seeds.
+  - **`holdout_qwen`** is set up as D2-MAARA: 1,024 MB, batches 2/4/8/16,
+    estimate basis, 20 seeds.
+  - Policies: `--policies kleinrock-switch gts`, plus fcfs and
+    `program-fcfs`.
+- **Go** if P meets K1 and K2 on dev3 and on sealed2, and K3 on
+  `holdout_qwen`.
+  - Each test uses its **active-mean point value** in place of the bound.
+  - Cells are counted by paired t interval, not by per-cell bootstrap: 5
+    seeds give only 126 distinct resamples.
+  - The minimum active-cell count applies.
+- **Fixed between dev and the freeze.** P does not change, except for bug
+  fixes with golden checks.
+- **On a no-go,** stop. sealed3 is not built, and the negative result is
+  reported. Any successor design is disclosed as the third attempt on the
+  sealed user pool (E1, E4, E5).
+- **GTS** runs in E5 whatever its dev results.
+- **Power note, recorded before the freeze, with no margin change.** Take
+  the dev3 active-mean interval half-width of P against FCFS on p95 latency
+  and p95 slowdown, and scale it by about 0.5 for 20 seeds. If the
+  projected half-width is near 5%, the amendment records that K2 has a
+  high false-fail risk (E-5b: 20–50% even at a true cost of 0–2%).
+
+**Runtime rule.**
+- E5 has the dev3 map's policies at 4× its seeds, and the same sampler. So
+  its projection is 4 × the wall time in the dev3 manifest, calibration
+  included.
+- If that exceeds 14 h, sealed3 is built with N = 120.
+- Seeds are never cut, and nothing is cut after the build.
+
+**E5 (held-out), after the freeze.**
+
+```
+MAARA_POLICIES_FROZEN=<freeze> scheduling_map --trace-set tracelab_sealed3
+  --load-axis capacity --kv-mb 8192 --retention lru --batches 2 4 8
+  --policies kleinrock-switch gts --seeds 20
+  --slo-mix tight:1.0:0.3,standard:2.0:0.4,loose:4.0:0.3
+  --deadline-basis task --profile gpu_5060ti_public --workers 8
+  --out results/tracelab/E5_sealed3.json
+```
+
+Then `final_qwen`, set up as D2-MAARA, with the same policies and 20 seeds,
+writing `results/tracelab/E5_final_qwen.json`.
+
+**Statistics** (`experiments/score_sealed.py`, `c8487d4`, before any E5
+data).
+- **Ratios.** A cell's ratio is the policy's mean over seeds divided by the
+  baseline's.
+- **Bootstrap.** Seed-cluster: B = 10,000, rng seed 39, one resample of the
+  seed indices shared by every cell and policy. 95% percentile intervals.
+- **The primary statistic** is the **mean over active cells**. A cell is
+  active if FCFS had a choice in at least 5% of decisions.
+  - **At least 8 active cells** are needed. Below that, K1 and K2 are
+    **inconclusive**, not passes.
+- **Scope of the intervals.** They are conditional on these turns: only the
+  arrival gaps and order are resampled, never the turns. The claim is about
+  this sample of capped sealed-pool turns.
+- **"Beyond δ"** means a cell whose bootstrap ratio interval has lo > 1 + δ.
+  The cell rule is a weak check for uneven harm, not a non-inferiority test.
+  - The active-mean bound *is* the non-inferiority test.
+  - Inactive cells, with a ratio of exactly 1, never count.
+- **Sensitivity, reported beside the primary interval.** A delta-method
+  t(19) interval on the log of the active-mean ratio, and the geometric
+  mean of the cell ratios. A verdict that flips under either is labelled
+  **fragile**.
+- **Multiplicity.** The headline is an intersection-union test (Berger
+  1982), so no correction is applied. The false-pass risk is at most that
+  of the weakest component, and the cost falls on power.
+- **Margins.**
+  - **5% against FCFS** is about a fifth of `program-fcfs`'s 23% latency
+    gain over FCFS on E1's active cells.
+  - **2% on MAARA** matches §38's within-0.5% dev result, plus noise.
+  - Both were set after E1, E4 and D2 were seen, and before sealed3 exists.
+
+**Hypotheses (P = `kleinrock-switch`).**
+
+| | data | comparison | pass if |
+|---|---|---|---|
+| **K1** fixes `program-fcfs`'s slowdown failure | sealed3 | P vs `program-fcfs`, p95 slowdown | active-mean hi < 1.00, and at most 2 cells beyond δ = 0 |
+| **K2** par with FCFS, the real test (the cost of warm-up and detection delay) | sealed3 | P vs FCFS, p95 latency and p95 slowdown, each | active-mean hi ≤ 1.05, and at most 2 cells beyond δ = 0.05 |
+| **K3** MAARA kept | final_qwen | P vs `program-fcfs`, p95 latency | no switch in any run (P is then identical to `program-fcfs`); otherwise active-mean hi ≤ 1.02 and at most 2 of 40 cells beyond δ = 0.02 |
+| **K4** latency price, reported with no verdict | sealed3 | P vs `program-fcfs`, p95 latency | expected near 1.30 over active cells (E1's FCFS vs `program-fcfs`, FINDINGS §42) |
+
+- **K1 and K3 are expected to pass almost surely.** K1 because P becomes
+  FCFS (expected ratio about 0.24). K3 because MAARA's CV of R is 0.42,
+  against a threshold of 1.10.
+- **Headline wording, fixed now:**
+  - if K1, K2 and K3 all hold: "A switch on the online CV of requests per
+    task matches FCFS on TraceLab within 5% (K2) and keeps `program-fcfs`
+    on MAARA (K3), at a TraceLab p95-latency cost of <K4 value [interval]>
+    against `program-fcfs`."
+  - The K4 number is always in the headline sentence.
+- **Exploratory:**
+  - GTS against both baselines. Does it recover part of K4's price within
+    K1/K2's bounds?
+  - The switch times.
+  - Claude vs Codex turns.
+  - K1 against 0.80, reported with no verdict.
+
+**Threats fixed in advance.**
+- The same user pool as E1 and E4.
+- `final_qwen` is a second use.
+- The intervals are conditional on the turn sample.
+- Turns of at most 116 rounds only.
+- One model's rates and simulated GPU costs (c = 0.3).
+- No inter-turn KV reuse (OPEN_ISSUES §33).
+
+**Order checkable in git:** this commit → code and tests → dev3 build →
+dev runs → go/no-go amendment → freeze commit → sealed3 build → E5 →
+scoring.
+
+**Expert checkpoints:**
+- E-6, code review, before the dev runs;
+- E-7, before the freeze, including an independent go/no-go;
+- E-8, before conclusions.
+
+Every disagreement goes to the owner.
