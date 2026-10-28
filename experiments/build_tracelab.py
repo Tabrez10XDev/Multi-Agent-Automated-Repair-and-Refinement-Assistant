@@ -3,6 +3,7 @@ Build the derived TraceLab workload files (DECISIONS 37).
 
     ./venv/bin/python -I experiments/build_tracelab.py [--n 80] [--raw PATH] [--out DIR]
     ./venv/bin/python -I experiments/build_tracelab.py --fresh-sealed 80
+    ./venv/bin/python -I experiments/build_tracelab.py --stratified 160 --split dev --name dev3
 
 STDLIB ONLY, NO REPO IMPORTS, run as a path with -I. The raw file is untrusted
 downloaded data: this script only reads it (streamed, never extracted to disk,
@@ -17,6 +18,7 @@ the derived files this writes:
                                              load it behind MAARA_POLICIES_FROZEN
     data/external/tracelab/dev_constants.json  estimator constants, dev ONLY
     data/external/tracelab/sealed2.jsonl.gz  --fresh-sealed only (DECISIONS 38)
+    data/external/tracelab/{dev3,sealed3}.jsonl.gz  --stratified only (DECISIONS 39)
 
 Each .jsonl.gz: line 1 is a provenance header {"header": {...}}, then one
 compact row per turn. Deterministic: no timestamps or paths in the output, a
@@ -278,12 +280,19 @@ def main():
     ap.add_argument("--n", type=int, default=80, help="turns per split (default 80)")
     ap.add_argument("--fresh-sealed", type=int, default=None, metavar="N",
                     help="write only sealed2.jsonl.gz with N new sealed turns")
+    ap.add_argument("--stratified", type=int, default=None, metavar="N",
+                    help="write only <name>.jsonl.gz: N turns stratified by rounds (DECISIONS 39)")
+    ap.add_argument("--split", choices=("dev", "sealed"))
+    ap.add_argument("--name", help="output name for --stratified, e.g. dev3 or sealed3")
     args = ap.parse_args()
+    if args.stratified is not None and not (args.split and args.name):
+        sys.exit("--stratified needs --split and --name")
     raw = os.path.expanduser(args.raw)
     got = sha256_file(raw)
     if got != RAW_SHA256:
         sys.exit(f"SHA-256 mismatch for {raw}: {got} != pre-registered {RAW_SHA256}")
-    build(raw, args.out, args.n, fresh_sealed=args.fresh_sealed)
+    build(raw, args.out, args.n, fresh_sealed=args.fresh_sealed,
+          stratified=(args.stratified, args.split, args.name) if args.stratified else None)
 
 
 def _dir_hashes(out_dir, skip):
@@ -338,7 +347,105 @@ def build_fresh_sealed(pop, header_common, out_dir, n_used, n_new):
     return counts
 
 
-def build(raw, out_dir, n_req, fresh_sealed=None):
+R_CAP = 116            # DECISIONS 39: smallest r with >= 99.5% of dev turns at or below
+SEALED2_CANDIDATES = 80   # first sealed2 build: its aggregate was seen (DECISIONS 38)
+
+
+def _used_turns(pop, out_dir, split, n_used):
+    """Turns of `pop` (sorted by sample hash) already written to a committed
+    file of this split: dev.jsonl.gz, or sealed.jsonl.gz plus the first
+    SEALED2_CANDIDATES fresh turns of DECISIONS 38's sealed2 builder."""
+    used = pop[:n_used]
+    committed = os.path.join(out_dir, f"{split}.jsonl.gz")
+    with gzip.open(committed, "rt", encoding="utf-8") as f:
+        f.readline()
+        had = [json.loads(line)["turn"] for line in f if line.strip()]
+    if had != [f"{t['session_id']}#{t['ordinal']}" for t in used]:
+        sys.exit(f"the first {n_used} {split} turns do not match {committed}")
+    if split == "sealed":
+        sess = {(t["provider"], t["session_id"]) for t in used}
+        fresh = [t for t in pop[n_used:] if (t["provider"], t["session_id"]) not in sess]
+        used = used + fresh[:SEALED2_CANDIDATES]
+    return used
+
+
+def build_stratified(pop, header_common, out_dir, split, name, n_used, n_new):
+    """DECISIONS 39: <name>.jsonl.gz, n_new turns of `split` stratified by R.
+
+    Pool: the split's turns minus every turn already used (see _used_turns)
+    and every session they belong to, then R <= R_CAP. Sorted by (R, h) with
+    h = sha256("tracelab-sample3:" + session + ":" + ordinal) and cut into
+    n_new equal-count strata; each stratum gives its smallest-h turn whose
+    session has no pick yet. Rows are written in h order, not by R, because
+    the adapter replays turns in file order before any shuffle."""
+    pop.sort(key=lambda t: digest("sample", t["session_id"], t["ordinal"]))
+    used = _used_turns(pop, out_dir, split, n_used)
+    used_ids = {(t["provider"], t["session_id"], t["ordinal"]) for t in used}
+    used_sessions = {(t["provider"], t["session_id"]) for t in used}
+    left = [t for t in pop if (t["provider"], t["session_id"]) not in used_sessions]
+    assert not any((t["provider"], t["session_id"], t["ordinal"]) in used_ids for t in left)
+    capped = [t for t in left if len(t["rounds"]) > R_CAP]
+    pool = [t for t in left if len(t["rounds"]) <= R_CAP]
+    h = {id(t): digest("sample3", t["session_id"], t["ordinal"]) for t in pool}
+    pool.sort(key=lambda t: (len(t["rounds"]), h[id(t)]))
+    M = len(pool)
+    if M < n_new:
+        sys.exit(f"only {M} turns in the {split} pool, {n_new} requested")
+    chosen, picked_sessions, skips = [], set(), 0
+    for i in range(n_new):
+        stratum = sorted(pool[i * M // n_new:(i + 1) * M // n_new], key=lambda t: h[id(t)])
+        for t in stratum:
+            if (t["provider"], t["session_id"]) not in picked_sessions:
+                chosen.append(t)
+                picked_sessions.add((t["provider"], t["session_id"]))
+                break
+            skips += 1
+        else:
+            sys.exit(f"stratum {i} has no turn from an unpicked session")
+    chosen.sort(key=lambda t: h[id(t)])
+    rows, agg = [], collections.Counter()
+    for t in chosen:
+        row, st = finish_turn(t)
+        rows.append(row)
+        agg.update(st)
+    rs = [len(t["rounds"]) for t in chosen]
+    mean_r = sum(rs) / len(rs)
+    cv_r = (sum((r - mean_r) ** 2 for r in rs) / len(rs)) ** 0.5 / mean_r
+    users_used = {t["user"] for t in used}
+    users_new = {t["user"] for t in chosen}
+    counts = {
+        "turns_in_split": len(pop), "turns_excluded_used": len(used),
+        "sessions_excluded": len(used_sessions),
+        "turns_excluded_same_session": len(pop) - len(left),
+        "turns_removed_by_cap": len(capped),
+        "rounds_removed_by_cap": sum(len(t["rounds"]) for t in capped),
+        "rounds_left_before_cap": sum(len(t["rounds"]) for t in left),
+        "pool_turns": M, "r_cap": R_CAP, "strata": n_new,
+        "skips_one_per_session": skips,
+        "turns_sampled": len(chosen), "rounds_sampled": agg["rounds"],
+        "rounds_per_turn_mean": mean_r, "rounds_per_turn_cv": cv_r,
+        "users_sampled": len(users_new),
+        "users_sampled_also_in_used": len(users_new & users_used),
+        "sampled": dict(sorted(agg.items())),
+        "providers_sampled": dict(sorted(collections.Counter(
+            t["provider"] for t in chosen).items()))}
+    hdr = dict(header_common, split=name, n_turns_requested=n_new,
+               spec="docs/DECISIONS.md sections 37 and 39", n_used=len(used),
+               counts=counts)
+    fname = f"{name}.jsonl.gz"
+    if os.path.exists(os.path.join(out_dir, fname)):
+        sys.exit(f"{fname} exists; derived data is never overwritten")
+    before = _dir_hashes(out_dir, fname)
+    write_gz(os.path.join(out_dir, fname), hdr, rows)
+    if _dir_hashes(out_dir, fname) != before:
+        sys.exit(f"an existing file changed while writing {fname}")
+    print(f"{name}: sampled={len(chosen)} rounds={agg['rounds']} R mean={mean_r:.2f} "
+          f"cv={cv_r:.2f} users={len(users_new)} pool={M} capped={len(capped)} "
+          f"skips={skips}")
+    return counts
+
+
+def build(raw, out_dir, n_req, fresh_sealed=None, stratified=None):
     """Everything after the SHA check (tests call this on a hand-built file)."""
 
     counts = collections.Counter({k: 0 for k in (
@@ -371,6 +478,10 @@ def build(raw, out_dir, n_req, fresh_sealed=None):
     if fresh_sealed is not None:
         return build_fresh_sealed(by_split["sealed"], header_common, out_dir, n_req,
                                   fresh_sealed)
+    if stratified is not None:
+        n_new, split, name = stratified
+        return build_stratified(by_split[split], header_common, out_dir, split, name,
+                                n_req, n_new)
 
     dev_pop = None
     for name in ("dev", "sealed"):

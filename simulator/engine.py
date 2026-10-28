@@ -313,6 +313,10 @@ class Engine:
         bind = getattr(self.scheduler, "bind", None)
         if bind is not None:
             bind(cost, estimator)
+        # Read-only task notifications (arrive / enqueue / request_done /
+        # task_done) for schedulers that track tasks between decisions
+        # (DECISIONS 39). Nothing else reads them; None for every other policy.
+        self._task_hook = getattr(self.scheduler, "on_task_event", None)
         self.do_trace = trace
         self.trace_log = []
         # task_id -> absolute deadline, set once when the task arrives.
@@ -525,6 +529,8 @@ class Engine:
                         true_output=node.output_tokens)
                 self.waiting.append(r)
                 self.requests.append(r)
+                if self._task_hook:
+                    self._task_hook("enqueue", task.task_id, self.now)
                 self._log(f"  queue t{task.task_id}/{node.stage} req{r.req_id} "
                           f"({node.prompt_tokens} tok prompt)")
 
@@ -532,6 +538,8 @@ class Engine:
         self.done_nodes[(task.task_id, node.node_id)] = self.now
         if all((task.task_id, n.node_id) in self.done_nodes for n in task.nodes):
             self.task_done_at[task.task_id] = self.now
+            if self._task_hook:
+                self._task_hook("task_done", task.task_id, self.now)
         else:
             self._release_ready(task)
 
@@ -1218,6 +1226,8 @@ class Engine:
                 self.task_attained[tid] = (self.task_attained.get(tid, 0.0)
                                            + r.finished_at - r.started_at)
                 self.task_requests_done[tid] = self.task_requests_done.get(tid, 0) + 1
+                if self._task_hook:
+                    self._task_hook("request_done", tid, self.now)
                 self.running.remove(r)
                 self.pinned_bytes -= r.private_bytes
                 for k in r.held_blocks:
@@ -1258,6 +1268,8 @@ class Engine:
                 _, _, kind, payload = heapq.heappop(self.events)
                 if kind == "arrival":
                     self._log(f"ARRIVE task {payload.task_id}")
+                    if self._task_hook:
+                        self._task_hook("arrive", payload.task_id, self.now)
                     self._release_ready(payload)
                 else:
                     task, node = payload
@@ -1509,6 +1521,9 @@ class Engine:
                 self.m["calls_with_choice"] / self.m["admit_calls"]
                 if self.m["admit_calls"] else 0.0),
             "mean_task_latency_s": statistics.fmean(lat) if lat else float("nan"),
+            # Switch log of a self-tracking scheduler (DECISIONS 39); None otherwise.
+            "scheduler_log": (self.scheduler.run_log()
+                              if hasattr(self.scheduler, "run_log") else None),
             "throughput_tasks_per_s": len(lat) / makespan if makespan else 0.0,
             "gpu_busy_frac": busy / makespan if makespan else 0.0,
             "mean_batch": w("w_batch"),

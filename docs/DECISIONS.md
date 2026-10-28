@@ -1942,3 +1942,17 @@ scoring.
 - E-8, before conclusions.
 
 Every disagreement goes to the owner.
+
+*Amendment 2026-10-28, during implementation, before any dev run or dev
+build:*
+- **Specification bug fixed.** The go/no-go applied the "at least 8 active
+  cells" minimum to sealed2 too. sealed2 had 4 active cells in E4, so it
+  could never pass, whatever P did.
+  - The minimum now applies to dev3 and to the held-out sealed3.
+  - sealed2 is scored on its active cells, whatever their number. They are
+    the overload cells it is there to stress.
+- **Go/no-go cell counts.** A cell is worse beyond δ when its paired t
+  interval of (P − baseline) has lo > δ × the baseline's mean. That is the
+  t-interval form of "beyond δ".
+- **`experiments/go_e5.py`** implements the go/no-go, the K2 power note and
+  the dev3 switch summary.

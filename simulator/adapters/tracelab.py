@@ -55,7 +55,15 @@ STAGE_LLM, STAGE_TOOL = "agent_round", "tool"
 SEQUENTIAL_MARGIN = (1.25, 1.0)        # x critical path, + seconds
 
 SOURCES = {"tracelab_dev": "dev.jsonl.gz", "tracelab_sealed": "sealed.jsonl.gz",
-           "tracelab_sealed2": "sealed2.jsonl.gz"}      # DECISIONS 38
+           "tracelab_sealed2": "sealed2.jsonl.gz",      # DECISIONS 38
+           "tracelab_dev3": "dev3.jsonl.gz", "tracelab_sealed3": "sealed3.jsonl.gz"}
+# Behind MAARA_POLICIES_FROZEN. tracelab_sealed2 was burned by E4 and is
+# development stress data from DECISIONS 39 on.
+SEALED = {"tracelab_sealed", "tracelab_sealed3"}
+# Sources whose turn order is permuted per seed before Poisson re-timing, so
+# the first arrivals differ across seeds (DECISIONS 39). The permutation
+# depends on the seed alone, so every policy sees the same order (CRN).
+SHUFFLED = {"tracelab_dev3", "tracelab_sealed3"}
 
 
 def read_derived(path):
@@ -123,6 +131,9 @@ def build_tasks(rows, seed=1, arrival_rate: Optional[float] = None, cost=None,
 def load_tracelab(name, seed, arrival_rate):
     """Registry loader. The sealed gate has already run in resolve_workload."""
     _, rows = read_derived(os.path.join(DATA_DIR, SOURCES[name]))
+    if name in SHUFFLED:
+        rows = list(rows)
+        random.Random(f"tracelab-order:{seed}").shuffle(rows)
     return build_tasks(rows, seed, arrival_rate, block_tokens=_block_tokens())
 
 
@@ -276,7 +287,7 @@ def _oracle(cost, tok, cpu):
 
 def register():
     for name in SOURCES:
-        register_source(name, load_tracelab, sealed=name.startswith("tracelab_sealed"),
+        register_source(name, load_tracelab, sealed=name in SEALED,
                         estimator_factory=_online, oracle_factory=_oracle,
                         supports_deadline_basis=("task",),
                         excluded_policies=("hint-priority",))

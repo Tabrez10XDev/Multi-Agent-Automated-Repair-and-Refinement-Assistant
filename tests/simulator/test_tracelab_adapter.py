@@ -249,6 +249,52 @@ def test_fresh_sealed_skips_used_turns_and_their_sessions(tmp_path, raw):
     assert counts["turns_skipped_same_session"] == 3 * len(used) - 2
 
 
+def test_stratified_excludes_used_sessions_caps_and_writes_in_hash_order(
+        tmp_path, raw, monkeypatch):
+    """DECISIONS 39: sealed3 skips sealed's turns, the sealed2 candidates and
+    all their sessions; caps R; one turn per session; rows in sample3-hash
+    order; no other file touched; never overwrites."""
+    monkeypatch.setattr(B, "R_CAP", 2)
+    monkeypatch.setattr(B, "SEALED2_CANDIDATES", 3)
+    other = []
+    for s in range(2, 14):                         # turns of 1, 2 and 3 rounds
+        idx, t = 0, 0
+        for k in range(3):
+            other.append(row(f"codex:S{s}", idx, f"x{s}{idx}", 10, 5, 5, USER_FIRST(t),
+                             user=SEALED_USER, provider="codex"))
+            idx, t = idx + 1, t + 10
+            for _ in range(k):
+                other.append(row(f"codex:S{s}", idx, f"x{s}{idx}", 20, 5, 5, CONT(t),
+                                 user=SEALED_USER, provider="codex"))
+                idx, t = idx + 1, t + 10
+    p2 = tmp_path / "raw2.jsonl.gz"
+    write_raw(p2, [json.loads(l) for l in gzip.open(raw, "rt")] + other)
+    out = tmp_path / "o"
+    B.build(str(p2), str(out), 2)
+    before = {f: (out / f).read_bytes() for f in os.listdir(out)}
+    counts = B.build(str(p2), str(out), 2, stratified=(4, "sealed", "sealed3"))
+    assert {f: (out / f).read_bytes() for f in before} == before
+    _, sealed = tl.read_derived(str(out / "sealed.jsonl.gz"))
+    hdr, picked = tl.read_derived(str(out / "sealed3.jsonl.gz"))
+    # the sealed2 candidates: first 3 fresh turns in sample order
+    _, turns = parse(str(p2))
+    pop = sorted((t for t in turns if B.split_of(t["user"]) == "sealed"),
+                 key=lambda t: B.digest("sample", t["session_id"], t["ordinal"]))
+    used_sess = {t["session_id"] for t in pop[:2]}
+    cand = [t for t in pop[2:] if t["session_id"] not in used_sess][:3]
+    banned = used_sess | {t["session_id"] for t in cand}
+    sess = [r["session_id"] for r in picked]
+    assert len(picked) == 4 and len(set(sess)) == 4 and not banned & set(sess)
+    assert all(len(r["epoch"]) <= 2 for r in picked)
+    assert counts["turns_removed_by_cap"] == sum(
+        1 for t in turns if B.split_of(t["user"]) == "sealed"
+        and t["session_id"] not in banned and len(t["rounds"]) > 2)
+    h3 = [B.digest("sample3", r["session_id"], r["ordinal"]) for r in picked]
+    assert h3 == sorted(h3) and hdr["split"] == "sealed3"
+    with pytest.raises(SystemExit):
+        B.build(str(p2), str(out), 2, stratified=(4, "sealed", "sealed3"))
+
+
 def test_fresh_sealed_refuses_a_mismatched_sealed_file(tmp_path, raw):
     other = [row(f"codex:S{s}", i, f"x{s}{i}", 10 * i, 5, 5, USER_FIRST(10 * i),
                  user=SEALED_USER, provider="codex")
@@ -430,15 +476,33 @@ def test_names_are_registered_without_a_flag():
         ws.check_deadline_basis("tracelab_dev", "estimate")
 
 
-@pytest.mark.parametrize("name", ["tracelab_sealed", "tracelab_sealed2"])
+@pytest.mark.parametrize("name", ["tracelab_sealed", "tracelab_sealed3"])
 def test_every_sealed_name_is_registered_sealed(name):
     assert ws.get_source(name).sealed
 
 
-def test_sealed_gate_refuses_tracelab_sealed2(monkeypatch):
+@pytest.mark.parametrize("name", ["tracelab_dev", "tracelab_dev3", "tracelab_sealed2"])
+def test_development_names_are_not_sealed(name):
+    # tracelab_sealed2 was burned by E4 and is development data (DECISIONS 39)
+    assert not ws.get_source(name).sealed
+
+
+def test_sealed_gate_refuses_tracelab_sealed3(monkeypatch):
     monkeypatch.delenv("MAARA_POLICIES_FROZEN", raising=False)
     with pytest.raises(SealedTraceSet, match="DECISIONS 26"):
-        ws.resolve_workload("tracelab_sealed2", 1, 0.1)
+        ws.resolve_workload("tracelab_sealed3", 1, 0.1)
+
+
+def test_shuffled_sources_permute_per_seed_only(monkeypatch):
+    # DECISIONS 39: same order for every policy at a seed, different across
+    # seeds; unshuffled sources keep file order.
+    from simulator.adapters import tracelab as tl
+    rows = [{"turn": f"s#{i}"} for i in range(40)]
+    monkeypatch.setattr(tl, "read_derived", lambda path: ({}, rows))
+    monkeypatch.setattr(tl, "build_tasks", lambda r, seed, rate, block_tokens: [x["turn"] for x in r])
+    a1, a1b, a2 = (tl.load_tracelab("tracelab_dev3", s, 0.1) for s in (1, 1, 2))
+    assert a1 == a1b and a1 != a2 and sorted(a1) == sorted(x["turn"] for x in rows)
+    assert tl.load_tracelab("tracelab_dev", 2, 0.1) == [x["turn"] for x in rows]
 
 
 def test_sealed_gate_refuses_tracelab_sealed(monkeypatch):

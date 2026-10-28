@@ -354,6 +354,8 @@ def main():
                     row["max_batch_seen_max"] = max(r["max_batch_seen"] for r in ok)
                     row["max_resident_max"] = max(r["max_resident"] for r in ok)
                     row["per_seed"] = {k: [r[k] for r in ok] for k in PER_SEED}
+                    if any(r.get("scheduler_log") for r in ok):     # DECISIONS 39
+                        row["per_seed"]["scheduler_log"] = [r.get("scheduler_log") for r in ok]
                     if slo:
                         row["per_seed"]["miss_by_class"] = {
                             c: [r["miss_by_class"].get(c, 0.0) for r in ok] for c, _, _ in slo}

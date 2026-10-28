@@ -652,6 +652,77 @@ class PLASGuardScheduler(GittinsScheduler):
         return v.task_attained_s
 
 
+class KleinrockSwitchScheduler(Scheduler):
+    """
+    `program-fcfs` until the tasks look heavy-tailed, then request-level FCFS
+    (DECISIONS 39). On chain programs request-level FCFS interleaves programs
+    one request at a time, like processor sharing; `program-fcfs` is FCFS over
+    jobs. In M/G/1 FCFS beats PS exactly when the size CV is below 1
+    (Kleinrock 1976), so the switch sits at that boundary.
+
+    The signal is the online Kaplan-Meier CV of requests per task
+    (simulator/switchboard.py), updated at task arrivals and completions from
+    the engine's `on_task_event` notifications. After WARMUP arrivals it
+    switches to `fcfs` at CV >= UP and back at CV <= DOWN. Constants fixed in
+    DECISIONS 39; not tuned. Every switch is logged and reported per run.
+    """
+    name = "kleinrock-switch"
+    WARMUP, UP, DOWN = 30, 1.10, 0.90
+
+    def __init__(self):
+        from simulator.switchboard import KMRequestsEstimator
+        self.km = KMRequestsEstimator()
+        self.mode = "program-fcfs"
+        self.switches = []
+        self._arms = {"program-fcfs": ProgramFCFSScheduler(), "fcfs": FCFSScheduler()}
+
+    def on_task_event(self, kind, task_id, now):
+        getattr(self.km, kind)(task_id)
+        if kind in ("arrive", "task_done") and self.km.arrived >= self.WARMUP:
+            cv = self.km.cv()
+            if cv is None:
+                return
+            new = self.mode
+            if self.mode == "program-fcfs" and cv >= self.UP:
+                new = "fcfs"
+            elif self.mode == "fcfs" and cv <= self.DOWN:
+                new = "program-fcfs"
+            if new != self.mode:
+                self.switches.append({"t": now, "arrived": self.km.arrived,
+                                      "completed": len(self.km.completed),
+                                      "cv": cv, "to": new})
+                self.mode = new
+
+    def order(self, views, now):
+        return self._arms[self.mode].order(views, now)
+
+    def run_log(self):
+        return {"switches": self.switches, "final_mode": self.mode}
+
+
+class GroupThenShareScheduler(GittinsScheduler):
+    """
+    Oldest task first while a task has finished fewer than Q requests, then
+    the request's own arrival, as FCFS (DECISIONS 39, exploratory). Q is the
+    first state whose Gittins index under the frozen dev prior falls below a
+    fresh task's: 3 on TraceLab, none on MAARA, where this is `program-fcfs`.
+    """
+    name = "gts"
+
+    def bind(self, cost, estimator):
+        super().bind(cost, estimator)
+        if self.table is None:
+            raise RuntimeError("gts needs a prior: bind it to an estimator with gittins_prior")
+        i0 = self.table.index(0)
+        self.q = next((k for k in range(1, self.table.k_tail + 1)
+                       if self.table.index(k) < i0), math.inf)
+
+    def order(self, views, now):
+        return [v.req_id for v in sorted(
+            views, key=lambda v: (v.task_arrival_s if v.task_requests_done < self.q
+                                  else v.enqueued_at, v.enqueued_at, v.req_id))]
+
+
 def _guarded(base, x):
     return type(f"{base.__name__}X{x}", (base,),
                 {"name": f"{base.name}-guard-x{x}", "GUARD_X": float(x)})
@@ -669,6 +740,7 @@ SCHEDULERS = {c.name: c for c in [
     AdaptiveCapProgramFCFS,
     BacklogLiftedCapProgramFCFS,
     *GITTINS_SCHEDULERS,
+    KleinrockSwitchScheduler, GroupThenShareScheduler,     # DECISIONS 39
 ]}
 
 
