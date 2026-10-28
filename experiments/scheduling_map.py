@@ -77,7 +77,9 @@ POLICIES = [("fcfs", "online", "fcfs"), ("sjf", "online", "sjf"),
             ("program-fcfs-cap", "online", "program-fcfs-cap"),
             ("program-fcfs-qcap", "online", "program-fcfs-qcap")] + [
             # DECISIONS 38: Gittins over requests completed, and the guards.
-            (c.name, "online", c.name) for c in GITTINS_SCHEDULERS]
+            (c.name, "online", c.name) for c in GITTINS_SCHEDULERS] + [
+            # DECISIONS 39. gts needs "online", the estimator with gittins_prior.
+            ("kleinrock-switch", "online", "kleinrock-switch"), ("gts", "online", "gts")]
 BASELINES = ("fcfs", "program-fcfs")
 CALIBRATED_UTILS = [0.6, 0.7, 0.8, 0.9]
 OVERLOAD_MULTIPLES = [1.1, 1.25, 1.5, 1.75, 2.2, 3.0]
@@ -111,6 +113,7 @@ def _job(args):
     except RuntimeError as e:
         return {"error": str(e)[:200]}
     out = {k: rep[k] for k in METRICS + ACTIVITY}
+    out["scheduler_log"] = rep.get("scheduler_log")      # None except DECISIONS 39
     out["miss_by_class"] = {c: v["miss_rate"] for c, v in
                             rep.get("miss_rate_by_slo_class", {}).items()}
     return out

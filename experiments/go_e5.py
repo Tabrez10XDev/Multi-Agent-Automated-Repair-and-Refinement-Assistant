@@ -65,9 +65,11 @@ def verdict(dev3, sealed2, maara, policy=P):
                 good, why = strict and r["worse"] <= 2, ""
             ok &= good
             out.append((name, test, base, key, r, good, why))
-    n_sw, n_runs, _ = switched(maara, policy) if policy == P else (0, 0, [])
+    n_sw, n_runs, logs = switched(maara, policy) if policy == P else (0, 0, [])
+    expected = sum(len(c["policies"][policy]["per_seed"][LAT]) for c in map_cells(maara))
     r = check(maara, policy, "program-fcfs", LAT, 0.02)
-    good = (n_sw == 0 and n_runs > 0) if policy == P else False
+    # A missing or errored log must not pass as "no switch".
+    good = (n_sw == 0 and n_runs == expected and all(logs)) if policy == P else False
     if policy == P and not good:
         good = r["active"] >= 1 and r["ratio"] <= 1.02 and r["worse"] <= 2
     ok &= good

@@ -140,9 +140,10 @@ def _strip(rep):
 
 @pytest.mark.parametrize("name", ["kleinrock-switch", "gts"])
 def test_equals_program_fcfs_when_it_never_switches(name):
-    # 10 tasks never reach the 30-task warm-up; gts on the MAARA prior has
-    # Q = infinity. Either way the run must equal program-fcfs field for field.
-    a, b = _run(name), _run("program-fcfs")
+    # 60 MAARA-like tasks pass the 30-task warm-up but their CV stays far
+    # below 1.10; gts on the MAARA prior has Q = infinity. Either way the run
+    # must equal program-fcfs field for field.
+    a, b = _run(name, n=60), _run("program-fcfs", n=60)
     assert _strip(a) == _strip(b)
     if name == "kleinrock-switch":
         assert a["scheduler_log"] == {"switches": [], "final_mode": "program-fcfs"}

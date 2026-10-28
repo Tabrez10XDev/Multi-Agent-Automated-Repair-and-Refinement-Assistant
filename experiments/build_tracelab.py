@@ -365,6 +365,13 @@ def _used_turns(pop, out_dir, split, n_used):
     if split == "sealed":
         sess = {(t["provider"], t["session_id"]) for t in used}
         fresh = [t for t in pop[n_used:] if (t["provider"], t["session_id"]) not in sess]
+        s2 = os.path.join(out_dir, "sealed2.jsonl.gz")
+        if os.path.exists(s2):
+            with gzip.open(s2, "rt", encoding="utf-8") as f:
+                f.readline()
+                had2 = [json.loads(line)["turn"] for line in f if line.strip()]
+            if had2 != [f"{t['session_id']}#{t['ordinal']}" for t in fresh[:len(had2)]]:
+                sys.exit(f"{s2} is not the first fresh sealed turns")
         used = used + fresh[:SEALED2_CANDIDATES]
     return used
 

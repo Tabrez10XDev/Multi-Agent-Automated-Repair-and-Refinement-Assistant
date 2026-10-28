@@ -1956,3 +1956,24 @@ build:*
   t-interval form of "beyond δ".
 - **`experiments/go_e5.py`** implements the go/no-go, the K2 power note and
   the dev3 switch summary.
+
+*Amendment 2026-10-28, after the E-6 code review (verdict: go with fixes),
+before any dev run or dev build:*
+- **Fixes.**
+  - scheduling_map now lists `kleinrock-switch` and `gts` (both with the
+    `online` estimator) and keeps each run's `scheduler_log`. Without these,
+    the maps refused the policies and recorded no switches.
+  - go_e5's K3 "no switch" needs a log for every seed of every cell.
+  - The golden test now runs 60 tasks, past the warm-up.
+  - The builder checks the committed sealed2 rows against the fresh-turn
+    order.
+  - A `--quick` MAARA map confirmed the path end to end: no switch, and no
+    log field for existing policies.
+- **Counting inactive cells, a judgement call taken conservatively.**
+  - Cells beyond the margin are counted over **all** cells, inactive
+    included, as the scorer frozen at `c8487d4` does.
+  - §39's line "inactive cells, with a ratio of exactly 1, never count" is
+    wrong as written. A policy can differ in an inactive cell, because up to
+    5% of decisions there have a choice. Counting them makes K1–K3 harder to
+    pass, not easier.
+- **Warm-up.** The switch may fire at the 30th arrival.
