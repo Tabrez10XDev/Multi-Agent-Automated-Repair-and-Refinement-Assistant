@@ -1608,3 +1608,62 @@ built):*
   replays batch 4 at loads 1.0 and 1.5, seeds 1–5, for `fcfs`,
   `program-fcfs`, `plas` and `gittins-guard-x2` against the D2 maps. Every
   policy is held to the map's per-seed p95. Exploratory, no prediction.
+
+*Amendment 2026-10-27, freeze (after the E-3 review; no sealed2 run yet,
+and only sealed2's header line has been read):*
+- **E-3 verdict: go, with fixes.**
+  - The selection was recomputed independently: `gittins-guard-x2`, no
+    tie. Under the same rule `plas-guard`'s own best X is also 2, so the
+    ablation is fair.
+  - No leakage was found. The same-session exclusion is right, because
+    block keys hash the session id.
+  - The rule is now in `experiments/gittins_select.py`.
+- **Deviation recorded.** §38 puts the freeze before sealed2 is built. It
+  was built first, at 80 turns, by the committed builder (blob aba076c),
+  and only its header was read. No policy, rule or threshold depends on it.
+- **Runtime rule resolved, by the owner, before any sealed2 run.**
+  - **What N means.** N is turns, as in §37; seeds are never halved.
+  - **Why the probe was not used.** A dev probe cannot see sealed2's
+    rounds. On E1 the probe projected 2.9 h, and the run took 13.2 h.
+  - **The cut.** The 80-turn file has 1,061 rounds, against 590 on
+    sealed, and projects to about 24–47 h. The owner chose N = 40, the
+    first 40 sealed2 turns in hash order (`--fresh-sealed 40`).
+  - **Plain `plas` is dropped from E4.** No hypothesis uses it, and
+    `plas-guard-x2` stays as the ablation.
+  - **Projection.** The 40 turns hold 856 rounds, so the run projects to
+    about 15–24 h. It is taken as it comes, with no further cut.
+- **sealed2 as committed.**
+  - sha256 `c5094ca8820a45a3bad66b7679712ee68f01c366038d30df2ceeb07e9b17a95d`.
+  - 40 turns, 856 rounds, 12 users, 9 of whom are also in the first
+    sealed set's 80 turns.
+  - 71 sessions were skipped (10,112 turns), and the providers are claude
+    18 and codex 22.
+  - sealed2 is heavier than its population: about 21 rounds per turn,
+    against 8.0 for the split and 7.4 for sealed. So the guard's limit of
+    2 × 145.2 s fires more often than on dev.
+- **Disclosure wording:** "new turns and sessions from the sealed user
+  pool; 9 of 12 users also contributed to the first sealed set."
+  - Long sessions are under-represented, because the skipped sessions
+    average about 142 turns.
+  - E1 and E4 are not independent replications, and §38 was designed
+    after E1.
+- **Reporting additions (no threshold changes).**
+  - Report mean L and D with CIs beside the counts. H2 is a
+    non-significance test, so a cost of about 4% can pass it unseen.
+  - Report the number of active cells.
+  - Word H3 as "index on requests completed vs PLAS on attained wall
+    time", since the two differ in more than the index.
+- **The E4 command**, run at the commit after this one with
+  `MAARA_POLICIES_FROZEN=<this commit>`:
+
+  ```
+  scheduling_map --trace-set tracelab_sealed2 --load-axis capacity
+    --kv-mb 8192 --retention lru --batches 2 4 8
+    --policies plas-guard-x2 gittins-guard-x2 --seeds 20
+    --slo-mix tight:1.0:0.3,standard:2.0:0.4,loose:4.0:0.3
+    --deadline-basis task --profile gpu_5060ti_public --workers 8
+    --out results/tracelab/E4_sealed2.json
+  ```
+
+  `fcfs` and `program-fcfs` are always kept as baselines.
+- **H1–H3 and their thresholds are unchanged.**
