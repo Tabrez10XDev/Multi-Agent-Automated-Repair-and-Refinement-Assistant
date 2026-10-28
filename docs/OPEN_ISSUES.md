@@ -8,7 +8,7 @@ What is not settled, not validated, or known to be wrong. Read this before trust
 > resolve. They are not sequential within a file. The other parts live in
 > `ARCHITECTURE.md`, `DECISIONS.md`, `FINDINGS.md` and `OPEN_ISSUES.md`.
 
-## Status index (2026-10-25)
+## Status index (2026-10-28)
 
 | § | issue | status | next action |
 |---|---|---|---|
@@ -34,8 +34,9 @@ What is not settled, not validated, or known to be wrong. Read this before trust
 | 31 | KV leak in admission (DECISIONS §8 item 11) | **closed** (2026-10-25): fixed in `4049013`; dev re-check left scheduling verdicts unchanged (1,440/1,440); the sealed 1x retention run was rerun on the fixed engine, and R1 now fails in 1 of 6 p95 cells (FINDINGS §35) | none |
 | 32 | Lone-replay memo filled memory (DECISIONS §8 item 12) | **closed** (`87f952b`) | none |
 | 33 | TraceLab: KV reuse across a human's turns not modelled | **open, a stated threat** (DECISIONS §37) | report it with FINDINGS §41 |
+| 34 | No rule yet beats both baselines on TraceLab; E4 was a weak test | **open** (2026-10-28): §38's guarded Gittins failed E4 (FINDINGS §42) | DECISIONS §39: a new design and a new, larger held-out set |
 
-**Still open and relevant: 5** — 9.5, 14, 24, 27, 33.
+**Still open and relevant: 6** — 9.5, 14, 24, 27, 33, 34.
 
 ---
 
@@ -801,3 +802,29 @@ whole history: 2.04M of 9.48M recorded prefix tokens (21.5%) can never hit.
 Retention results on TraceLab (E3, G4) therefore understate reuse, and
 scheduling results see more prefill than a real server would. Not corrected;
 report it with FINDINGS §41.
+
+## 34. No rule yet beats both baselines on TraceLab; E4 was a weak test
+
+**Open** (2026-10-28; FINDINGS §42, DECISIONS §38). On sealed TraceLab,
+`program-fcfs` keeps its p95-latency gain over FCFS but multiplies p95
+slowdown (E1: 4.1× over active cells), and PLAS, LSF and EDF fix slowdown
+at a latency cost (FINDINGS §41). §38's `gittins-guard-x2` was meant to do
+both and failed E4 (H1, H3). Its guard has an absolute age limit, so under
+overload it becomes oldest-first, which is `program-fcfs`; and §38's
+selection rule compared candidates with `program-fcfs` only.
+
+E4 also could not have shown much either way, and the next test must not
+repeat this:
+- **40 turns:** a seed's p95 is about the 2nd-worst task.
+- **4 of 30 active cells** (E1, with 80 turns: 16). Inactive cells dilute
+  the all-cell means.
+- **A heavy draw:** 21.4 rounds per turn against 8.0 for the sealed split.
+- **Same user pool as E1** (9 of 12 users), so E1 and E4 are not
+  independent replications.
+- **Counts at a zero margin with a non-inferiority reading:** H2 counted
+  "worse" cells at zero margin, so a consistent few-percent cost passes
+  unseen at 20 seeds and fails at more.
+
+Next: DECISIONS §39 pre-registers a design scored against FCFS and
+`program-fcfs` both, a stratified 160-turn held-out set, and a seed-cluster
+bootstrap with margins (`experiments/score_sealed.py`).

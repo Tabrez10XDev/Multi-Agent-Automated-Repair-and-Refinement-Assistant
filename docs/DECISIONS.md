@@ -1670,3 +1670,12 @@ and only sealed2's header line has been read):*
 
 *Amendment 2026-10-27:* the freeze commit is `0b2622d3e8f285aaff7fc4297a517ccacaf56a47`. E4 runs with
 `MAARA_POLICIES_FROZEN=0b2622d3e8f285aaff7fc4297a517ccacaf56a47`.
+
+*Amendment 2026-10-28, after E4 (`d51180b`, scored at `b5e6038`):* **H1
+fails** (better than `program-fcfs` on p95 slowdown in 3 of 30 cells),
+**H2 holds** (worse on p95 latency in 0; 4 of 30 cells active), **H3 fails**
+(better than `plas-guard-x2` on mean slowdown in 0, worse in 2). Results,
+the guard's collapse under overload, and the examiner's points are in
+FINDINGS §42; the open question is OPEN_ISSUES §34. §38 is closed. Its
+design is not revised after the fact; the next attempt is a new
+pre-registration, §39.

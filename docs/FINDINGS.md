@@ -2289,3 +2289,104 @@ Mean slowdown at load 1.5, smallest to largest fifth of task size:
     deadline-aware rules are at or below FCFS in every fifth. This is the
     per-task picture behind G1 failing and G2 holding. At load 1.0 the
     pattern is the same but compressed (all rules 1.4–2.3).
+
+## 42. Program-level Gittins with a tail guard (E4): fails out of sample
+
+> **Sealed, scored (2026-10-28).** DECISIONS §38 and its amendments. Freeze
+> `0b2622d`, run at `d51180b`, clean tree, 17,184 s. Output
+> `results/tracelab/E4_sealed2.{json,log}`. Scored by `experiments/score_e4.py`
+> (the pre-registered counts) and `experiments/score_sealed.py` (the
+> seed-cluster bootstrap DECISIONS §39 adopts, applied here after the fact
+> and reported as such).
+
+**Setup.** `tracelab_sealed2`: 40 turns, 856 rounds, 12 users (9 also in the
+first sealed set), new sessions. Batches 2/4/8 × 10 capacity loads, 20
+seeds. Policies fcfs, `program-fcfs`, `gittins-guard-x2` (chosen on dev by
+§38's rule) and `plas-guard-x2` (the ablation). **Only 4 of 30 cells are
+active** (FCFS had a choice in at least 5% of decisions): b2 at loads 1.5
+and 2.0, b4 and b8 at 2.0. E1, on 80 turns, had 16.
+
+**Verdicts** (paired 95% CI over 20 seeds per cell):
+
+| | test | result | verdict |
+|---|---|---|---|
+| H1 | `gittins-guard-x2` vs `program-fcfs`, p95 slowdown: better in ≥ 15, worse in ≤ 2 | better 3, worse 0 | **fails** |
+| H2 | vs `program-fcfs`, p95 latency: worse in ≤ 2 | worse 0, better 0 | holds, weakly (4 active cells) |
+| H3 | vs `plas-guard-x2`, mean slowdown: better in ≥ 5 | better 0, worse 2 | **fails** |
+
+Ratio of means, seed-cluster bootstrap 95% interval (B = 10,000; one seed
+resample shared by every cell and policy). Active = the 4 active cells:
+
+| policy | vs | metric | active mean | all-cell mean | median |
+|---|---|---|---|---|---|
+| `gittins-guard-x2` | `program-fcfs` | p95 slowdown | 0.964 [0.889, 1.025] | 0.897 [0.819, 0.975] | 0.895 [0.863, 1.000] |
+| | | p95 latency | 1.004 [1.000, 1.008] | 0.998 [0.993, 1.001] | 1.000 |
+| | FCFS | p95 slowdown | 4.39 [3.55, 5.07] | 1.61 [1.37, 1.84] | 1.012 [1.000, 1.042] |
+| | | p95 latency | 0.781 [0.730, 0.846] | 0.965 [0.952, 0.978] | 0.998 |
+| `plas-guard-x2` | `program-fcfs` | p95 slowdown | 0.882 [0.777, 0.964] | 0.869 [0.773, 0.965] | 0.872 [0.801, 1.000] |
+| `program-fcfs` | FCFS | p95 slowdown | 4.40 [3.64, 5.04] | 1.76 [1.44, 2.07] | 1.315 [1.000, 1.778] |
+| | | p95 latency | 0.777 [0.726, 0.845] | 0.967 [0.953, 0.980] | 1.000 |
+
+At load 2.0, p95 slowdown | p95 latency (s):
+
+| policy | batch 2 | batch 4 | batch 8 |
+|---|---|---|---|
+| fcfs | 12.2 \| 3,435 | **9.9** \| 2,868 | **9.7** \| 2,798 |
+| `program-fcfs` | 18.7 \| 1,653 | 71.6 \| 2,501 | 68.5 \| 2,523 |
+| `gittins-guard-x2` | 17.8 \| 1,659 | 71.1 \| 2,499 | 71.4 \| 2,540 |
+| `plas-guard-x2` | 16.6 \| 1,669 | 65.2 \| 2,487 | 64.9 \| 2,521 |
+
+1. **The guard turned the rule into `program-fcfs` under load.** The guard
+   promotes the oldest queued task older than 2 × 145.2 s = 290 s. sealed2's
+   turns average about 21 rounds, against 8.0 for the split, so in overload
+   nearly every task is past the limit and "oldest overdue first" is oldest
+   first. At load 2.0, batches 4/8, every guarded rule sits at
+   `program-fcfs`'s p95 slowdown, about 7× FCFS's, while buying 10–13% on
+   p95 latency. Any guard with an absolute age limit collapses this way.
+2. **§38's selection rule could not see this.** It scored candidates
+   against `program-fcfs` only. Against FCFS on dev (D2, 5 seeds) the guard
+   already cost slowdown: unguarded `gittins` D 0.856, `-guard-x8` 0.900,
+   `-x4` 1.017, `-x2` 1.166 (mean ratio of p95 slowdown to FCFS's).
+3. **The remaining H1 gain is thin.** In the 15 cells where
+   `gittins-guard-x2` beat `program-fcfs` on p95 slowdown by over 10%,
+   14 are inactive, and at batches 4/8, loads 0.9–1.25, 18–19 of 20 seeds
+   are identical and one or two seeds carry the whole gain. Over the active cells the ratio is
+   0.964 [0.889, 1.025], not different from 1.
+4. **Bounds.** 40 turns, so a seed's p95 is about the 2nd-worst task; 4
+   active cells; a heavy draw (856 of the 1,061 rounds of the first 80
+   candidates fell in the 40 used); same user pool as E1.
+
+**Examiner review (E-4), each point checked against the data:**
+- *"The 10% mean-D gain is outlier-driven."* **Supported**, at the seed
+  level (point 3). The cell median (0.895) agrees with the mean, so it is
+  not one outlier cell.
+- *"The MAARA rescue belongs to the guard, not Gittins."* **Partly
+  supported.** On D2-MAARA (`holdout_qwen`, 20 seeds) mean p95 latency vs
+  `program-fcfs` is the same with or without the guard (unguarded 0.996,
+  x2 0.999), but unguarded `gittins` is worse in 3 of 40 cells and the
+  guarded one in 0. The guard removes the worse cells, not a mean cost.
+- *"p95 over 40 tasks is about the 2nd-worst task."* **Supported** (38th–39th
+  order statistic).
+- *"sealed2 is atypically heavy."* **Supported**: 21.4 rounds per turn
+  against 8.0 for the sealed split and 7.4 for the first sealed set.
+
+**E1 retroactively** (same bootstrap, 16 active cells), for comparison:
+`program-fcfs` vs FCFS, p95 latency 0.768 [0.733, 0.806] active (0.874
+all-cell), p95 slowdown 4.11 [3.78, 4.40] active. PLAS vs FCFS, p95 latency
+0.999 [0.974, 1.025] active but worse in 9 cells, p95 slowdown 0.630 [0.581,
+0.676] active. Over active cells the latency price of not grouping
+(FCFS vs `program-fcfs`) is about 1.30, larger than the all-cell 1.14.
+
+**Development figures computed 2026-10-28 (dev only, already-seen data).**
+Mean ratio to FCFS over cells, p95 latency L | p95 slowdown D; cells
+significantly worse:
+- TraceLab dev (D2, 30 cells, 5 seeds): unguarded `gittins` 0.934 | 0.856,
+  worse in none; `gittins-sd` 0.952 | 0.837, none; `plas` 0.977 | 0.862,
+  none; `program-fcfs` 0.893 | 1.296, worse on D in 2.
+- MAARA (`holdout_qwen`, 40 cells, 20 seeds): `program-fcfs` 0.878, better
+  on L in 29, worse on D in 25; unguarded `gittins` 0.876, the same pattern
+  (L better in 29, D worse in 24); `plas` 1.205, worse on L in 29.
+
+So unguarded `gittins` looked like the wanted hybrid on dev. Choosing it now
+would be post-hoc, which is why DECISIONS §39 pre-registers a new design and
+a new held-out set rather than re-scoring E4.

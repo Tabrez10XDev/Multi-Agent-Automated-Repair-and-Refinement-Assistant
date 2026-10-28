@@ -174,6 +174,45 @@ def paired_ci(a, b):
             "significant": not (lo <= 0.0 <= hi)}
 
 
+def seed_bootstrap(a, b, active=None, reps=10_000, rng_seed=39):
+    """
+    Ratio of policy a to policy b across a map's cells, with a seed-cluster
+    bootstrap (DECISIONS 39). a and b are per-cell lists of per-seed values,
+    the same seeds in the same order in every cell.
+
+    Each replicate draws one resample of the seed indices and applies it to
+    every cell and both policies (common random numbers, DECISIONS 24), so the
+    correlation between cells that share seeds is kept rather than assumed
+    away, as a t interval across cells would. A cell's ratio is the mean of a
+    over the resampled seeds divided by the mean of b. Returned, each with a
+    point value and a 95% percentile interval: the mean and the median of the
+    cell ratios, the mean over `active` cells (a bool per cell) if given, and
+    every cell's own ratio.
+    """
+    import numpy as np
+    A, B = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
+    if A.shape != B.shape or A.ndim != 2 or A.shape[1] < 2:
+        raise ValueError("a and b must be equal-shape (cells, seeds) with >= 2 seeds")
+    idx = np.random.default_rng(rng_seed).integers(0, A.shape[1], size=(reps, A.shape[1]))
+    point = A.mean(axis=1) / B.mean(axis=1)
+    boot = A[:, idx].mean(axis=2) / B[:, idx].mean(axis=2)        # (cells, reps)
+
+    def summary(p, reps_):
+        lo, hi = np.percentile(reps_, [2.5, 97.5])
+        return {"value": float(p), "lo": float(lo), "hi": float(hi)}
+
+    out = {"mean": summary(point.mean(), boot.mean(axis=0)),
+           "median": summary(np.median(point), np.median(boot, axis=0)),
+           "cells": [summary(point[i], boot[i]) for i in range(len(point))],
+           "n_cells": len(point), "n_seeds": A.shape[1], "reps": reps}
+    if active is not None:
+        m = np.asarray(active, dtype=bool)
+        out["n_active"] = int(m.sum())
+        out["active_mean"] = (summary(point[m].mean(), boot[m].mean(axis=0))
+                              if m.any() else None)
+    return out
+
+
 def calibrate_slack(scale, seeds, kv_mb, rate, retention, cost, tok, cpu,
                     trace_set, batch=8, lo=0.5, hi=6.0, iters=10,
                     target=(0.20, 0.30), slo=None, deadline_basis="estimate"):
