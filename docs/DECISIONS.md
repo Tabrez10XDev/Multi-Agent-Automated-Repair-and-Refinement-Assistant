@@ -2149,3 +2149,18 @@ to its hash, which the next commit records.
 
 *Amendment 2026-10-29:* the §40 freeze commit is `2f7026add74b12c738adc1ed5fb852cb14af4341`. sealed3 is
 built at the next commit, and E5 runs with `MAARA_POLICIES_FROZEN=2f7026add74b12c738adc1ed5fb852cb14af4341`.
+
+*Amendment 2026-10-29, sealed3 built at `fd33de7` (the commit after the
+freeze) with the §40 command; only the header was read:*
+- **The draw.** 160 turns, 1,279 rounds, R mean 7.99, CV of R 1.66, from 18
+  users. 16 of those users are also in the sealed sets already used.
+  Providers: claude 74, codex 86.
+- **The pool.**
+  - Of 45,303 sealed-split turns, 160 were used before. Their 144 sessions
+    exclude 16,104 turns.
+  - The cap removed 185 turns and 38,302 of 268,394 rounds (14.3%).
+  - That leaves a pool of 29,014 turns. 42 picks were skipped to keep one
+    turn per session.
+- **Lone-replay CV, under the freeze, before any policy run.** Batch 4,
+  c = 0.3, 8,192 MB, seed-1 order: mean 135.9 s, SD 195.8 s (population),
+  median 65.2 s, max 1,072.7 s, **CV 1.44**.
