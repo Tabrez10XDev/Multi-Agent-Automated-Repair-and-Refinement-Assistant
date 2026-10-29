@@ -1990,3 +1990,32 @@ before any dev run or dev build:*
   sampler, and sealed3 is expected to be similar.
 - **Runtime rule.** The rule (4 × the dev3 map's wall time) decides sealed3's
   N.
+
+*Amendment 2026-10-29, engine speed fix during the dev runs (before any dev
+result):*
+- **The first dev-map launch was stopped** at 8 h 08 min with no output
+  file. A map saves nothing until it finishes. Batches 2 and 4 had been
+  logged; the log was seen only for progress.
+- **Where it stalled.** Batch 8's saturation calibration (3 FCFS runs, all
+  160 dev3 turns arriving at once) ran for over 6 hours.
+- **Cause.** At batch 8 the KV budget, not the batch cap, binds. So every
+  iteration retried each of about 150 waiting requests, and each retry
+  rescanned its whole block chain (about 3,600 keys) and every cache entry.
+  The cost grows roughly as waiting × chain length × iterations, so 40-turn
+  sets never showed it.
+- **Fix (speed only).** In `Engine._try_admit`:
+  - **Memoize** each waiting request's match and absent-block count. The
+    memo is dropped only when a key of that request's own chain is
+    inserted or evicted.
+  - **Refuse at once** a request that does not fit when nothing is
+    evictable. Every retention policy's `choose_victims` is pure, so the
+    skipped path would evict nothing.
+  - **Skip re-pricing** after the last-resort pass when it released
+    nothing.
+- **Golden check.** Full reports from 56 configurations are identical to
+  `03a58b4`: `holdout_qwen` and `tracelab_dev`; fcfs, `program-fcfs`, lsf,
+  plas, `kleinrock-switch` and `gittins-guard-x2`; LRU, ski-rental,
+  evict-now and keep-all; batches 4 and 8.
+- **Speed.** One batch-8 saturation run on dev3 went from about 4.5 h
+  (projected) to 271 s.
+- The dev maps rerun unchanged on the fixed engine.

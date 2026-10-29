@@ -335,6 +335,14 @@ class Engine:
         self.waiting = []
         self.running = []
         self.entries = {}           # key -> KVEntry
+        # A waiting request's match and absent-block count depend only on
+        # which of ITS OWN chain's keys are in `entries`, so _try_admit
+        # memoizes them per request and every insert or delete of key k drops
+        # the memo of each waiting request whose chain contains k. A blocked
+        # request retried every iteration then no longer rescans its whole
+        # chain (DECISIONS 39 amendment; speed only, golden-checked).
+        self._need_memo = {}        # req_id -> (matched, n_absent)
+        self._key_waiters = {}      # key -> req_ids with a memo over it
         self._key_uses = {}         # key -> [times needed], when cfg.record_key_uses
         self._key_nbytes = {}       # key -> block bytes, same condition
         self.pinned_bytes = 0       # private (non-shared) KV of running requests
@@ -685,7 +693,17 @@ class Engine:
         node = r.node
         bt = self.cfg.block_tokens
         chain = node.block_keys
-        matched = self._match_blocks(r)
+        absent = lambda keys: sum(1 for k in keys if k not in self.entries)  # noqa: E731
+        memo = self._need_memo.get(r.req_id)
+        if memo is not None:
+            matched, n_absent = memo
+        else:
+            matched = self._match_blocks(r)
+            n_absent = absent(chain[matched:])
+            if self.cfg.cache_mode != "ollama":
+                self._need_memo[r.req_id] = (matched, n_absent)
+                for k in chain:
+                    self._key_waiters.setdefault(k, set()).add(r.req_id)
         matched_tokens = min(matched * bt, node.prompt_tokens)
         new_keys = chain[matched:]
 
@@ -698,8 +716,7 @@ class Engine:
         # vLLM does, but its KV already exists, so it is re-pinned rather than
         # re-created and needs no new bytes. Re-creating it overwrote the live
         # entry and leaked its bytes from the budget (DECISIONS 37 amendment).
-        absent = lambda keys: sum(1 for k in keys if k not in self.entries)  # noqa: E731
-        need = absent(new_keys) * block_bytes + output_bytes
+        need = n_absent * block_bytes + output_bytes
 
         # Check the WORST case, not the current one. With some blocks already
         # cached a request can look admissible, then become permanently
@@ -713,13 +730,20 @@ class Engine:
                 f"for its full prompt ({len(chain)} blocks + output) but the whole "
                 f"budget is {self.cfg.kv_budget_mb:.0f}MB. Raise kv_budget_mb.")
 
+        if need > self.free_bytes and self._evictable_n == 0:
+            # Nothing can be evicted, and every retention policy's
+            # choose_victims is pure, so the path below would evict nothing,
+            # keep the price and refuse: refuse now (speed only).
+            return False
         if need > self.free_bytes:
             # Every cached block of this chain is protected, not only the
             # matched ones: evicting a surviving block past the match would
             # only make this request create it again.
             held = set(chain)
-            candidates = [e for e in self.entries.values()
-                          if e.evictable and e.key not in held]
+            # The counter is exact, so with nothing evictable both scans
+            # below would return [] (speed only).
+            candidates = [] if self._evictable_n == 0 else [
+                e for e in self.entries.values() if e.evictable and e.key not in held]
             victims = self.retention.choose_victims(
                 candidates, need - self.free_bytes, self.now)
             for v in victims:
@@ -734,18 +758,23 @@ class Engine:
                 # request's own admission -- a deadlock where a request is held
                 # up by the blocks it wanted to reuse. Releasing them costs a
                 # recompute; refusing to costs the whole run.
-                spares = [e for e in self.entries.values()
-                          if e.evictable and e.key in held]
+                spares = [] if self._evictable_n == 0 else [
+                    e for e in self.entries.values() if e.evictable and e.key in held]
+                released = False
                 for v in self.retention.choose_victims(
                         spares, need - self.free_bytes, self.now):
                     if self.free_bytes >= need:
                         break
                     self._evict(v, forced=True)
-                # The match is shorter now, so redo it and re-price.
-                matched = self._match_blocks(r)
-                matched_tokens = min(matched * bt, node.prompt_tokens)
-                new_keys = chain[matched:]
-                need = absent(new_keys) * block_bytes + output_bytes
+                    released = True
+                # The match is shorter now, so redo it and re-price. With
+                # nothing released the cache is unchanged and so is the
+                # price (speed only).
+                if released:
+                    matched = self._match_blocks(r)
+                    matched_tokens = min(matched * bt, node.prompt_tokens)
+                    new_keys = chain[matched:]
+                    need = absent(new_keys) * block_bytes + output_bytes
 
             for v in ():
                 # Test against live free space only. An earlier version also
@@ -788,6 +817,7 @@ class Engine:
         for k in new_keys:
             if k in self.entries:
                 continue                  # surviving block: pinned below, see `absent`
+            self._drop_memos(k)
             self.entries[k] = KVEntry(
                 key=k, model=r.model, tokens=bt, nbytes=block_bytes,
                 created=self.now, last_used=self.now,
@@ -836,7 +866,18 @@ class Engine:
                   f"{matched}/{len(chain)} blocks hit  prefill={r.prefill_tokens}tok "
                   f"batch={len(self.running)} kv={self.used_bytes/1024/1024:.0f}/"
                   f"{self.cfg.kv_budget_mb:.0f}MB")
+        if self._need_memo.pop(r.req_id, None) is not None:
+            for k in chain:
+                w = self._key_waiters.get(k)
+                if w is not None:
+                    w.discard(r.req_id)
+                    if not w:
+                        del self._key_waiters[k]
         return True
+
+    def _drop_memos(self, key):
+        for rid in self._key_waiters.pop(key, ()):
+            self._need_memo.pop(rid, None)
 
     def _evict(self, entry: KVEntry, forced: bool):
         if entry.refcount == 0:
@@ -847,6 +888,7 @@ class Engine:
             self._model_blocks[entry.model] = self._model_blocks.get(entry.model, 1) - 1
         self._entry_bytes -= entry.nbytes
         del self.entries[entry.key]
+        self._drop_memos(entry.key)
         self._evict_rate += 1.0 / max(1e-9, self.cfg.ewma_tau_s)
         self.m["evictions"] += 1
         if entry.is_tail:
