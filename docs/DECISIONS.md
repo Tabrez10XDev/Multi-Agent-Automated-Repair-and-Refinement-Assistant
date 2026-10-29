@@ -2146,3 +2146,6 @@ after one disclosure fix), before sealed3 exists:*
 
 **This commit is the §40 freeze.** E5 runs with `MAARA_POLICIES_FROZEN` set
 to its hash, which the next commit records.
+
+*Amendment 2026-10-29:* the §40 freeze commit is `2f7026add74b12c738adc1ed5fb852cb14af4341`. sealed3 is
+built at the next commit, and E5 runs with `MAARA_POLICIES_FROZEN=2f7026add74b12c738adc1ed5fb852cb14af4341`.
