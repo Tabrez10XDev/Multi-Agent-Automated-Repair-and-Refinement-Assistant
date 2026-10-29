@@ -2101,3 +2101,48 @@ sealed3 exists.
 5. E5 sealed3, then `final_qwen`, both with
    `MAARA_POLICIES_FROZEN=<freeze>`;
 6. scoring with `score_e5.py`.
+
+*Amendment 2026-10-29, after the E-7 pre-freeze review (verdict: freeze
+after one disclosure fix), before sealed3 exists:*
+- **E-7 recomputed the go/no-go independently and agrees with it.** The
+  switch is a NO-GO on sealed2 K2 slowdown (3.405), and gts passes K1–K3 at
+  point values.
+- **Disclosure corrected.** §40's "No sealed data informs it" is wrong.
+  - The switch's no-go was decided on **sealed2**, burned sealed-pool data
+    from users shared with sealed3, reclassified as development before any
+    run on it.
+  - gts's sealed2 numbers were seen before gts was promoted.
+  - So sealed-pool development data informed one choice between two rules
+    registered in advance. No parameter was fitted: Q comes from the frozen
+    §38 dev prior.
+  - The builder's `users_sampled_also_in_used` is reported with E5.
+- **Framing, fixed now:** "third scheduling test on the sealed pool (E1, E4,
+  E5); the pool was also used by E3 (retention) and by the sealed2 dev
+  runs; the rule registered first failed at dev and the scored rule was
+  changed, as in §38."
+- **K4 expectation corrected.** §39's "expected near 1.30" came from E1.
+  On dev3's active cells, FCFS-like behaviour costs about 1.74 against
+  `program-fcfs`, and gts costs 1.62 [1.51, 1.72]. **No K4 bar is added**,
+  because any bar set now would be tuned to dev.
+- **"Better than FCFS" wording.** This was added after gts beat FCFS on
+  dev3, and is labelled as written after dev.
+- **K3, owner's decision.** gts is `program-fcfs` by construction when
+  Q = ∞, so K3 is verified on the dev map `D5_maara`: identical in all 40
+  cells × 20 seeds. A unit test checks the same thing. **`final_qwen` is
+  not run and stays fresh.** The E5 MAARA command is dropped.
+- **FRAGILE, owner's decision.** It is reported in the headline sentence as
+  a caveat and does not block the headline.
+- **score_e5 fixes.**
+  - The geometric-mean sensitivity is bootstrapped with the same seed
+    resamples. It can only flag a fail.
+  - The inputs are checked: `tracelab_sealed3`, 20 seeds, a clean tree, run
+    at a descendant of `--freeze`.
+  - The headline line prints any FRAGILE label.
+- **The sealed3 build command, run at the commit after the freeze:**
+  `./venv/bin/python -I experiments/build_tracelab.py --stratified 160
+  --split sealed --name sealed3`, with the default `--n 80`.
+- **Runtime.** E-7 expects 13–25 h: sealed2's saturation throughput was
+  about half of dev3's. N stays 160 by the rule, whatever the run time.
+
+**This commit is the §40 freeze.** E5 runs with `MAARA_POLICIES_FROZEN` set
+to its hash, which the next commit records.
