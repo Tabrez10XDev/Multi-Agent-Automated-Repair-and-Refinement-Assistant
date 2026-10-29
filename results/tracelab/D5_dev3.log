@@ -1,0 +1,171 @@
+trace=tracelab_dev3 kv=8192MB retention=lru profile=gpu_5060ti_public coeff=0.3 seeds=5 batches=[2, 4, 8] slo=(('tight', 1.0, 0.3), ('standard', 2.0, 0.4), ('loose', 4.0, 0.3)) deadlines=task load-axis=capacity
+
+=== batch 2 ===
+  saturation throughput = 0.0072 tasks/s; slack calibrated at load 0.8 = 0.0057/s
+  slack_factor = 0.844  (FCFS miss 26.9% at util 0.8)
+  load 0.50 (util None, x0.5)  choice  2.5%  rent>0  5.2%  forced 448006.2  resident max 2  active max/p95 2/2.0  at-cap 24.9% INACTIVE
+    fcfs   p50    60.6  p95   890.3  miss 20.4% (infeasible 17.0%)
+    program-fcfs p95 -130.50 [-478.64, +217.64]   miss  +0.0% [-2.4%, +2.4%]
+    kleinrock-switch p95   +0.00 [+0.00, +0.00]   miss  +0.3% [-0.4%, +0.9%]
+    gts        p95  -47.13 [-150.19, +55.94]   miss  -0.5% [-1.5%, +0.5%]
+  load 0.60 (util None, x0.6)  choice  4.7%  rent>0  8.1%  forced 505540.6  resident max 2  active max/p95 2/2.0  at-cap 31.3% INACTIVE
+    fcfs   p50    64.6  p95  1030.1  miss 21.9% (infeasible 17.6%)
+    program-fcfs p95 -229.76 [-822.94, +363.42]   miss  -1.0% [-5.5%, +3.5%]
+    kleinrock-switch p95   +0.00 [+0.00, +0.00]   miss  -0.0% [-0.5%, +0.5%]
+    gts        p95  -16.66 [-46.21, +12.88]   miss  -0.8% [-1.6%, +0.1%]
+  load 0.70 (util None, x0.7)  choice  5.2%  rent>0  9.6%  forced 513610.8  resident max 2  active max/p95 2/2.0  at-cap 35.1%
+    fcfs   p50    68.2  p95  1129.1  miss 23.4% (infeasible 19.4%)
+    program-fcfs p95 -243.93 [-876.77, +388.91]   miss  +0.1% [-2.4%, +2.7%]
+    kleinrock-switch p95   +0.00 [+0.00, +0.00]   miss  -0.1% [-0.5%, +0.2%]
+    gts        p95 -116.82 [-396.86, +163.23]   miss  -0.5% [-1.7%, +0.7%]
+  load 0.80 (util None, x0.8)  choice  5.8%  rent>0 11.2%  forced 510543.0  resident max 2  active max/p95 2/2.0  at-cap 40.0%
+    fcfs   p50    69.7  p95  1107.3  miss 25.2% (infeasible 20.4%)
+    program-fcfs p95 -209.95 [-801.21, +381.31]   miss  -0.5% [-2.3%, +1.3%]
+    kleinrock-switch p95   +0.00 [+0.00, +0.00]   miss  -0.4% [-1.4%, +0.7%]
+    gts        p95  -56.27 [-178.86, +66.31]   miss  -1.0% [-2.4%, +0.4%]
+  load 0.90 (util None, x0.9)  choice  7.0%  rent>0 13.1%  forced 526019.0  resident max 2  active max/p95 2/2.0  at-cap 44.0%
+    fcfs   p50    76.2  p95  1227.8  miss 26.5% (infeasible 21.4%)
+    program-fcfs p95 -300.67 [-1121.19, +519.85]   miss  +0.4% [-0.8%, +1.6%]
+    kleinrock-switch p95   +0.00 [+0.00, +0.00]   miss  +0.0% [-0.5%, +0.5%]
+    gts        p95  -73.33 [-211.75, +65.09]   miss  -0.4% [-1.3%, +0.5%]
+  load 1.00 (util None, x1.0)  choice  9.3%  rent>0 16.0%  forced 562084.0  resident max 2  active max/p95 2/2.0  at-cap 49.1%
+    fcfs   p50    81.0  p95  1436.1  miss 29.1% (infeasible 22.5%)
+    program-fcfs p95 -480.25 [-1414.50, +454.01]   miss  -0.0% [-2.9%, +2.9%]
+    kleinrock-switch p95   +0.00 [+0.00, +0.00]   miss  -0.1% [-1.3%, +1.0%]
+    gts        p95 -127.46 [-326.46, +71.55]   miss  -1.4% [-2.9%, +0.1%]
+  load 1.10 (util None, x1.1)  choice 11.7%  rent>0 19.7%  forced 588007.6  resident max 2  active max/p95 2/2.0  at-cap 53.7%
+    fcfs   p50    85.5  p95  1543.0  miss 31.1% (infeasible 24.0%)
+    program-fcfs p95 -517.60 [-1373.97, +338.76]   miss  -1.2% [-2.5%, -0.0%]*
+    kleinrock-switch p95   +0.00 [+0.00, +0.00]   miss  -0.6% [-1.9%, +0.6%]
+    gts        p95  -91.60 [-261.97, +78.78]   miss  -1.0% [-2.4%, +0.4%]
+  load 1.25 (util None, x1.25)  choice 16.5%  rent>0 25.7%  forced 665481.2  resident max 2  active max/p95 2/2.0  at-cap 60.6%
+    fcfs   p50    97.8  p95  1854.5  miss 34.6% (infeasible 26.9%)
+    program-fcfs p95 -763.92 [-1580.11, +52.27]   miss  -2.2% [-5.8%, +1.3%]
+    kleinrock-switch p95   -0.02 [-0.06, +0.03]   miss  -0.3% [-1.8%, +1.3%]
+    gts        p95 -130.23 [-262.92, +2.45]   miss  -1.0% [-3.0%, +1.0%]
+  load 1.50 (util None, x1.5)  choice 44.1%  rent>0 52.4%  forced 1269021.8  resident max 2  active max/p95 2/2.0  at-cap 81.0%
+    fcfs   p50   256.5  p95  3951.5  miss 58.5% (infeasible 42.6%)
+    program-fcfs p95 -2713.34 [-5257.97, -168.70]*  miss -21.0% [-43.4%, +1.4%]
+    kleinrock-switch p95 -1362.50 [-4794.56, +2069.56]   miss -15.4% [-42.0%, +11.2%]
+    gts        p95 -1654.72 [-4927.13, +1617.68]   miss -15.0% [-41.3%, +11.3%]
+  load 2.00 (util None, x2.0)  choice 85.5%  rent>0 87.6%  forced 2389545.0  resident max 2  active max/p95 2/2.0  at-cap 96.7%
+    fcfs   p50  1221.3  p95 12538.4  miss 93.6% (infeasible 77.1%)
+    program-fcfs p95 -10795.72 [-12471.81, -9119.63]*  miss -34.9% [-45.2%, -24.5%]*
+    kleinrock-switch p95 -1456.45 [-3243.78, +330.88]   miss  -6.4% [-17.2%, +4.5%]
+    gts        p95 -2287.65 [-3386.32, -1188.98]*  miss  -4.1% [-7.1%, -1.2%]*
+
+=== batch 4 ===
+  saturation throughput = 0.0080 tasks/s; slack calibrated at load 0.8 = 0.0064/s
+  slack_factor = 0.844  (FCFS miss 27.5% at util 0.8)
+  load 0.50 (util None, x0.5)  choice  1.2%  rent>0  1.5%  forced 491771.4  resident max 4  active max/p95 4/3.0  at-cap  6.5% INACTIVE
+    fcfs   p50    62.0  p95  1001.6  miss 21.1% (infeasible 16.1%)
+    program-fcfs p95 -102.80 [-388.17, +182.57]   miss  -0.5% [-1.9%, +0.9%]
+    kleinrock-switch p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gts        p95  -24.27 [-91.65, +43.11]   miss  -0.4% [-1.4%, +0.7%]
+  load 0.60 (util None, x0.6)  choice  1.8%  rent>0  2.2%  forced 519095.2  resident max 4  active max/p95 4/3.0  at-cap  8.7% INACTIVE
+    fcfs   p50    64.2  p95  1152.2  miss 22.5% (infeasible 17.2%)
+    program-fcfs p95 -138.20 [-521.86, +245.45]   miss  -0.1% [-1.0%, +0.7%]
+    kleinrock-switch p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gts        p95  -23.69 [-89.45, +42.07]   miss  +0.1% [-0.2%, +0.5%]
+  load 0.70 (util None, x0.7)  choice  1.8%  rent>0  2.2%  forced 516047.2  resident max 4  active max/p95 4/3.2  at-cap  9.0% INACTIVE
+    fcfs   p50    66.5  p95  1113.2  miss 23.6% (infeasible 18.4%)
+    program-fcfs p95  -74.49 [-274.32, +125.34]   miss  -0.2% [-0.9%, +0.4%]
+    kleinrock-switch p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gts        p95  +34.64 [-61.52, +130.79]   miss  -0.3% [-0.9%, +0.4%]
+  load 0.80 (util None, x0.8)  choice  2.0%  rent>0  2.4%  forced 518155.6  resident max 4  active max/p95 4/3.6  at-cap 10.1% INACTIVE
+    fcfs   p50    68.9  p95  1168.5  miss 24.6% (infeasible 19.0%)
+    program-fcfs p95  -90.49 [-341.70, +160.72]   miss  +0.0% [-0.5%, +0.5%]
+    kleinrock-switch p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gts        p95  +14.55 [-25.83, +54.92]   miss  -0.1% [-0.5%, +0.2%]
+  load 0.90 (util None, x0.9)  choice  2.5%  rent>0  3.1%  forced 556652.2  resident max 4  active max/p95 4/3.6  at-cap 13.3% INACTIVE
+    fcfs   p50    75.7  p95  1331.1  miss 27.9% (infeasible 20.0%)
+    program-fcfs p95  -50.40 [-277.99, +177.18]   miss  -0.2% [-0.7%, +0.2%]
+    kleinrock-switch p95   +0.00 [+0.00, +0.00]   miss  -0.1% [-0.5%, +0.2%]
+    gts        p95  -19.24 [-60.66, +22.17]   miss  -0.7% [-2.0%, +0.5%]
+  load 1.00 (util None, x1.0)  choice  2.8%  rent>0  3.8%  forced 583729.6  resident max 4  active max/p95 4/3.8  at-cap 15.9% INACTIVE
+    fcfs   p50    80.3  p95  1469.9  miss 28.1% (infeasible 19.6%)
+    program-fcfs p95 -118.95 [-444.78, +206.89]   miss  +0.0% [+0.0%, +0.0%]
+    kleinrock-switch p95   +0.00 [+0.00, +0.00]   miss  +0.1% [-0.2%, +0.5%]
+    gts        p95  +32.01 [-28.24, +92.27]   miss  +0.0% [-0.5%, +0.5%]
+  load 1.10 (util None, x1.1)  choice  3.3%  rent>0  4.8%  forced 613225.6  resident max 4  active max/p95 4/4.0  at-cap 20.1% INACTIVE
+    fcfs   p50    85.5  p95  1588.1  miss 31.5% (infeasible 22.0%)
+    program-fcfs p95 -132.37 [-443.81, +179.06]   miss  +0.4% [-1.3%, +2.1%]
+    kleinrock-switch p95   +0.00 [+0.00, +0.00]   miss  +0.6% [-1.1%, +2.4%]
+    gts        p95   +1.78 [-0.62, +4.19]   miss  -0.1% [-0.5%, +0.2%]
+  load 1.25 (util None, x1.25)  choice  6.0%  rent>0  7.6%  forced 710881.6  resident max 4  active max/p95 4/4.0  at-cap 27.4%
+    fcfs   p50    95.4  p95  1888.7  miss 35.2% (infeasible 24.8%)
+    program-fcfs p95 -127.98 [-336.64, +80.68]   miss  +0.4% [-0.0%, +0.8%]
+    kleinrock-switch p95  +34.43 [-61.14, +129.99]   miss  +0.6% [-0.7%, +2.0%]
+    gts        p95  -21.84 [-131.69, +88.00]   miss  -0.1% [-1.6%, +1.4%]
+  load 1.50 (util None, x1.5)  choice 19.8%  rent>0 22.6%  forced 1147293.4  resident max 4  active max/p95 4/4.0  at-cap 52.1%
+    fcfs   p50   187.8  p95  3136.9  miss 52.1% (infeasible 34.1%)
+    program-fcfs p95 -383.04 [-1061.29, +295.21]   miss  -2.4% [-7.6%, +2.9%]
+    kleinrock-switch p95 +671.44 [-1195.01, +2537.90]   miss  +1.5% [-6.4%, +9.4%]
+    gts        p95   -3.86 [-53.16, +45.44]   miss  -3.0% [-9.4%, +3.4%]
+  load 2.00 (util None, x2.0)  choice 72.5%  rent>0 74.0%  forced 2382594.6  resident max 4  active max/p95 4/4.0  at-cap 92.0%
+    fcfs   p50  1108.3  p95 11147.5  miss 92.2% (infeasible 71.8%)
+    program-fcfs p95 -3124.66 [-4483.27, -1766.05]*  miss  -0.1% [-1.6%, +1.4%]
+    kleinrock-switch p95  -42.20 [-206.92, +122.52]   miss  +0.2% [-1.3%, +1.8%]
+    gts        p95 -351.76 [-819.33, +115.82]   miss  -1.9% [-4.7%, +1.0%]
+
+=== batch 8 ===
+  saturation throughput = 0.0080 tasks/s; slack calibrated at load 0.8 = 0.0064/s
+  slack_factor = 0.844  (FCFS miss 27.3% at util 0.8)
+  load 0.50 (util None, x0.5)  choice  1.2%  rent>0  0.1%  forced 504355.4  resident max 5  active max/p95 5/3.0  at-cap  0.0% INACTIVE CAP-NEVER-BINDS
+    fcfs   p50    62.0  p95   999.6  miss 21.2% (infeasible 15.9%)
+    program-fcfs p95 -102.41 [-386.71, +181.88]   miss  -0.6% [-2.4%, +1.1%]
+    kleinrock-switch p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gts        p95  -12.34 [-46.61, +21.92]   miss  -0.1% [-0.5%, +0.2%]
+  load 0.60 (util None, x0.6)  choice  1.7%  rent>0  0.1%  forced 529004.2  resident max 5  active max/p95 5/3.0  at-cap  0.0% INACTIVE CAP-NEVER-BINDS
+    fcfs   p50    63.8  p95  1129.5  miss 22.5% (infeasible 17.1%)
+    program-fcfs p95 -131.71 [-497.34, +233.92]   miss  -0.3% [-1.4%, +0.9%]
+    kleinrock-switch p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gts        p95  -23.17 [-87.50, +41.15]   miss  +0.0% [+0.0%, +0.0%]
+  load 0.70 (util None, x0.7)  choice  1.8%  rent>0  0.1%  forced 525209.4  resident max 5  active max/p95 5/3.2  at-cap  0.0% INACTIVE CAP-NEVER-BINDS
+    fcfs   p50    65.8  p95  1156.0  miss 23.5% (infeasible 18.4%)
+    program-fcfs p95  -99.96 [-370.50, +170.59]   miss  -0.2% [-0.9%, +0.4%]
+    kleinrock-switch p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gts        p95  -21.40 [-80.80, +38.00]   miss  -0.3% [-0.9%, +0.4%]
+  load 0.80 (util None, x0.8)  choice  1.9%  rent>0  0.1%  forced 530407.0  resident max 5  active max/p95 5/3.6  at-cap  0.0% INACTIVE CAP-NEVER-BINDS
+    fcfs   p50    69.2  p95  1110.3  miss 24.6% (infeasible 18.8%)
+    program-fcfs p95   -8.33 [-38.37, +21.70]   miss  +0.1% [-0.7%, +1.0%]
+    kleinrock-switch p95   +0.00 [+0.00, +0.00]   miss  +0.0% [+0.0%, +0.0%]
+    gts        p95   -6.10 [-23.04, +10.84]   miss  +0.0% [+0.0%, +0.0%]
+  load 0.90 (util None, x0.9)  choice  2.4%  rent>0  0.1%  forced 573779.2  resident max 5  active max/p95 5/3.6  at-cap  0.0% INACTIVE CAP-NEVER-BINDS
+    fcfs   p50    75.7  p95  1324.9  miss 27.6% (infeasible 19.6%)
+    program-fcfs p95   -1.31 [-200.30, +197.67]   miss  +0.1% [-0.7%, +1.0%]
+    kleinrock-switch p95   +0.00 [+0.00, +0.00]   miss  +0.1% [-0.2%, +0.5%]
+    gts        p95   -0.61 [-28.25, +27.03]   miss  +0.0% [+0.0%, +0.0%]
+  load 1.00 (util None, x1.0)  choice  2.7%  rent>0  0.1%  forced 612356.0  resident max 5  active max/p95 5/3.8  at-cap  0.0% INACTIVE CAP-NEVER-BINDS
+    fcfs   p50    79.8  p95  1477.3  miss 28.4% (infeasible 19.6%)
+    program-fcfs p95  -70.05 [-224.70, +84.61]   miss  -0.3% [-0.9%, +0.4%]
+    kleinrock-switch p95   +0.00 [+0.00, +0.00]   miss  +0.1% [-0.2%, +0.5%]
+    gts        p95  +27.12 [-48.17, +102.41]   miss  -0.1% [-0.5%, +0.2%]
+  load 1.10 (util None, x1.1)  choice  3.1%  rent>0  0.1%  forced 639107.6  resident max 5  active max/p95 5/4.0  at-cap  0.0% INACTIVE CAP-NEVER-BINDS
+    fcfs   p50    85.0  p95  1564.8  miss 31.6% (infeasible 21.7%)
+    program-fcfs p95  +32.22 [-284.72, +349.16]   miss  +0.7% [-2.1%, +3.6%]
+    kleinrock-switch p95   +0.00 [+0.00, +0.00]   miss  +0.5% [-0.9%, +1.9%]
+    gts        p95   -3.41 [-31.60, +24.79]   miss  +0.0% [-0.5%, +0.5%]
+  load 1.25 (util None, x1.25)  choice  5.9%  rent>0  0.1%  forced 759330.0  resident max 5  active max/p95 5/4.2  at-cap  0.0% CAP-NEVER-BINDS
+    fcfs   p50    96.7  p95  1893.3  miss 36.0% (infeasible 24.4%)
+    program-fcfs p95  -71.88 [-242.21, +98.44]   miss  -0.5% [-3.8%, +2.8%]
+    kleinrock-switch p95  +44.06 [-78.24, +166.36]   miss  +0.3% [-1.4%, +1.9%]
+    gts        p95  +14.39 [-49.80, +78.59]   miss  -1.1% [-3.8%, +1.6%]
+  load 1.50 (util None, x1.5)  choice 33.1%  rent>0  0.2%  forced 1599578.8  resident max 6  active max/p95 6/4.4  at-cap  0.0% CAP-NEVER-BINDS
+    fcfs   p50   359.2  p95  4912.5  miss 63.1% (infeasible 40.8%)
+    program-fcfs p95 -735.59 [-1379.03, -92.14]*  miss  -0.5% [-3.2%, +2.2%]
+    kleinrock-switch p95  +22.94 [-49.63, +95.51]   miss  -0.3% [-1.4%, +0.9%]
+    gts        p95 -262.74 [-2201.83, +1676.35]   miss  -2.1% [-7.2%, +2.9%]
+  load 2.00 (util None, x2.0)  choice 72.1%  rent>0  0.1%  forced 2415527.8  resident max 6  active max/p95 6/5.0  at-cap  0.0% CAP-NEVER-BINDS
+    fcfs   p50  1110.2  p95 11033.0  miss 91.9% (infeasible 69.0%)
+    program-fcfs p95 -2188.16 [-3343.53, -1032.78]*  miss  -0.1% [-1.1%, +0.9%]
+    kleinrock-switch p95  -17.22 [-91.11, +56.67]   miss  +0.5% [-0.7%, +1.7%]
+    gts        p95 +180.67 [-143.92, +505.27]   miss  -0.7% [-2.6%, +1.1%]
+
+=== summary ===
+  batch 2: program-fcfs first separates from fcfs at load 1.10 on miss_vs_fcfs: p95 -517.6s [-1374.0, +338.8], miss -1.2% [-2.5%, -0.0%]
+  batch 4: program-fcfs first separates from fcfs at load 2.00 on p95_vs_fcfs: p95 -3124.7s [-4483.3, -1766.1], miss -0.1% [-1.6%, +1.4%]
+  batch 8: cap never binds at any load (KV-bound: the KV budget, not max_batch, limits concurrency)
+  batch 8: program-fcfs first separates from fcfs at load 1.50 on p95_vs_fcfs: p95 -735.6s [-1379.0, -92.1], miss -0.5% [-3.2%, +2.2%]
+
+elapsed 11755s -> results/tracelab/D5_dev3.json

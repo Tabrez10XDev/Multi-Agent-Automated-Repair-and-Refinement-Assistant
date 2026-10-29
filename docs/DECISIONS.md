@@ -2019,3 +2019,85 @@ result):*
 - **Speed.** One batch-8 saturation run on dev3 went from about 4.5 h
   (projected) to 271 s.
 - The dev maps rerun unchanged on the fixed engine.
+
+*Amendment 2026-10-29, dev go/no-go (maps `D5_dev3`, `D5_sealed2`,
+`D5_maara` at `4962a62`, clean tree; `experiments/go_e5.py`):*
+- **`kleinrock-switch`: NO-GO.**
+  - It passes K1 and K2 on dev3: 14 active cells; slowdown against
+    `program-fcfs` 0.683; latency and slowdown against FCFS 0.985 and 0.993.
+  - It passes K3: no switch in 800 MAARA runs, ratio 1.000.
+  - It passes K1 and the latency part of K2 on sealed2.
+  - **It fails K2 on sealed2 p95 slowdown: 3.41 against FCFS** over 3
+    active cells.
+- **Why.** sealed2 has 40 turns. The switch fired at arrival 30 in every
+  run, so 75% of each run was `program-fcfs`. At load 2.0, batches 4/8, its
+  p95 slowdown was 39.9 against FCFS's 8.8 and 8.1. The warm-up cost that
+  E-5b flagged decides the 40-turn set.
+- **Per the rule,** §39's held-out test is not run and sealed3 is not built
+  under §39.
+- **`gts` (exploratory under §39), the same tests at point values:**
+  - dev3: K1 0.525; K2 latency 0.921 and slowdown 0.776 (better than FCFS
+    on both).
+  - sealed2: K1 0.375; K2 0.974 and 0.947.
+  - MAARA: identical to `program-fcfs`.
+- **Dev timing.** The dev3 map took 11,755 s, so the runtime rule projects
+  E5 at 13.1 h, which is at most 14 h. **N stays 160.**
+
+## 40. Group-then-share (`gts`) as the scored rule, pre-registered after §39's dev no-go
+
+Set 2026-10-29, owner's decision, after §39's dev go/no-go and before
+sealed3 exists.
+- **Disclosure, fixed here.** This is the **third attempt on the sealed
+  TraceLab user pool** (E1, E4, now E5).
+- `gts` was pre-registered in §39, before any dev data, as an exploratory
+  challenger. It is promoted to the scored rule **because of its dev
+  results**. That is a dev selection, as in §38. No sealed data informs it,
+  and sealed3 has not been built.
+
+**The rule, unchanged from §39.**
+- **Sort key.** The task's arrival time while k = `task_requests_done` < Q,
+  then the request's own enqueue time. Ties go to enqueue time, then
+  request id.
+- **Q** is the smallest k ≥ 1 with index(k) < index(0) under the frozen §38
+  Gittins prior of the source.
+  - TraceLab gives Q = 3: a turn keeps its program priority for its first 3
+    rounds, then takes turns with everyone else.
+  - MAARA gives Q = ∞, where `gts` is `program-fcfs` exactly.
+- **What it needs.** A frozen dev prior, not an online detector. This
+  replaces §39's "no prior" wording.
+- **No oracle field is read.**
+
+**Everything else is §39 as amended, with P = `gts`:**
+- **The sets.** sealed3 is built by §39's sampler at **N = 160**, after the
+  freeze. MAARA uses `final_qwen`, a disclosed second use: 91 tasks with
+  the `single_agent` config and 1 incomplete, checked from labels only.
+- **The commands.** The E5 commands are §39's, policies
+  `kleinrock-switch gts`. The switch is reported, with no hypothesis.
+- **Statistics:** the seed-cluster bootstrap, the active-cell primary
+  statistic, at least 8 active cells, and the beyond-δ cell rule over all
+  cells.
+- **K1 to K4 unchanged.**
+  - K3 holds outright if `gts` is identical to `program-fcfs` in every seed
+    of every `final_qwen` cell, which it must be when Q = ∞.
+  - K4 is reported in the headline sentence.
+- **Scorer:** `experiments/score_e5.py`, committed here, before any sealed3
+  data. Its sensitivity check is a t(n − 1) interval on the log of the
+  per-seed active-mean ratio, plus the geometric mean of active-cell
+  ratios. A verdict that flips under either is FRAGILE.
+- **Headline wording, fixed now:**
+  - "Group-then-share, with Q set by the frozen dev Gittins prior, fixes
+    `program-fcfs`'s slowdown failure (K1), is within 5% of FCFS on both p95
+    metrics on TraceLab (K2), and is identical to `program-fcfs` on MAARA
+    (K3), at a TraceLab p95-latency cost of <K4 [interval]> against
+    `program-fcfs`."
+  - If K2's bounds are below 1, "better than FCFS" may be said for that
+    metric.
+
+**Order checkable in git:**
+1. this commit;
+2. the E-7 review;
+3. the **freeze commit**;
+4. the sealed3 build at the commit after the freeze;
+5. E5 sealed3, then `final_qwen`, both with
+   `MAARA_POLICIES_FROZEN=<freeze>`;
+6. scoring with `score_e5.py`.
