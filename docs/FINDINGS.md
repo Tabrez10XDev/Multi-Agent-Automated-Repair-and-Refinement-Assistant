@@ -2390,3 +2390,101 @@ significantly worse:
 So unguarded `gittins` looked like the wanted hybrid on dev. Choosing it now
 would be post-hoc, which is why DECISIONS §39 pre-registers a new design and
 a new held-out set rather than re-scoring E4.
+
+## 43. Group-then-share (E5): at least par with FCFS, headline fails by one cell
+
+> **Sealed, scored (2026-10-30).** DECISIONS §39–§40 and their amendments.
+> Freeze `2f7026a`, sealed3 built at `fd33de7`, run at `07420db`, clean
+> tree, 99,692 s (27.7 h). Output `results/tracelab/E5_sealed3.{json,log}`,
+> committed before scoring (`4372985`). Scored by `experiments/score_e5.py`
+> with the input checks on; E-8 rescored independently (below).
+
+**Setup.** `tracelab_sealed3`: 160 turns, 1,279 rounds, 18 users, stratified
+by requests per turn (R ≤ 116), arrival order shuffled per seed. Batches
+2/4/8 × 10 capacity loads, 20 seeds, **18 of 30 cells active**. Policies
+fcfs, `program-fcfs`, `gts` (scored, §40) and `kleinrock-switch`
+(exploratory after its dev no-go). MAARA K3 on the dev map `D5_maara`
+(`holdout_qwen`, owner's amendment; `final_qwen` kept fresh).
+
+**Verdicts for `gts`.** Ratio of means, seed-cluster bootstrap 95% interval
+(B = 10,000, rng 39); "beyond" counts all 30 cells whose own interval lies
+wholly above 1 + δ:
+
+| | test | active mean | beyond | verdict |
+|---|---|---|---|---|
+| K1 | vs `program-fcfs`, p95 slowdown: hi < 1.00, ≤ 2 beyond 0 | 0.555 [0.508, 0.629] | **3** | **fails** |
+| K2 | vs FCFS, p95 latency: hi ≤ 1.05, ≤ 2 beyond 0.05 | 0.935 [0.920, 0.952] | 0 | holds |
+| K2 | vs FCFS, p95 slowdown: same | 0.924 [0.905, 0.946] | 1 | holds |
+| K3 | identical to `program-fcfs` on MAARA, every seed and cell | identical | — | holds |
+| K4 | vs `program-fcfs`, p95 latency (reported) | 1.874 [1.700, 2.059] | — | — |
+
+**Headline (K1 ∧ K2 ∧ K3): does not hold.** No verdict is FRAGILE. All-cell
+means: K1 0.594, K2 latency 0.955, K2 slowdown 0.943, K4 1.532.
+
+The three K1 cells are all at batch 2: load 0.60 (inactive; interval lo
+1.013), 0.70 (lo 1.011) and 1.50 (ratio 1.342 [1.088, 1.710]). Inactive
+cells count toward "beyond" by the §39 E-6 amendment.
+
+At selected cells, p95 slowdown | p95 latency (s), mean over 20 seeds:
+
+| cell | fcfs | `program-fcfs` | `gts` | `kleinrock-switch` |
+|---|---|---|---|---|
+| b2 0.70 | 4.1 \| 915 | **3.2** \| 689 | 3.8 \| 866 | 4.1 \| 914 |
+| b2 1.50 | 46.3 \| 7,422 | **28.3** \| 1,170 | 38.0 \| 6,172 | 42.4 \| 6,659 |
+| b2 2.00 | 85.7 \| 12,463 | 104.7 \| 1,954 | **74.3** \| 11,084 | 79.2 \| 11,753 |
+| b4 2.00 | **72.7** \| 11,111 | 531.8 \| 8,119 | 74.2 \| 10,948 | 74.2 \| 11,069 |
+| b8 2.00 | **78.0** \| 11,012 | 576.9 \| 9,262 | 86.3 \| 11,277 | 80.2 \| 11,007 |
+
+1. **The goal of at least par with FCFS is met, with room.** `gts` is better
+   than FCFS on both pre-registered metrics (latency 0.935, slowdown 0.924
+   over active cells; both upper bounds below 1). Its one cell beyond the
+   5% margin is b8 at load 2.0 (slowdown 1.107 [1.072, 1.139]).
+2. **It removes `program-fcfs`'s slowdown failure where that failure
+   lives.** At batches 4/8 under load, `program-fcfs`'s p95 slowdown is
+   7× FCFS's; `gts`'s is FCFS's (b4/b8 active-cell ratios to `program-fcfs`
+   0.14–0.27).
+3. **K1 fails at batch 2, where `program-fcfs` does not fail.** With two
+   slots, grouping a turn's rounds is close to right: `program-fcfs` beats
+   FCFS on slowdown at b2 0.70 and 1.50 and cuts p95 latency 6× at load
+   1.5. `gts` ungroups after Q = 3 rounds and loses part of that. The K1
+   test asked for "no worse than `program-fcfs` in more than 2 of 30
+   cells", and three batch-2 cells are worse, two by about 1% at the
+   interval's edge.
+4. **The latency price is large.** `gts`'s p95 latency is 1.87× `program-fcfs`'s
+   over active cells (§40 expected about 1.6–1.7 from dev3). It keeps
+   little of the grouping gain: most of it comes from FCFS-like sharing.
+5. **The switch, exploratory.** `kleinrock-switch` switched to FCFS in all
+   600 runs at the 30th arrival and never switched back. It also passes K2
+   (latency 0.962, slowdown 0.979) and fails K1 (0.619, 4 beyond); with
+   160 turns the warm-up is 19% of a run, against 75% on sealed2 (§39 dev
+   no-go).
+
+**Independent rescore (E-8).** Own code from the §39–§40 text, not the
+project's scorers: every number above reproduced to the third decimal, the
+map's `inactive` flags match FCFS's choice fraction in all 30 cells, and K3
+has 0 differences in 40 cells × 20 seeds. Provenance holds: the run commit is
+two commits after the freeze, which add only sealed3 and DECISIONS text.
+The only readings under which K1 passes (dropping inactive cells, as §39's
+superseded text said, or per-cell paired-t intervals) are post-hoc. Not
+pre-registered, sensitivity only: across 200 other bootstrap seeds K1 fails
+200 times with the same three cells; b2 0.60 is inactive by 0.0005 in
+choice fraction, and at b2 0.70 `gts` is worse in 8 of 20 seeds, one seed
+carrying about 37% of the difference. E-8 also notes that the sealed gate
+checks only that `MAARA_POLICIES_FROZEN` is set and the manifest does not
+record its value; the code here is identical to the freeze, so it does not
+matter for E5. sealed3 shares 16 of its 18 users with E1 and E4, so E5 is
+the third test on that user pool.
+
+**What E5 supports.** A rule that groups each program's first Q rounds,
+with Q derived from the frozen dev prior, and then shares, is no worse than
+FCFS on held-out heavy-tailed traces and identical to `program-fcfs` on
+MAARA. **What it does not support:** "one rule that beats both baselines".
+On TraceLab no tested rule keeps `program-fcfs`'s latency gain and FCFS's
+slowdown at once (OPEN_ISSUES §34).
+
+**Prior art.** `gts` is a two-level MLPS/FB discipline (Kleinrock; Aalto,
+Ayesta and Righter) applied at program level, close to Autellix's
+program-level attained-service scheduling. The new part is only the
+threshold, Q = the first k with Gittins index(k) < index(0) under the dev
+prior. The §39 review rejected a fixed "service quantum" variant before
+§40 adopted this one.

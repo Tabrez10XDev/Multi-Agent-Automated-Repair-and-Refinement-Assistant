@@ -8,7 +8,7 @@ What is not settled, not validated, or known to be wrong. Read this before trust
 > resolve. They are not sequential within a file. The other parts live in
 > `ARCHITECTURE.md`, `DECISIONS.md`, `FINDINGS.md` and `OPEN_ISSUES.md`.
 
-## Status index (2026-10-28)
+## Status index (2026-10-30)
 
 | § | issue | status | next action |
 |---|---|---|---|
@@ -34,7 +34,7 @@ What is not settled, not validated, or known to be wrong. Read this before trust
 | 31 | KV leak in admission (DECISIONS §8 item 11) | **closed** (2026-10-25): fixed in `4049013`; dev re-check left scheduling verdicts unchanged (1,440/1,440); the sealed 1x retention run was rerun on the fixed engine, and R1 now fails in 1 of 6 p95 cells (FINDINGS §35) | none |
 | 32 | Lone-replay memo filled memory (DECISIONS §8 item 12) | **closed** (`87f952b`) | none |
 | 33 | TraceLab: KV reuse across a human's turns not modelled | **open, a stated threat** (DECISIONS §37) | report it with FINDINGS §41 |
-| 34 | No rule yet beats both baselines on TraceLab; E4 was a weak test | **open** (2026-10-28): §38's guarded Gittins failed E4 (FINDINGS §42) | DECISIONS §39: a new design and a new, larger held-out set |
+| 34 | No rule yet beats both baselines on TraceLab | **open, narrowed** (2026-10-30): §40's `gts` beats FCFS on held-out TraceLab and fixes `program-fcfs`'s batch-4/8 slowdown, but fails K1 by one batch-2 cell and costs 1.87× `program-fcfs`'s p95 latency (FINDINGS §43) | state it in the writeup; a rule keeping both gains is future work |
 
 **Still open and relevant: 6** — 9.5, 14, 24, 27, 33, 34.
 
@@ -804,6 +804,14 @@ scheduling results see more prefill than a real server would. Not corrected;
 report it with FINDINGS §41.
 
 ## 34. No rule yet beats both baselines on TraceLab; E4 was a weak test
+
+**Update 2026-10-30 (FINDINGS §43).** E5 tested §40's `gts` on a fresh
+160-turn stratified set with 18 active cells, so the weak-test points below
+no longer apply. `gts` is better than FCFS on p95 latency (0.935) and p95
+slowdown (0.924) and removes `program-fcfs`'s slowdown blow-up at batches
+4/8, but it is worse than `program-fcfs` on slowdown in 3 batch-2 cells (K1
+allows 2), and its p95 latency is 1.87× `program-fcfs`'s. Still open: a
+rule that keeps `program-fcfs`'s latency gain without its slowdown cost.
 
 **Open** (2026-10-28; FINDINGS §42, DECISIONS §38). On sealed TraceLab,
 `program-fcfs` keeps its p95-latency gain over FCFS but multiplies p95

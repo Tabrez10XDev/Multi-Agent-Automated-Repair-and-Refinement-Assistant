@@ -2164,3 +2164,11 @@ freeze) with the §40 command; only the header was read:*
 - **Lone-replay CV, under the freeze, before any policy run.** Batch 4,
   c = 0.3, 8,192 MB, seed-1 order: mean 135.9 s, SD 195.8 s (population),
   median 65.2 s, max 1,072.7 s, **CV 1.44**.
+
+*Amendment 2026-10-30, E5 scored (closing):* run at `07420db`, 99,692 s,
+committed before scoring at `4372985`. `gts`: K1 **fails** (active mean
+0.555 [0.508, 0.629], but 3 cells beyond 0, all at batch 2); K2 holds
+(latency 0.935, slowdown 0.924); K3 holds (identical). **The headline does
+not hold.** E-8 reproduced every number with independent code. Results and
+interpretation: FINDINGS §43. No rule from §39–§40 is re-scored or re-run on
+sealed3.
